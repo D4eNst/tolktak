@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type WebSocketRoute } from '@playwright/test';
 import { expectFlowing, joinRoom, openClient, stats } from './helpers';
 import { register, startStack, type Stack } from './stack';
 
@@ -30,6 +30,32 @@ test('DM: realtime delivery, unread badge, reply', async ({ browser }) => {
   await expect(alice.locator('.msg-text', { hasText: /^Привет!$/ })).toBeVisible();
   await alice.context().close();
   await bob.context().close();
+});
+
+test('an expired session shows one notice after signing in again', async ({ browser }) => {
+  const ctx = await browser.newContext({ locale: 'ru-RU' });
+  const page = await ctx.newPage();
+  let socket: WebSocketRoute | undefined;
+  await page.routeWebSocket(/\/api\/v1\/ws$/, (ws) => {
+    ws.connectToServer();
+    socket = ws;
+  });
+  const expired = page.locator('.toast', { hasText: 'Сессия завершена' });
+  await page.goto(stack.web);
+  for (let round = 0; round < 2; round++) {
+    await page.fill('input[name=server]', stack.api);
+    await page.fill('input[name=username]', 'alice');
+    await page.fill('input[name=password]', 'password123');
+    await page.click('button[type=submit]');
+    await expect(page.locator('.shell')).toBeVisible();
+    await expect.poll(() => socket).toBeTruthy();
+    await socket!.close({ code: 4001, reason: 'invalid token' });
+    socket = undefined;
+    await expect(page.locator('input[name=username]')).toBeVisible();
+    await expect(expired).toHaveCount(1);
+    await expect(expired).toHaveCount(0);
+  }
+  await ctx.close();
 });
 
 test('group voice room: two-way audio, stream with sound, late join, host leaves', async ({ browser }) => {
