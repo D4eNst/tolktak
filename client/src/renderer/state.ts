@@ -176,6 +176,12 @@ function delIn<K, V>(sig: { value: Map<K, V> }, key: K) {
 
 let rt: Realtime | null = null;
 
+window.addEventListener('online', () => rt?.nudge());
+window.addEventListener('tolktak:unauthorized', () => {
+  toast(t().core.sessionExpired, 'error');
+  logout();
+});
+
 export async function boot() {
   const s = await bridge.getSettings();
   if (s.server && s.token) {
@@ -232,11 +238,6 @@ async function startSession(a: Api, user: User, server: ServerInfo) {
     if (st === 'online' && was !== 'online' && was !== 'connecting') resync();
   });
   rt.connect();
-  window.addEventListener('online', () => rt?.nudge());
-  window.addEventListener('tolktak:unauthorized', () => {
-    toast(t().core.sessionExpired, 'error');
-    logout();
-  });
   bridge.setTitle(server.name + ' — TolkTak');
 }
 
