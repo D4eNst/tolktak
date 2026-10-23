@@ -1,12 +1,13 @@
 import { app, type BrowserWindow, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 
 const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
 
 export function installUpdater(getWindow: () => BrowserWindow | null) {
   ipcMain.handle('update:install', () => autoUpdater.quitAndInstall());
-  // Unpacked runs and the portable zip have no update metadata.
-  if (!app.isPackaged || process.env.TOLKTAK_NO_UPDATES) return;
+  if (!app.isPackaged || isPortableWindows() || process.env.TOLKTAK_NO_UPDATES) return;
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -16,4 +17,8 @@ export function installUpdater(getWindow: () => BrowserWindow | null) {
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   setTimeout(check, 30_000);
   setInterval(check, CHECK_EVERY_MS);
+}
+
+function isPortableWindows() {
+  return process.platform === 'win32' && !existsSync(path.join(path.dirname(process.execPath), 'Uninstall TolkTak.exe'));
 }
