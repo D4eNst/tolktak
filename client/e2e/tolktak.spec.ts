@@ -1,6 +1,6 @@
 import { expect, test, type WebSocketRoute } from '@playwright/test';
 import { expectFlowing, joinRoom, openClient, stats } from './helpers';
-import { register, startStack, type Stack } from './stack';
+import { loginToken, register, startStack, type Stack } from './stack';
 
 let stack: Stack;
 const ids: Record<string, number> = {};
@@ -30,6 +30,45 @@ test('DM: realtime delivery, unread badge, reply', async ({ browser }) => {
   await expect(alice.locator('.msg-text', { hasText: /^Привет!$/ })).toBeVisible();
   await alice.context().close();
   await bob.context().close();
+});
+
+test('messages sent or received while the first page loads stay in the chat', async ({ browser }) => {
+  const bob = await loginToken(stack.api, 'bob');
+  const call = (path: string, body: unknown) =>
+    fetch(stack.api + '/api/v1' + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + bob },
+      body: JSON.stringify(body),
+    }).then((r) => r.json());
+  const { channel } = await call('/dms', { user_id: ids.carol });
+  await call(`/channels/${channel.id}/messages`, { text: 'до загрузки', nonce: crypto.randomUUID() });
+
+  const carol = await openClient(browser, stack, 'carol');
+  let pageFetched!: () => void;
+  let releasePage!: () => void;
+  const fetched = new Promise<void>((r) => (pageFetched = r));
+  const released = new Promise<void>((r) => (releasePage = r));
+  await carol.route(`**/channels/${channel.id}/messages?limit=50`, async (route) => {
+    const page = await route.fetch();
+    pageFetched();
+    await released;
+    await route.fulfill({ response: page });
+  });
+  const bobItem = carol.locator('.side-item', { hasText: 'Bob' });
+  await bobItem.click();
+  await fetched;
+  await call(`/channels/${channel.id}/messages`, { text: 'во время загрузки', nonce: crypto.randomUUID() });
+  await expect(bobItem.locator('.side-item-sub')).toHaveText('во время загрузки');
+  await carol.locator('.composer textarea').fill('отправлено при загрузке');
+  await carol.keyboard.press('Enter');
+  await expect(bobItem.locator('.side-item-sub')).toHaveText('отправлено при загрузке');
+  releasePage();
+
+  await expect(carol.locator('.msg-text', { hasText: 'до загрузки' })).toBeVisible();
+  await expect(carol.locator('.msg-text', { hasText: 'во время загрузки' })).toBeVisible();
+  await expect(carol.locator('.msg-text', { hasText: 'отправлено при загрузке' })).toBeVisible();
+  await expect(carol.locator('.msg.pending')).toHaveCount(0);
+  await carol.context().close();
 });
 
 test('an expired session shows one notice after signing in again', async ({ browser }) => {

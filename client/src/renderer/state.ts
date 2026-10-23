@@ -388,7 +388,7 @@ function cmFor(cid: number): ChannelMessages {
 
 export function upsertMessage(m: Message) {
   const cm = cmFor(m.channel_id);
-  if (!cm.loaded) {
+  if (!cm.loaded && !cm.loading) {
     bumpChannel(m);
     return;
   }
@@ -473,10 +473,15 @@ export async function openChannel(cid: number) {
   if (cm.loaded || cm.loading) return;
   setIn(messages, cid, { ...cm, loading: true });
   try {
-    const { messages: items } = await api().messages(cid, { limit: 50 });
-    setIn(messages, cid, { items, pending: cm.pending, hasOlder: items.length === 50, loading: false, loaded: true });
+    const { messages: page } = await api().messages(cid, { limit: 50 });
+    const now = cmFor(cid);
+    const hasOlder = page.length === 50;
+    const live = now.items.filter((m) => !hasOlder || m.id >= page[0].id);
+    const liveIds = new Set(live.map((m) => m.id));
+    const items = [...page.filter((m) => !liveIds.has(m.id)), ...live].sort((a, b) => a.id - b.id);
+    setIn(messages, cid, { items, pending: now.pending, hasOlder, loading: false, loaded: true });
   } catch (e) {
-    setIn(messages, cid, { ...cm, loading: false });
+    setIn(messages, cid, { ...cmFor(cid), items: cm.items, loading: false });
     toast(errorText(e), 'error');
   }
 }
