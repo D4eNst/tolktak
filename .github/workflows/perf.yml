@@ -1,0 +1,62 @@
+name: Perf
+
+# Shared runners without a GPU: only large regressions are caught.
+on:
+  pull_request:
+    paths: ['client/src/**', 'client/package*.json', 'client/e2e/stack.ts', 'perf/**', 'deploy/livekit.yaml.template', '.github/workflows/perf.yml']
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      repeats:
+        description: Repeats per scenario
+        default: '2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      LIVEKIT_VERSION: 1.13.10
+      PERF_CI_REPEATS: ${{ github.event.inputs.repeats || '2' }}
+      PERF_HOST_NOTE: GitHub Actions ubuntu-24.04 runner (shared VM, no GPU)
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      - name: System packages
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb
+      - name: LiveKit server
+        run: |
+          mkdir -p "$RUNNER_TEMP/lk"
+          curl -fsSL "https://github.com/livekit/livekit/releases/download/v${LIVEKIT_VERSION}/livekit_${LIVEKIT_VERSION}_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP/lk"
+          echo "LIVEKIT_BIN=$RUNNER_TEMP/lk/livekit-server" >> "$GITHUB_ENV"
+      - run: npm ci
+        working-directory: client
+      - run: npm run build
+        working-directory: client
+      - run: uv sync --locked --no-dev
+        working-directory: server
+      - name: Perf scenarios and regression check
+        run: perf/ci.sh "$RUNNER_TEMP/perf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-linux
+          path: ${{ runner.temp }}/perf
+          retention-days: 30

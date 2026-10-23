@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Install with Docker — TolkTak</title><meta name="description" content="Docker Compose runs the TolkTak server and LiveKit for voice, video and screen sharing. This guide assumes a Linux server with Git, Docker and the Compose plugin installe">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/en/docs/install/docker/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/install/docker/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/install/docker/">
+<meta property="og:type" content="website"><meta property="og:title" content="Install with Docker — TolkTak"><meta property="og:description" content="Docker Compose runs the TolkTak server and LiveKit for voice, video and screen sharing. This guide assumes a Linux server with Git, Docker and the Compose plugin installe"><meta property="og:url" content="https://tolktak.d4enst.ru/en/docs/install/docker/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="en">
+<a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/en/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span></button>
+    <nav id="site-nav" aria-label="Menu">
+      <a href="/en/#features">Features</a>
+      <a href="/en/download/" >Download</a>
+      <a href="/en/docs/" aria-current="page">Documentation</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/docs/install/docker/" lang="ru" hreflang="ru" aria-label="Читать по-русски">RU</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/en/docs/">Documentation</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Documentation sections</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search documentation</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Documentation sections"><div class="docs-nav-group"><strong>Getting started</strong><a href="/en/docs/" >Getting started</a><a href="/en/docs/install/desktop-app/" >Desktop app</a><a href="/en/docs/install/requirements/" >Requirements</a><a href="/en/docs/install/docker/" aria-current="page">Install with Docker</a><a href="/en/docs/install/source/" >Install from source</a></div><div class="docs-nav-group"><strong>Network and database</strong><a href="/en/docs/guides/domains/" >Domains and addresses</a><a href="/en/docs/guides/certificates/" >HTTPS certificates</a><a href="/en/docs/guides/reverse-proxy/" >Reverse proxy</a><a href="/en/docs/guides/firewall/" >Firewall and ports</a><a href="/en/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Server administration</strong><a href="/en/docs/operations/configuration/" >Configuration</a><a href="/en/docs/operations/administration/" >Administration</a><a href="/en/docs/operations/maintenance/" >Maintenance</a><a href="/en/docs/operations/troubleshooting/" >Troubleshooting</a></div><div class="docs-nav-group"><strong>Development</strong><a href="/en/docs/development/architecture/" >Architecture</a><a href="/en/docs/development/building/" >Building and testing</a><a href="/en/docs/development/api/" >HTTP and WebSocket API</a></div><div class="docs-nav-group"><strong>Project</strong><a href="/en/docs/contributing/" >Contributing to TolkTak</a><a href="/en/docs/security/" >Security policy</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/en/docs/">Documentation</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Getting started</span></div><article class="prose"><h1 id="install-with-docker">Install with Docker</h1>
+<p>Docker Compose runs the TolkTak server and LiveKit for voice, video and screen sharing. This guide assumes a Linux server with Git, Docker and the Compose plugin installed. See <a href="/en/docs/install/requirements/">Requirements</a> for hardware and network ports.</p>
+<h2 id="1-deployment-files">1. Deployment files<a class="heading-anchor" href="#1-deployment-files" aria-label="Link to section">#</a></h2>
+<pre><code class="language-sh">git clone https://github.com/D4eNst/tolktak.git
+cd tolktak/deploy
+</code></pre>
+<p>Run all subsequent commands from the <code>deploy/</code> directory.</p>
+<h2 id="2-configuration">2. Configuration<a class="heading-anchor" href="#2-configuration" aria-label="Link to section">#</a></h2>
+<p>The <code>init.sh</code> script creates <code>.env</code> with server parameters and <code>livekit.yaml</code> with LiveKit settings. It generates fresh keys when run. These files contain secrets and should not be published.</p>
+<h3 id="internet-server">Internet server<a class="heading-anchor" href="#internet-server" aria-label="Link to section">#</a></h3>
+<p>HTTPS requires <a href="/en/docs/guides/domains/">two domain names</a> pointing to the server: one for TolkTak and one for LiveKit.</p>
+<pre><code class="language-sh">./init.sh talk.example.com lk.example.com
+</code></pre>
+<p>Replace the example domains with your own. In this configuration, both services listen on <code>127.0.0.1</code>; a <a href="/en/docs/guides/reverse-proxy/">reverse proxy</a> handles HTTPS with <a href="/en/docs/guides/certificates/">certificates</a> for both names. Calls also require open <a href="/en/docs/guides/firewall/">media ports</a>.</p>
+<h3 id="local-network-server">Local network server<a class="heading-anchor" href="#local-network-server" aria-label="Link to section">#</a></h3>
+<p>For a setup without HTTPS, pass the machine's address that participants can reach:</p>
+<pre><code class="language-sh">./init.sh --http 192.168.1.20
+</code></pre>
+<p>With this address, TolkTak is available at <code>http://192.168.1.20:8080</code> and LiveKit at <code>ws://192.168.1.20:7880</code>. Passwords, messages and files are sent over unencrypted HTTP. For an internet server, use the HTTPS setup above.</p>
+<h3 id="server-parameters">Server parameters<a class="heading-anchor" href="#server-parameters" aria-label="Link to section">#</a></h3>
+<p>The main settings are in <code>.env</code>:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Horizontally scrollable table"><table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TOLKTAK_SERVER_NAME</code></td>
+<td>Server name.</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_REGISTRATION</code></td>
+<td>Registration mode. The default is <code>invite</code>. The first account can be created in any mode.</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_VERSION</code></td>
+<td>TolkTak image version. The default is <code>latest</code>; a specific tag pins the version.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Other settings are listed in the <a href="/en/docs/operations/configuration/">configuration reference</a>. If <code>.env</code> already exists, <code>init.sh</code> stops rather than overwriting it. Edit existing configuration files directly.</p>
+<h2 id="3-start-the-services">3. Start the services<a class="heading-anchor" href="#3-start-the-services" aria-label="Link to section">#</a></h2>
+<pre><code class="language-sh">docker compose up -d
+docker compose ps
+</code></pre>
+<p>Compose downloads <code>ghcr.io/d4enst/tolktak-server</code> with the selected tag and starts both services. To view their logs:</p>
+<pre><code class="language-sh">docker compose logs --tail 100 tolktak livekit
+</code></pre>
+<h2 id="4-create-the-administrator">4. Create the administrator<a class="heading-anchor" href="#4-create-the-administrator" aria-label="Link to section">#</a></h2>
+<p>After starting the server, register at its address, for example <code>https://talk.example.com</code> or <code>http://192.168.1.20:8080</code>. <strong>The first account becomes the administrator</strong>, so create it straight away.</p>
+<p>The administration panel is at <code>/admin</code> on the same address. It provides invites for other participants. They register on the server's website and sign in to the <a href="/en/docs/install/desktop-app/">desktop app</a> with the same server address, username and password.</p>
+<h2 id="5-check-the-connection">5. Check the connection<a class="heading-anchor" href="#5-check-the-connection" aria-label="Link to section">#</a></h2>
+<p>Use two accounts to check app sign-in, messaging, a call and screen sharing. A participant connecting from another network helps verify media port access: a working chat alone does not confirm it.</p>
+<p>For voice and video connection issues, see <a href="/en/docs/operations/troubleshooting/">Troubleshooting</a>. After the first launch, set up <a href="/en/docs/operations/maintenance/">backups</a>.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/install/docker.md">Page source<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Documentation"><a href="/en/docs/install/requirements/"><span>Previous</span><strong>Requirements</strong></a><a href="/en/docs/install/source/"><span>Next</span><strong>Install from source<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></strong></a></nav></div>
+    <aside class="doc-toc"><strong>On this page</strong><nav><a class="h2" href="#1-deployment-files">1. Deployment files</a><a class="h2" href="#2-configuration">2. Configuration</a><a class="h3" href="#internet-server">Internet server</a><a class="h3" href="#local-network-server">Local network server</a><a class="h3" href="#server-parameters">Server parameters</a><a class="h2" href="#3-start-the-services">3. Start the services</a><a class="h2" href="#4-create-the-administrator">4. Create the administrator</a><a class="h2" href="#5-check-the-connection">5. Check the connection</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/en/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Voice, video and chat on your own server.</p></div>
+    <div><strong>Documentation</strong><a href="/en/docs/install/desktop-app/">Desktop app guide</a><a href="/en/docs/install/docker/">Run a server</a><a href="/en/docs/operations/troubleshooting/">Troubleshooting</a></div>
+    <div><strong>Project</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/en/releases/">Release history</a><a href="/en/docs/contributing/">Contributing</a><a href="/en/docs/security/">Security</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Open source · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Search documentation"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="What would you like to set up?" aria-label="Search documentation"><button class="close-search icon-button" type="button" aria-label="Close"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Try: microphone, ports, invites</p><div class="search-results"></div></dialog></body></html>

@@ -1,0 +1,81 @@
+{
+ "_comment": "Minimum DNSMOS OVRL/SIG, PESQ-wb and STOI per preset and case for client/e2e/voice-quality.spec.ts: measured on Linux minus 0.25 (DNSMOS, PESQ) / 0.04 (STOI). Renders are deterministic up to Chromium's float math.",
+ "light": {
+  "fan5": {
+   "OVRL": 2.57,
+   "SIG": 2.83,
+   "PESQ": 1.0,
+   "STOI": 0.879
+  },
+  "kbd10": {
+   "OVRL": 3.17,
+   "SIG": 3.36,
+   "PESQ": 1.82,
+   "STOI": 0.93
+  },
+  "quiet50": {
+   "OVRL": 3.22,
+   "SIG": 3.4,
+   "PESQ": 2.63,
+   "STOI": 0.951
+  },
+  "quiet60": {
+   "OVRL": 2.91,
+   "SIG": 3.36,
+   "PESQ": 2.38,
+   "STOI": 0.95
+  }
+ },
+ "max": {
+  "fan5": {
+   "OVRL": 2.87,
+   "SIG": 3.14,
+   "PESQ": 1.51,
+   "STOI": 0.878
+  },
+  "kbd10": {
+   "OVRL": 3.17,
+   "SIG": 3.35,
+   "PESQ": 2.79,
+   "STOI": 0.942
+  },
+  "quiet50": {
+   "OVRL": 3.19,
+   "SIG": 3.38,
+   "PESQ": 2.71,
+   "STOI": 0.94
+  },
+  "quiet60": {
+   "OVRL": 2.99,
+   "SIG": 3.22,
+   "PESQ": 1.0,
+   "STOI": 0.495
+  }
+ },
+ "medium": {
+  "fan5": {
+   "OVRL": 2.57,
+   "SIG": 2.81,
+   "PESQ": 1.34,
+   "STOI": 0.877
+  },
+  "kbd10": {
+   "OVRL": 3.18,
+   "SIG": 3.37,
+   "PESQ": 2.33,
+   "STOI": 0.927
+  },
+  "quiet50": {
+   "OVRL": 3.08,
+   "SIG": 3.31,
+   "PESQ": 2.55,
+   "STOI": 0.936
+  },
+  "quiet60": {
+   "OVRL": 3.01,
+   "SIG": 3.24,
+   "PESQ": 1.53,
+   "STOI": 0.913
+  }
+ }
+}

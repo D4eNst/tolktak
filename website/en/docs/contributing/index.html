@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contributing to TolkTak — TolkTak</title><meta name="description" content="Thank you for your interest in TolkTak. Bug reports, fixes, features and translations are all welcome.">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/en/docs/contributing/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/contributing/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/contributing/">
+<meta property="og:type" content="website"><meta property="og:title" content="Contributing to TolkTak — TolkTak"><meta property="og:description" content="Thank you for your interest in TolkTak. Bug reports, fixes, features and translations are all welcome."><meta property="og:url" content="https://tolktak.d4enst.ru/en/docs/contributing/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="en">
+<a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/en/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span></button>
+    <nav id="site-nav" aria-label="Menu">
+      <a href="/en/#features">Features</a>
+      <a href="/en/download/" >Download</a>
+      <a href="/en/docs/" aria-current="page">Documentation</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/docs/contributing/" lang="ru" hreflang="ru" aria-label="Читать по-русски">RU</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/en/docs/">Documentation</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Documentation sections</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search documentation</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Documentation sections"><div class="docs-nav-group"><strong>Getting started</strong><a href="/en/docs/" >Getting started</a><a href="/en/docs/install/desktop-app/" >Desktop app</a><a href="/en/docs/install/requirements/" >Requirements</a><a href="/en/docs/install/docker/" >Install with Docker</a><a href="/en/docs/install/source/" >Install from source</a></div><div class="docs-nav-group"><strong>Network and database</strong><a href="/en/docs/guides/domains/" >Domains and addresses</a><a href="/en/docs/guides/certificates/" >HTTPS certificates</a><a href="/en/docs/guides/reverse-proxy/" >Reverse proxy</a><a href="/en/docs/guides/firewall/" >Firewall and ports</a><a href="/en/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Server administration</strong><a href="/en/docs/operations/configuration/" >Configuration</a><a href="/en/docs/operations/administration/" >Administration</a><a href="/en/docs/operations/maintenance/" >Maintenance</a><a href="/en/docs/operations/troubleshooting/" >Troubleshooting</a></div><div class="docs-nav-group"><strong>Development</strong><a href="/en/docs/development/architecture/" >Architecture</a><a href="/en/docs/development/building/" >Building and testing</a><a href="/en/docs/development/api/" >HTTP and WebSocket API</a></div><div class="docs-nav-group"><strong>Project</strong><a href="/en/docs/contributing/" aria-current="page">Contributing to TolkTak</a><a href="/en/docs/security/" >Security policy</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/en/docs/">Documentation</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Project</span></div><article class="prose"><h1 id="contributing-to-tolktak">Contributing to TolkTak</h1>
+<p>Thank you for your interest in TolkTak. Bug reports, fixes, features and translations are all welcome.</p>
+<h2 id="before-you-start">Before you start<a class="heading-anchor" href="#before-you-start" aria-label="Link to section">#</a></h2>
+<ul>
+<li>For bugs, search the <a href="https://github.com/D4eNst/tolktak/issues">existing issues</a> first, then open a new one with the bug report template.</li>
+<li>For larger changes or new features, open an issue to discuss the idea before writing code. It saves everyone time if the direction needs adjusting.</li>
+<li>For questions and ideas that are not yet a concrete proposal, use <a href="https://github.com/D4eNst/tolktak/discussions">GitHub Discussions</a>.</li>
+<li>Security problems are reported privately: see <a href="/en/docs/security/">SECURITY.md</a>.</li>
+</ul>
+<h2 id="development-setup">Development setup<a class="heading-anchor" href="#development-setup" aria-label="Link to section">#</a></h2>
+<p>See <a href="/en/docs/development/building/">Building and testing</a> for prerequisites, running a local stack and the end-to-end tests. Before opening a pull request, run the same checks as CI:</p>
+<pre><code class="language-sh">cd server &amp;&amp; uv sync &amp;&amp; uv run ruff check . &amp;&amp; uv run ruff format --check . &amp;&amp; uv run ty check &amp;&amp; uv run pytest
+cd client &amp;&amp; npm ci &amp;&amp; npm run typecheck &amp;&amp; npm run build
+</code></pre>
+<h2 id="pull-requests">Pull requests<a class="heading-anchor" href="#pull-requests" aria-label="Link to section">#</a></h2>
+<ul>
+<li>Keep each pull request focused on one change, and describe what it changes and why.</li>
+<li>Add or update tests for the behaviour you change. Server changes need tests in <code>server/tests/</code> (pytest); client changes that affect behaviour need an end-to-end test where one is practical.</li>
+<li><strong>Changes to the media path</strong> (voice, camera, screen sharing, stream audio, watch-together) are accepted only with an end-to-end test that checks the real stream, such as decoded video frames, audio levels or RTP packet statistics, not just the presence of elements on screen.</li>
+<li>Follow the style of the surrounding code. Python code is formatted and linted with <code>ruff</code> (<code>uv run ruff format .</code>).</li>
+<li>Update the documentation in <code>docs/</code> when you change behaviour, configuration or deployment.</li>
+<li>Every string shown to users goes through the translation files (see below), never inline in a component.</li>
+</ul>
+<h2 id="translations">Translations<a class="heading-anchor" href="#translations" aria-label="Link to section">#</a></h2>
+<p>UI strings live in <code>client/src/renderer/i18n/</code>. English (<code>en/</code>) is the reference; every other language is a directory that mirrors it file by file, and each file is typed against its English counterpart, so a missing or misspelled key is a compile error.</p>
+<p>To add a language:</p>
+<ol>
+<li>
+<p>Copy <code>client/src/renderer/i18n/en/</code> to a new directory named after the language code, for example <code>de/</code>.</p>
+</li>
+<li>
+<p>In each file, import the English module's type and declare the object with it, as the existing <code>ru/</code> files do:</p>
+<pre><code class="language-ts">import type en from '../en/chat';
+
+const de: typeof en = {
+  // ...
+};
+
+export default de;
+</code></pre>
+</li>
+<li>
+<p>Translate the strings. Strings that depend on a number or a name are functions; keep their parameters.</p>
+</li>
+<li>
+<p>Register the language in <code>client/src/renderer/i18n/index.ts</code>: add it to the <code>Locale</code> type, the <code>LOCALES</code> list (with the language's own name), the dictionary map, and the locale detection and <code>intlLocale</code> functions.</p>
+</li>
+<li>
+<p>Run <code>npm run typecheck</code> in <code>client/</code>. It fails until every string is present.</p>
+</li>
+</ol>
+<p>The pages served by the server (<code>server/tolktak/web/static/</code>) are translated separately: each page script (<code>index.js</code>, <code>admin.js</code>, <code>docs.js</code>) holds its own <code>en</code> and <code>ru</code> dictionaries, and <code>i18n.js</code> switches between them.</p>
+<h2 id="code-provenance-and-licensing">Code provenance and licensing<a class="heading-anchor" href="#code-provenance-and-licensing" aria-label="Link to section">#</a></h2>
+<ul>
+<li>Write your own code. Do not copy code from projects whose license is incompatible with AGPL-3.0-or-later, and do not submit code derived from decompiling or disassembling proprietary software.</li>
+<li>If you add a dependency or bundle third-party assets (models, sounds, fonts, images), state its license in the pull request. It must be compatible with AGPL-3.0-or-later.</li>
+<li>By submitting a contribution, you agree that it is licensed under the <a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">GNU Affero General Public License v3.0 or later</a>, the license of the project.</li>
+</ul>
+<h2 id="code-of-conduct">Code of conduct<a class="heading-anchor" href="#code-of-conduct" aria-label="Link to section">#</a></h2>
+<p>Everyone taking part in the project is expected to follow the <a href="https://github.com/D4eNst/tolktak/blob/main/CODE_OF_CONDUCT.md">code of conduct</a>.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/CONTRIBUTING.md">Page source<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Documentation"><span></span></nav></div>
+    <aside class="doc-toc"><strong>On this page</strong><nav><a class="h2" href="#before-you-start">Before you start</a><a class="h2" href="#development-setup">Development setup</a><a class="h2" href="#pull-requests">Pull requests</a><a class="h2" href="#translations">Translations</a><a class="h2" href="#code-provenance-and-licensing">Code provenance and licensing</a><a class="h2" href="#code-of-conduct">Code of conduct</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/en/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Voice, video and chat on your own server.</p></div>
+    <div><strong>Documentation</strong><a href="/en/docs/install/desktop-app/">Desktop app guide</a><a href="/en/docs/install/docker/">Run a server</a><a href="/en/docs/operations/troubleshooting/">Troubleshooting</a></div>
+    <div><strong>Project</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/en/releases/">Release history</a><a href="/en/docs/contributing/">Contributing</a><a href="/en/docs/security/">Security</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Open source · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Search documentation"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="What would you like to set up?" aria-label="Search documentation"><button class="close-search icon-button" type="button" aria-label="Close"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Try: microphone, ports, invites</p><div class="search-results"></div></dialog></body></html>

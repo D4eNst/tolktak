@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HTTP и WebSocket API — TolkTak</title><meta name="description" content="Приложение использует JSON API под /api/v1. Его можно вызывать из своих инструментов. Пока TolkTak находится в версии 0.x, API может меняться между релизами. Сверяйтесь с">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/docs/development/api/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/development/api/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/development/api/">
+<meta property="og:type" content="website"><meta property="og:title" content="HTTP и WebSocket API — TolkTak"><meta property="og:description" content="Приложение использует JSON API под /api/v1. Его можно вызывать из своих инструментов. Пока TolkTak находится в версии 0.x, API может меняться между релизами. Сверяйтесь с"><meta property="og:url" content="https://tolktak.d4enst.ru/docs/development/api/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="ru">
+<a class="skip" href="#main">К содержимому</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Меню</span></button>
+    <nav id="site-nav" aria-label="Меню">
+      <a href="/#features">Возможности</a>
+      <a href="/download/" >Скачать</a>
+      <a href="/docs/" aria-current="page">Документация</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/en/docs/development/api/" lang="en" hreflang="en" aria-label="Read in English">EN</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/docs/">Документация</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Разделы документации</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Поиск по документации</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Разделы документации"><div class="docs-nav-group"><strong>Начало работы</strong><a href="/docs/" >Начало работы</a><a href="/docs/install/desktop-app/" >Приложение</a><a href="/docs/install/requirements/" >Требования</a><a href="/docs/install/docker/" >Установка через Docker</a><a href="/docs/install/source/" >Установка из исходников</a></div><div class="docs-nav-group"><strong>Сеть и база данных</strong><a href="/docs/guides/domains/" >Домены и адреса</a><a href="/docs/guides/certificates/" >HTTPS и сертификаты</a><a href="/docs/guides/reverse-proxy/" >Обратный прокси</a><a href="/docs/guides/firewall/" >Файрвол и порты</a><a href="/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Управление сервером</strong><a href="/docs/operations/configuration/" >Настройки</a><a href="/docs/operations/administration/" >Управление сервером</a><a href="/docs/operations/maintenance/" >Обновления и резервные копии</a><a href="/docs/operations/troubleshooting/" >Решение проблем</a></div><div class="docs-nav-group"><strong>Разработка</strong><a href="/docs/development/architecture/" >Архитектура</a><a href="/docs/development/building/" >Сборка и тестирование</a><a href="/docs/development/api/" aria-current="page">HTTP и WebSocket API</a></div><div class="docs-nav-group"><strong>Проект</strong><a href="/docs/contributing/" >Участие в проекте</a><a href="/docs/security/" >Безопасность</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/docs/">Документация</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Разработка</span></div><article class="prose"><h1 id="http-и-websocket-api">HTTP и WebSocket API</h1>
+<p>Приложение использует JSON API под <code>/api/v1</code>. Его можно вызывать из своих инструментов. Пока TolkTak находится в версии 0.x, API может меняться между релизами. Сверяйтесь с <code>client/src/renderer/api.ts</code> той же версии, что и сервер.</p>
+<h2 id="формат">Формат<a class="heading-anchor" href="#формат" aria-label="Ссылка на раздел">#</a></h2>
+<p>Запросы и ответы используют JSON, кроме файлов. Время — Unix в миллисекундах. ID — целые числа, идентификаторы файлов — случайные строки.</p>
+<p>Ошибка содержит HTTP-статус и объект:</p>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;code&quot;:&quot;invite_invalid&quot;,&quot;message&quot;:&quot;Invite code is invalid, expired or used up&quot;}}
+</code></pre>
+<p>Программы должны проверять <code>code</code>, а не английское <code>message</code>. При ограничении частоты запросов сервер отвечает <code>429</code>, код <code>rate_limited</code>.</p>
+<h2 id="вход">Вход<a class="heading-anchor" href="#вход" aria-label="Ссылка на раздел">#</a></h2>
+<pre><code class="language-http">POST /api/v1/auth/login
+Content-Type: application/json
+
+{&quot;username&quot;:&quot;alice&quot;,&quot;password&quot;:&quot;…&quot;,&quot;device&quot;:&quot;my-script&quot;}
+</code></pre>
+<p>Ответ содержит <code>token</code> и <code>user</code>. Передавайте токен заголовком:</p>
+<pre><code class="language-http">Authorization: Bearer &lt;token&gt;
+</code></pre>
+<p>Он действует до <code>POST /api/v1/auth/logout</code>. Регистрация принимает <code>username</code>, <code>display_name</code>, <code>password</code> и, если требуется, <code>invite</code>. Для автоматизации создавайте отдельный аккаунт.</p>
+<h2 id="основные-методы">Основные методы<a class="heading-anchor" href="#основные-методы" aria-label="Ссылка на раздел">#</a></h2>
+<p>Пути ниже указаны относительно <code>/api/v1</code>.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Таблица с горизонтальной прокруткой"><table>
+<thead>
+<tr>
+<th>Метод</th>
+<th>Назначение</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /server</code></td>
+<td>Версия, имя, режим регистрации и адрес LiveKit; без входа</td>
+</tr>
+<tr>
+<td><code>POST /auth/register</code>, <code>/auth/login</code>, <code>/auth/logout</code></td>
+<td>Аккаунты и сессии</td>
+</tr>
+<tr>
+<td><code>GET /me</code>, <code>PATCH /me</code>, <code>POST /me/password</code></td>
+<td>Профиль и пароль</td>
+</tr>
+<tr>
+<td><code>GET /users</code></td>
+<td>Пользователи сервера</td>
+</tr>
+<tr>
+<td><code>GET /channels</code></td>
+<td>Доступные каналы и непрочитанные</td>
+</tr>
+<tr>
+<td><code>POST /dms</code></td>
+<td>Личный канал с <code>user_id</code></td>
+</tr>
+<tr>
+<td><code>GET /channels/{id}/messages</code></td>
+<td>История: <code>before</code>, <code>after</code>, <code>limit</code>, <code>q</code></td>
+</tr>
+<tr>
+<td><code>POST /channels/{id}/messages</code></td>
+<td>Сообщение: <code>text</code>, <code>nonce</code>, опциональные <code>reply_to</code>, <code>attachments</code></td>
+</tr>
+<tr>
+<td><code>POST /channels/{id}/read</code></td>
+<td>Прочитано до <code>message_id</code></td>
+</tr>
+<tr>
+<td><code>PATCH /messages/{id}</code>, <code>DELETE /messages/{id}</code></td>
+<td>Изменение и удаление своих сообщений</td>
+</tr>
+<tr>
+<td><code>POST /messages/{id}/reactions</code></td>
+<td>Переключение реакции <code>emoji</code></td>
+</tr>
+<tr>
+<td><code>POST</code>, <code>DELETE /messages/{id}/pin</code>; <code>GET /channels/{id}/pins</code></td>
+<td>Закрепления</td>
+</tr>
+<tr>
+<td><code>POST /files?name=…</code></td>
+<td>Загрузка файла сырым телом запроса</td>
+</tr>
+<tr>
+<td><code>GET /files/{id}[/{name}]</code></td>
+<td>Скачивание без авторизации</td>
+</tr>
+<tr>
+<td><code>GET /groups</code>, <code>POST /groups</code>, <code>PATCH</code>, <code>DELETE /groups/{id}</code></td>
+<td>Группы</td>
+</tr>
+<tr>
+<td><code>POST /groups/{id}/members</code>, <code>DELETE /groups/{id}/members/{uid}</code></td>
+<td>Участники</td>
+</tr>
+<tr>
+<td><code>PUT /groups/{id}/members/{uid}/role</code></td>
+<td>Роли</td>
+</tr>
+<tr>
+<td><code>POST /groups/{id}/channels</code>, <code>PATCH</code>, <code>DELETE /text-channels/{id}</code></td>
+<td>Текстовые каналы</td>
+</tr>
+<tr>
+<td><code>POST /groups/{id}/rooms</code>, <code>PATCH</code>, <code>DELETE /rooms/{id}</code></td>
+<td>Голосовые комнаты</td>
+</tr>
+<tr>
+<td><code>POST /voice/join</code>, <code>/voice/leave</code></td>
+<td>Подключение к комнате по <code>room_id</code> или к звонку по <code>channel_id</code></td>
+</tr>
+<tr>
+<td><code>POST /calls/{channel}/ring</code>, <code>/decline</code>, <code>/cancel</code></td>
+<td>Личные звонки</td>
+</tr>
+<tr>
+<td><code>GET</code>, <code>POST /admin/invites</code>, <code>DELETE /admin/invites/{code}</code></td>
+<td>Приглашения, только администратор</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>GET /healthz</code> находится вне <code>/api/v1</code>, возвращает <code>ok</code>.</p>
+<h2 id="websocket">WebSocket<a class="heading-anchor" href="#websocket" aria-label="Ссылка на раздел">#</a></h2>
+<p>Подключитесь к <code>/api/v1/ws</code>. За первые 10 секунд отправьте токен первым кадром:</p>
+<pre><code class="language-json">{&quot;type&quot;:&quot;auth&quot;,&quot;token&quot;:&quot;…&quot;}
+</code></pre>
+<p>Не добавляйте токен в URL. После ответа <code>hello</code> сервер передаёт события в формате <code>{&quot;type&quot;:&quot;…&quot;,&quot;data&quot;:{…}}</code>.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Таблица с горизонтальной прокруткой"><table>
+<thead>
+<tr>
+<th>Событие</th>
+<th>Назначение</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message.created</code>, <code>message.updated</code></td>
+<td>Новые и изменённые сообщения, реакции и закрепления</td>
+</tr>
+<tr>
+<td><code>channel.created</code>, <code>channel.deleted</code>, <code>channel.read</code></td>
+<td>Каналы и позиция чтения</td>
+</tr>
+<tr>
+<td><code>group.updated</code>, <code>group.deleted</code></td>
+<td>Состав и настройки группы</td>
+</tr>
+<tr>
+<td><code>user.created</code>, <code>user.updated</code>, <code>presence</code></td>
+<td>Пользователи и доступность</td>
+</tr>
+<tr>
+<td><code>typing</code></td>
+<td>Набор текста</td>
+</tr>
+<tr>
+<td><code>voice.room</code></td>
+<td>Участники комнаты и состояние медиа</td>
+</tr>
+<tr>
+<td><code>call.ring</code>, <code>call.declined</code>, <code>call.cancelled</code>, <code>call.ended</code></td>
+<td>Звонки</td>
+</tr>
+<tr>
+<td><code>ping</code></td>
+<td>Раз в 25 секунд; 70 секунд без кадров — потеря соединения</td>
+</tr>
+</tbody>
+</table></div>
+<p>После переподключения получите пропущенные данные через REST. Клиент может отправлять <code>{&quot;type&quot;:&quot;typing&quot;,&quot;channel_id&quot;:…}</code>.</p>
+<h2 id="медиа-и-боты">Медиа и боты<a class="heading-anchor" href="#медиа-и-боты" aria-label="Ссылка на раздел">#</a></h2>
+<p><code>POST /voice/join</code> возвращает <code>url</code>, <code>token</code> и <code>room</code> для LiveKit. Подключайтесь через <a href="https://docs.livekit.io/home/client/connect/">LiveKit SDK</a>. Токен действует только для этой комнаты.</p>
+<p>Отдельного Bot API пока нет. Скрипт может работать как обычный пользователь. Специальные bot-аккаунты, права, webhooks и slash-команды только планируются.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/ru/development/api.md">Исходник страницы<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Документация"><a href="/docs/development/building/"><span>Назад</span><strong>Сборка и тестирование</strong></a></nav></div>
+    <aside class="doc-toc"><strong>На этой странице</strong><nav><a class="h2" href="#формат">Формат</a><a class="h2" href="#вход">Вход</a><a class="h2" href="#основные-методы">Основные методы</a><a class="h2" href="#websocket">WebSocket</a><a class="h2" href="#медиа-и-боты">Медиа и боты</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Голос, видео и чат на своём сервере.</p></div>
+    <div><strong>Документация</strong><a href="/docs/install/desktop-app/">Инструкция к приложению</a><a href="/docs/install/docker/">Установить сервер</a><a href="/docs/operations/troubleshooting/">Решение проблем</a></div>
+    <div><strong>Проект</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/releases/">История версий</a><a href="/docs/contributing/">Участие в проекте</a><a href="/docs/security/">Безопасность</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Открытый код · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Поиск по документации"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="Что хотите настроить?" aria-label="Поиск по документации"><button class="close-search icon-button" type="button" aria-label="Закрыть"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Например: микрофон, порты, приглашения</p><div class="search-results"></div></dialog></body></html>

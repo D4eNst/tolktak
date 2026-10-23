@@ -1,0 +1,14 @@
+{
+  "name": "tolktak-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "preview": "node tools/serve.mjs",
+    "check": "node --check site.js && node tools/check.mjs",
+    "releases:refresh": "node tools/releases.mjs"
+  },
+  "devDependencies": {
+    "markdown-it": "15.0.3"
+  }
+}

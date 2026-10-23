@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maintenance — TolkTak</title><meta name="description" content="Read the release notes first. The database schema is migrated automatically when the new version starts; there is no way back to an older version after that except restor">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/en/docs/operations/maintenance/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/operations/maintenance/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/operations/maintenance/">
+<meta property="og:type" content="website"><meta property="og:title" content="Maintenance — TolkTak"><meta property="og:description" content="Read the release notes first. The database schema is migrated automatically when the new version starts; there is no way back to an older version after that except restor"><meta property="og:url" content="https://tolktak.d4enst.ru/en/docs/operations/maintenance/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="en">
+<a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/en/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span></button>
+    <nav id="site-nav" aria-label="Menu">
+      <a href="/en/#features">Features</a>
+      <a href="/en/download/" >Download</a>
+      <a href="/en/docs/" aria-current="page">Documentation</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/docs/operations/maintenance/" lang="ru" hreflang="ru" aria-label="Читать по-русски">RU</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/en/docs/">Documentation</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Documentation sections</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search documentation</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Documentation sections"><div class="docs-nav-group"><strong>Getting started</strong><a href="/en/docs/" >Getting started</a><a href="/en/docs/install/desktop-app/" >Desktop app</a><a href="/en/docs/install/requirements/" >Requirements</a><a href="/en/docs/install/docker/" >Install with Docker</a><a href="/en/docs/install/source/" >Install from source</a></div><div class="docs-nav-group"><strong>Network and database</strong><a href="/en/docs/guides/domains/" >Domains and addresses</a><a href="/en/docs/guides/certificates/" >HTTPS certificates</a><a href="/en/docs/guides/reverse-proxy/" >Reverse proxy</a><a href="/en/docs/guides/firewall/" >Firewall and ports</a><a href="/en/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Server administration</strong><a href="/en/docs/operations/configuration/" >Configuration</a><a href="/en/docs/operations/administration/" >Administration</a><a href="/en/docs/operations/maintenance/" aria-current="page">Maintenance</a><a href="/en/docs/operations/troubleshooting/" >Troubleshooting</a></div><div class="docs-nav-group"><strong>Development</strong><a href="/en/docs/development/architecture/" >Architecture</a><a href="/en/docs/development/building/" >Building and testing</a><a href="/en/docs/development/api/" >HTTP and WebSocket API</a></div><div class="docs-nav-group"><strong>Project</strong><a href="/en/docs/contributing/" >Contributing to TolkTak</a><a href="/en/docs/security/" >Security policy</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/en/docs/">Documentation</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Server administration</span></div><article class="prose"><h1 id="maintenance">Maintenance</h1>
+<h2 id="upgrading">Upgrading<a class="heading-anchor" href="#upgrading" aria-label="Link to section">#</a></h2>
+<p>Read the <a href="https://github.com/D4eNst/tolktak/releases">release notes</a> first. The database schema is migrated automatically when the new version starts; there is no way back to an older version after that except restoring a backup, so take one first.</p>
+<p><strong>Docker, prebuilt image.</strong> With <code>TOLKTAK_VERSION=latest</code>:</p>
+<pre><code class="language-sh">cd tolktak/deploy
+git pull                 # picks up changes to the Compose file and examples
+docker compose pull
+docker compose up -d
+</code></pre>
+<p>With a pinned version, change <code>TOLKTAK_VERSION</code> in <code>.env</code> to the new release, then run the same commands.</p>
+<p><strong>Docker, built from source.</strong></p>
+<pre><code class="language-sh">git pull
+docker compose up -d --build
+</code></pre>
+<p><strong>Source install.</strong> Pull, run <code>uv sync --no-dev</code> and restart the service, as in <a href="/en/docs/install/source/#5-finish">Install from source</a>.</p>
+<p><strong>LiveKit</strong> is pinned in <code>docker-compose.yml</code>. A new TolkTak release updates the pin when a newer LiveKit is tested; there is no need to update it separately.</p>
+<p>Users' apps update themselves from GitHub Releases.</p>
+<h2 id="backups">Backups<a class="heading-anchor" href="#backups" aria-label="Link to section">#</a></h2>
+<p>Everything the server knows is in its database and its data directory: <code>tolktak.db</code> (SQLite, the default) and the <code>files/</code> folder with uploads. Back them up together with <code>deploy/.env</code> and <code>deploy/livekit.yaml</code>. With PostgreSQL, the data directory holds only <code>files/</code>; back up the database with <code>pg_dump</code> as described in <a href="/en/docs/guides/postgres/#backups">PostgreSQL</a>.</p>
+<p>The simplest consistent backup stops the server for a moment:</p>
+<pre><code class="language-sh">cd tolktak/deploy
+docker compose stop tolktak
+docker run --rm -v deploy_tolktak-data:/data -v &quot;$PWD&quot;:/backup alpine \
+  tar czf /backup/tolktak-data-$(date +%F).tar.gz -C /data .
+docker compose start tolktak
+</code></pre>
+<p>The volume name is <code>&lt;directory&gt;_tolktak-data</code>; <code>docker volume ls</code> shows it. For a source install, archive <code>/var/lib/tolktak</code> the same way.</p>
+<p>For SQLite backups without stopping, use SQLite's online backup (<code>sqlite3 tolktak.db &quot;.backup backup.db&quot;</code>) and copy <code>files/</code> afterwards; files are never modified after upload.</p>
+<p><strong>Restore:</strong> stop the server, extract the archive into an empty volume or data directory, restore <code>.env</code> and <code>livekit.yaml</code>, start the server. With PostgreSQL, restore the database dump before starting.</p>
+<h2 id="logs-and-health">Logs and health<a class="heading-anchor" href="#logs-and-health" aria-label="Link to section">#</a></h2>
+<pre><code class="language-sh">docker compose logs -f tolktak
+docker compose logs -f livekit
+curl http://127.0.0.1:8080/healthz      # &quot;ok&quot;
+</code></pre>
+<p>For a source install, use <code>journalctl -u tolktak -f</code>. Set <code>TOLKTAK_DEBUG=1</code> to get more detail while you investigate a problem.</p>
+<h2 id="moving-to-another-machine">Moving to another machine<a class="heading-anchor" href="#moving-to-another-machine" aria-label="Link to section">#</a></h2>
+<p>Back up as above, install on the new machine with the same <code>.env</code> and <code>livekit.yaml</code>, restore the data, then point DNS at the new address. Users stay signed in, since their sessions are in the database.</p>
+<h2 id="renewing-certificates">Renewing certificates<a class="heading-anchor" href="#renewing-certificates" aria-label="Link to section">#</a></h2>
+<p>Certificates are renewed by whatever issued them (see <a href="/en/docs/guides/certificates/">HTTPS certificates</a>). Reload the reverse proxy after renewal if your certificate client does not do it for you.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/operations/maintenance.md">Page source<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Documentation"><a href="/en/docs/operations/administration/"><span>Previous</span><strong>Administration</strong></a><a href="/en/docs/operations/troubleshooting/"><span>Next</span><strong>Troubleshooting<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></strong></a></nav></div>
+    <aside class="doc-toc"><strong>On this page</strong><nav><a class="h2" href="#upgrading">Upgrading</a><a class="h2" href="#backups">Backups</a><a class="h2" href="#logs-and-health">Logs and health</a><a class="h2" href="#moving-to-another-machine">Moving to another machine</a><a class="h2" href="#renewing-certificates">Renewing certificates</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/en/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Voice, video and chat on your own server.</p></div>
+    <div><strong>Documentation</strong><a href="/en/docs/install/desktop-app/">Desktop app guide</a><a href="/en/docs/install/docker/">Run a server</a><a href="/en/docs/operations/troubleshooting/">Troubleshooting</a></div>
+    <div><strong>Project</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/en/releases/">Release history</a><a href="/en/docs/contributing/">Contributing</a><a href="/en/docs/security/">Security</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Open source · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Search documentation"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="What would you like to set up?" aria-label="Search documentation"><button class="close-search icon-button" type="button" aria-label="Close"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Try: microphone, ports, invites</p><div class="search-results"></div></dialog></body></html>

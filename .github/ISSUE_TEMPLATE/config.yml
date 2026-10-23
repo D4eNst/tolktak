@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and help
+    url: https://github.com/D4eNst/tolktak/discussions
+    about: Ask questions about using or hosting TolkTak in GitHub Discussions.
+  - name: Security vulnerability
+    url: https://github.com/D4eNst/tolktak/security/advisories/new
+    about: Report security problems privately, not as a public issue.

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PostgreSQL — TolkTak</title><meta name="description" content="TolkTak stores its data in SQLite by default: one file, tolktak.db, in the data directory, with nothing else to install. It can use PostgreSQL instead. Uploaded files sta">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/en/docs/guides/postgres/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/guides/postgres/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/guides/postgres/">
+<meta property="og:type" content="website"><meta property="og:title" content="PostgreSQL — TolkTak"><meta property="og:description" content="TolkTak stores its data in SQLite by default: one file, tolktak.db, in the data directory, with nothing else to install. It can use PostgreSQL instead. Uploaded files sta"><meta property="og:url" content="https://tolktak.d4enst.ru/en/docs/guides/postgres/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="en">
+<a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/en/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span></button>
+    <nav id="site-nav" aria-label="Menu">
+      <a href="/en/#features">Features</a>
+      <a href="/en/download/" >Download</a>
+      <a href="/en/docs/" aria-current="page">Documentation</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/docs/guides/postgres/" lang="ru" hreflang="ru" aria-label="Читать по-русски">RU</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/en/docs/">Documentation</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Documentation sections</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search documentation</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Documentation sections"><div class="docs-nav-group"><strong>Getting started</strong><a href="/en/docs/" >Getting started</a><a href="/en/docs/install/desktop-app/" >Desktop app</a><a href="/en/docs/install/requirements/" >Requirements</a><a href="/en/docs/install/docker/" >Install with Docker</a><a href="/en/docs/install/source/" >Install from source</a></div><div class="docs-nav-group"><strong>Network and database</strong><a href="/en/docs/guides/domains/" >Domains and addresses</a><a href="/en/docs/guides/certificates/" >HTTPS certificates</a><a href="/en/docs/guides/reverse-proxy/" >Reverse proxy</a><a href="/en/docs/guides/firewall/" >Firewall and ports</a><a href="/en/docs/guides/postgres/" aria-current="page">PostgreSQL</a></div><div class="docs-nav-group"><strong>Server administration</strong><a href="/en/docs/operations/configuration/" >Configuration</a><a href="/en/docs/operations/administration/" >Administration</a><a href="/en/docs/operations/maintenance/" >Maintenance</a><a href="/en/docs/operations/troubleshooting/" >Troubleshooting</a></div><div class="docs-nav-group"><strong>Development</strong><a href="/en/docs/development/architecture/" >Architecture</a><a href="/en/docs/development/building/" >Building and testing</a><a href="/en/docs/development/api/" >HTTP and WebSocket API</a></div><div class="docs-nav-group"><strong>Project</strong><a href="/en/docs/contributing/" >Contributing to TolkTak</a><a href="/en/docs/security/" >Security policy</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/en/docs/">Documentation</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Network and database</span></div><article class="prose"><h1 id="postgresql">PostgreSQL</h1>
+<p>TolkTak stores its data in SQLite by default: one file, <code>tolktak.db</code>, in the data directory, with nothing else to install. It can use PostgreSQL instead. Uploaded files stay in the data directory either way.</p>
+<h2 id="which-one-to-use">Which one to use<a class="heading-anchor" href="#which-one-to-use" aria-label="Link to section">#</a></h2>
+<ul>
+<li><strong>SQLite</strong> is the right choice for a quick start, a test server, or a small server for friends. There is nothing to set up, and a backup is a copy of the data directory.</li>
+<li><strong>PostgreSQL</strong> is recommended for a main server that many people rely on. It handles many people writing at once better, it can run on another machine or as a managed service, and it comes with its own tools for backups, replication and monitoring.</li>
+</ul>
+<p>You can start with SQLite and move later; see <a href="#moving-an-existing-server">Moving an existing server</a>. Databases created by earlier versions of TolkTak open unchanged, and the schema is migrated automatically when the server starts, on both.</p>
+<p>The server picks the database from <code>TOLKTAK_DATABASE_URL</code> (see <a href="/en/docs/operations/configuration/">Configuration</a>). Empty means SQLite in the data directory; a <code>postgres://user:password@host:5432/dbname</code> address means PostgreSQL.</p>
+<h2 id="option-a-postgresql-in-the-same-docker-compose-setup">Option A: PostgreSQL in the same Docker Compose setup<a class="heading-anchor" href="#option-a-postgresql-in-the-same-docker-compose-setup" aria-label="Link to section">#</a></h2>
+<p>Add a <code>postgres</code> service next to TolkTak. Put it in <code>deploy/docker-compose.override.yml</code>, which Docker Compose merges into <code>docker-compose.yml</code> automatically, so <code>git pull</code> does not conflict with your change:</p>
+<pre><code class="language-yaml">services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tolktak
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: tolktak
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [&quot;CMD-SHELL&quot;, &quot;pg_isready -U tolktak -d tolktak&quot;]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  tolktak:
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+</code></pre>
+<p>The TolkTak container uses host networking, so it reaches PostgreSQL at <code>127.0.0.1:5432</code>, not by the service name <code>postgres</code>. The port is published only on <code>127.0.0.1</code>; change the left-hand <code>5432</code> if that port is taken on the host.</p>
+<p>Generate a password and add both lines to <code>deploy/.env</code>:</p>
+<pre><code class="language-sh">openssl rand -hex 24
+</code></pre>
+<pre><code class="language-sh">POSTGRES_PASSWORD=&lt;the generated password&gt;
+TOLKTAK_DATABASE_URL=postgres://tolktak:&lt;the generated password&gt;@127.0.0.1:5432/tolktak
+</code></pre>
+<p>A hex password needs no escaping in the URL. If you choose your own, percent-encode characters such as <code>@</code>, <code>:</code>, <code>/</code> and <code>#</code>.</p>
+<p>On a new server, start everything with <code>docker compose up -d</code>. On a server that already has data in SQLite, follow <a href="#moving-an-existing-server">Moving an existing server</a> instead, or the server starts with an empty PostgreSQL database.</p>
+<h2 id="option-b-an-existing-or-managed-postgresql">Option B: an existing or managed PostgreSQL<a class="heading-anchor" href="#option-b-an-existing-or-managed-postgresql" aria-label="Link to section">#</a></h2>
+<p>Any PostgreSQL the server can reach works: one already running on the host, on another machine, or a managed service from your provider. Create a user and a database for TolkTak with <code>psql</code> as an administrator:</p>
+<pre><code class="language-sql">CREATE USER tolktak WITH PASSWORD 'choose-a-password';
+CREATE DATABASE tolktak OWNER tolktak;
+</code></pre>
+<p>The server creates its tables on the first start. Set the address in <code>deploy/.env</code> (or <code>/etc/tolktak/.env</code> for a <a href="/en/docs/install/source/">source install</a>):</p>
+<pre><code class="language-sh">TOLKTAK_DATABASE_URL=postgres://tolktak:choose-a-password@db.example.com:5432/tolktak
+</code></pre>
+<p>Restart the server. Its <code>tolktak-server listening</code> log line shows <code>database=postgres</code> when it uses PostgreSQL.</p>
+<ul>
+<li>If PostgreSQL runs on another machine, allow the TolkTak server in its <code>pg_hba.conf</code> and firewall, and nobody else.</li>
+<li>Keep the database close to the server: network latency to the database adds to almost every request.</li>
+</ul>
+<h2 id="moving-an-existing-server">Moving an existing server<a class="heading-anchor" href="#moving-an-existing-server" aria-label="Link to section">#</a></h2>
+<p><code>tolktak-server copy-db FROM TO</code> copies all data from one database to another. The destination must be empty; the command refuses to write into a database that already has accounts. Uploaded files stay where they are, in the data directory.</p>
+<p>With Docker Compose, after setting up PostgreSQL as in option A or B:</p>
+<pre><code class="language-sh">cd tolktak/deploy
+docker compose stop tolktak
+docker compose run --rm tolktak copy-db sqlite:///data/tolktak.db \
+  postgres://tolktak:&lt;password&gt;@127.0.0.1:5432/tolktak
+</code></pre>
+<p>Then make sure <code>TOLKTAK_DATABASE_URL</code> is set in <code>.env</code> and start the server with <code>docker compose up -d</code>. Users stay signed in, since their sessions are copied too.</p>
+<p>For a source install:</p>
+<pre><code class="language-sh">sudo systemctl stop tolktak
+sudo -u tolktak /opt/tolktak/server/.venv/bin/tolktak-server copy-db \
+  sqlite:///var/lib/tolktak/tolktak.db postgres://tolktak:&lt;password&gt;@127.0.0.1:5432/tolktak
+</code></pre>
+<p>Add <code>TOLKTAK_DATABASE_URL</code> to <code>/etc/tolktak/.env</code> and <code>sudo systemctl start tolktak</code>.</p>
+<p><code>copy-db</code> only reads the data from the SQLite file (after bringing its schema up to date, as the server would on start). Keep the file until you are sure everything works: going back is a matter of removing <code>TOLKTAK_DATABASE_URL</code>, though anything written to PostgreSQL in the meantime stays there. The same command copies in the other direction, from PostgreSQL to an empty SQLite file.</p>
+<h2 id="backups">Backups<a class="heading-anchor" href="#backups" aria-label="Link to section">#</a></h2>
+<p>With PostgreSQL, a backup has two parts: a database dump and the uploaded files in the data directory.</p>
+<pre><code class="language-sh">cd tolktak/deploy
+docker compose exec -T postgres pg_dump -U tolktak -Fc tolktak &gt; tolktak-db-$(date +%F).dump
+</code></pre>
+<p><code>pg_dump</code> takes a consistent snapshot while the server keeps running. Back up the <code>files/</code> folder of the data directory as described in <a href="/en/docs/operations/maintenance/#backups">Maintenance</a>; files are never modified after upload, so it can be copied while the server runs. For an external or managed PostgreSQL, run <code>pg_dump</code> against it with the same address, or use the provider's backups.</p>
+<p>To restore, stop TolkTak and load the dump back:</p>
+<pre><code class="language-sh">docker compose stop tolktak
+docker compose exec -T postgres pg_restore -U tolktak -d tolktak --clean --if-exists &lt; tolktak-db-2026-01-31.dump
+docker compose start tolktak
+</code></pre>
+<p>With SQLite, by comparison, the database is one file in the data directory and is backed up with it.</p>
+<h2 id="tips">Tips<a class="heading-anchor" href="#tips" aria-label="Link to section">#</a></h2>
+<ul>
+<li>Pin the major version (<code>postgres:17</code>). A new major version cannot open the old data directory; moving to one takes a dump and restore.</li>
+<li>Do not publish PostgreSQL on a public interface. With option A it listens only on <code>127.0.0.1</code>.</li>
+<li>Test a restore once, on another machine or into a scratch database. A backup that has never been restored is a guess.</li>
+<li>The rest of the configuration does not change: LiveKit, the reverse proxy and the apps do not know which database the server uses.</li>
+</ul>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/guides/postgres.md">Page source<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Documentation"><a href="/en/docs/guides/firewall/"><span>Previous</span><strong>Firewall and ports</strong></a><a href="/en/docs/operations/configuration/"><span>Next</span><strong>Configuration<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></strong></a></nav></div>
+    <aside class="doc-toc"><strong>On this page</strong><nav><a class="h2" href="#which-one-to-use">Which one to use</a><a class="h2" href="#option-a-postgresql-in-the-same-docker-compose-setup">Option A: PostgreSQL in the same Docker Compose setup</a><a class="h2" href="#option-b-an-existing-or-managed-postgresql">Option B: an existing or managed PostgreSQL</a><a class="h2" href="#moving-an-existing-server">Moving an existing server</a><a class="h2" href="#backups">Backups</a><a class="h2" href="#tips">Tips</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/en/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Voice, video and chat on your own server.</p></div>
+    <div><strong>Documentation</strong><a href="/en/docs/install/desktop-app/">Desktop app guide</a><a href="/en/docs/install/docker/">Run a server</a><a href="/en/docs/operations/troubleshooting/">Troubleshooting</a></div>
+    <div><strong>Project</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/en/releases/">Release history</a><a href="/en/docs/contributing/">Contributing</a><a href="/en/docs/security/">Security</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Open source · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Search documentation"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="What would you like to set up?" aria-label="Search documentation"><button class="close-search icon-button" type="button" aria-label="Close"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Try: microphone, ports, invites</p><div class="search-results"></div></dialog></body></html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TolkTak</title>
+<link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><img class="logo" src="/static/logo.svg" alt="" width="22" height="22"> <span id="name">TolkTak</span></a>
+  <nav>
+    <a href="/docs" data-i18n="nav.docs">Docs</a>
+    <a href="/admin" data-i18n="nav.admin">Admin</a>
+    <a href="https://github.com/D4eNst/tolktak" rel="noopener">GitHub</a>
+    <span class="lang-switch" role="group" aria-label="Language">
+      <button type="button" data-set-lang="en">EN</button><button type="button" data-set-lang="ru">RU</button>
+    </span>
+  </nav>
+</header>
+<main class="card">
+  <h1 data-i18n="hero.title">Your own voice and chat server</h1>
+  <p class="muted" data-i18n="hero.tagline">Voice rooms, chat, screen sharing and watch parties, hosted on this server.</p>
+
+  <section id="register">
+    <h2 data-i18n="reg.title">Create an account</h2>
+    <form id="reg-form">
+      <label><span data-i18n="reg.username">Username</span>
+        <input name="username" required minlength="3" maxlength="32" pattern="[a-zA-Z0-9_.\-]{3,32}" autocomplete="username"></label>
+      <label><span data-i18n="reg.display">Display name (optional)</span>
+        <input name="display_name" maxlength="40"></label>
+      <label><span data-i18n="reg.password">Password (at least 8 characters)</span>
+        <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label><span data-i18n="reg.password2">Repeat the password</span>
+        <input name="password2" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label class="check"><input type="checkbox" id="show-pw"> <span data-i18n="reg.show">Show password</span></label>
+      <label id="invite-row"><span data-i18n="reg.invite">Invite code</span>
+        <input name="invite" autocomplete="off"></label>
+      <button type="submit" data-i18n="reg.submit">Create account</button>
+      <p id="reg-msg" class="msg" role="status"></p>
+    </form>
+    <p id="closed" class="muted" hidden data-i18n="reg.closed">Registration is closed on this server. Ask the administrator to create an account for you.</p>
+  </section>
+
+  <section>
+    <h2 data-i18n="connect.title">Connect</h2>
+    <ol>
+      <li><span data-i18n="connect.install">Install the TolkTak desktop app for Windows, macOS or Linux.</span> <a id="dl" hidden data-i18n="connect.download">Download</a></li>
+      <li><span data-i18n="connect.address">In the sign-in window, enter the server address:</span> <code id="addr"></code></li>
+      <li data-i18n="connect.signin">Sign in with your username and password.</li>
+    </ol>
+  </section>
+
+  <p class="foot"><span id="ver"></span> · <a href="https://github.com/D4eNst/tolktak" rel="noopener" data-i18n="foot.oss">TolkTak is open source</a></p>
+</main>
+<script src="/static/i18n.js"></script>
+<script src="/static/index.js"></script>
+</body>
+</html>

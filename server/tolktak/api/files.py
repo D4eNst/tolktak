@@ -1,0 +1,125 @@
+"""Reads are not authenticated: <img> and <audio> cannot send the token, the random id is the access."""
+
+import contextlib
+import os
+import posixpath
+from typing import Annotated
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import FileResponse, PlainTextResponse
+
+from ..errors import ApiError, NotFound
+from ..server import current_user
+from ..sniff import SNIFF_LEN, detect_content_type, image_size, type_by_extension
+from ..store import files
+from .common import json_response, query_int, server
+
+router = APIRouter(prefix="/api/v1")
+
+User = Annotated[dict, Depends(current_user)]
+
+
+def clean_name(raw: str) -> str:
+    name = raw.replace("\\", "/").rstrip("/")
+    name = posixpath.basename(name) if name else ("/" if raw.replace("\\", "/") else ".")
+    name = name.strip()
+    if name in ("", ".", "/"):
+        name = "file"
+    return name[-120:]
+
+
+@router.post("/files")
+async def upload(request: Request, user: User):
+    s = server(request)
+    me = user["id"]
+    s.limit(f"upload:{me}", 20, 60, "Too many uploads, slow down")
+    limit = s.cfg.max_upload_bytes
+    too_large = ApiError(413, "too_large", f"File exceeds {limit >> 20} MB")
+    with contextlib.suppress(ValueError):
+        if int(request.headers.get("content-length", "0")) > limit:
+            raise too_large
+    name = clean_name(request.query_params.get("name", ""))
+    os.makedirs(s.cfg.files_dir, mode=0o750, exist_ok=True)
+    fid = files.new_file_id()
+    path = s.cfg.files_dir / fid
+    head = b""
+    size = 0
+    ok = False
+    try:
+        with open(path, "xb") as f:
+            os.chmod(path, 0o640)
+            async for chunk in request.stream():
+                if not chunk:
+                    continue
+                size += len(chunk)
+                if size > limit:
+                    raise too_large
+                if len(head) < SNIFF_LEN:
+                    head += chunk[: SNIFF_LEN - len(head)]
+                f.write(chunk)
+        if size == 0:
+            raise ApiError(400, "empty_file", "File is empty")
+        # The content is trusted over the client.
+        ctype = detect_content_type(head)
+        if ctype == "application/octet-stream" or ctype.startswith("text/plain"):
+            if by_ext := type_by_extension(posixpath.splitext(name)[1]):
+                ctype = by_ext
+        ctype = ctype.split(";")[0].strip()
+        # WebM sniffs as video, but a client voice message is audio-only WebM.
+        if ctype == "video/webm" and request.headers.get("content-type", "").startswith("audio/webm"):
+            ctype = "audio/webm"
+        meta = {"id": fid, "name": name, "mime": ctype, "size": size}
+        if ctype.startswith("image/"):
+            w, h = image_size(str(path), ctype)
+            if w == 0:
+                # Formats not parsed here (webp, avif): accept the client's measurement.
+                w, h = query_int(request, "w"), query_int(request, "h")
+            if w:
+                meta["width"] = w
+            if h:
+                meta["height"] = h
+        await files.create_file(me, meta)
+        ok = True
+    finally:
+        if not ok:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+    return json_response({"file": files.file_dict(meta)}, 201)
+
+
+# Rendered by the client; everything else is downloaded.
+INLINE_TYPES = {
+    "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif",
+    "audio/mpeg", "audio/ogg", "audio/wav", "audio/webm", "audio/mp4", "audio/x-wav", "audio/aac", "audio/flac",
+    "video/mp4", "video/webm",
+}  # fmt: skip
+
+
+@router.get("/files/{id}")
+@router.get("/files/{id}/{name}")
+async def download(request: Request, id: str):
+    not_found = PlainTextResponse("404 page not found\n", status_code=404)
+    if not files.valid_file_id(id):
+        return not_found
+    try:
+        meta, _ = await files.file_by_id(id)
+    except NotFound:
+        return not_found
+    path = server(request).cfg.files_dir / id
+    if not path.is_file():
+        return not_found
+    ctype = meta["mime"]
+    disp = "inline" if ctype in INLINE_TYPES else "attachment"
+    if disp == "attachment":
+        ctype = "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=ctype,
+        headers={
+            "Content-Disposition": f"{disp}; filename*=UTF-8''{quote(meta['name'], safe='')}",
+            "Cache-Control": "private, max-age=31536000, immutable",
+            # Uploaded content never runs as a page of this origin.
+            "Content-Security-Policy": "sandbox; default-src 'none'",
+        },
+    )

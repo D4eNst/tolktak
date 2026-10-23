@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Install from source — TolkTak</title><meta name="description" content="This runs the server from a checkout under systemd, without Docker. Use it when you want to run a specific commit or cannot use containers.">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/en/docs/install/source/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/install/source/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/install/source/">
+<meta property="og:type" content="website"><meta property="og:title" content="Install from source — TolkTak"><meta property="og:description" content="This runs the server from a checkout under systemd, without Docker. Use it when you want to run a specific commit or cannot use containers."><meta property="og:url" content="https://tolktak.d4enst.ru/en/docs/install/source/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="en">
+<a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/en/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span></button>
+    <nav id="site-nav" aria-label="Menu">
+      <a href="/en/#features">Features</a>
+      <a href="/en/download/" >Download</a>
+      <a href="/en/docs/" aria-current="page">Documentation</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/docs/install/source/" lang="ru" hreflang="ru" aria-label="Читать по-русски">RU</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/en/docs/">Documentation</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Documentation sections</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search documentation</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Documentation sections"><div class="docs-nav-group"><strong>Getting started</strong><a href="/en/docs/" >Getting started</a><a href="/en/docs/install/desktop-app/" >Desktop app</a><a href="/en/docs/install/requirements/" >Requirements</a><a href="/en/docs/install/docker/" >Install with Docker</a><a href="/en/docs/install/source/" aria-current="page">Install from source</a></div><div class="docs-nav-group"><strong>Network and database</strong><a href="/en/docs/guides/domains/" >Domains and addresses</a><a href="/en/docs/guides/certificates/" >HTTPS certificates</a><a href="/en/docs/guides/reverse-proxy/" >Reverse proxy</a><a href="/en/docs/guides/firewall/" >Firewall and ports</a><a href="/en/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Server administration</strong><a href="/en/docs/operations/configuration/" >Configuration</a><a href="/en/docs/operations/administration/" >Administration</a><a href="/en/docs/operations/maintenance/" >Maintenance</a><a href="/en/docs/operations/troubleshooting/" >Troubleshooting</a></div><div class="docs-nav-group"><strong>Development</strong><a href="/en/docs/development/architecture/" >Architecture</a><a href="/en/docs/development/building/" >Building and testing</a><a href="/en/docs/development/api/" >HTTP and WebSocket API</a></div><div class="docs-nav-group"><strong>Project</strong><a href="/en/docs/contributing/" >Contributing to TolkTak</a><a href="/en/docs/security/" >Security policy</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/en/docs/">Documentation</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Getting started</span></div><article class="prose"><h1 id="install-from-source">Install from source</h1>
+<p>This runs the server from a checkout under systemd, without Docker. Use it when you want to run a specific commit or cannot use containers.</p>
+<h2 id="1-install-the-server">1. Install the server<a class="heading-anchor" href="#1-install-the-server" aria-label="Link to section">#</a></h2>
+<p>The server is a Python application. It needs Python 3.14 and <a href="https://docs.astral.sh/uv/">uv</a>, which installs the dependencies and, if the system has no Python 3.14, Python itself.</p>
+<pre><code class="language-sh">curl -LsSf https://astral.sh/uv/install.sh | sh     # or see the uv documentation for other ways
+sudo git clone https://github.com/D4eNst/tolktak.git /opt/tolktak
+cd /opt/tolktak/server
+sudo UV_PYTHON_INSTALL_DIR=/opt/tolktak/python &quot;$(command -v uv)&quot; sync --no-dev
+</code></pre>
+<p>This creates a virtual environment in <code>server/.venv</code> with the <code>tolktak-server</code> command in <code>server/.venv/bin/</code>. <code>UV_PYTHON_INSTALL_DIR</code> keeps a Python downloaded by uv under <code>/opt/tolktak</code>, where the service user can read it, rather than in root's home directory. The website is part of the package. By default the server keeps its data in SQLite; to use PostgreSQL, see <a href="/en/docs/guides/postgres/">PostgreSQL</a>.</p>
+<p>A source install reports its version as <code>0.1.0-dev</code>. To show the real one, write it into <code>tolktak/_version.py</code> before starting:</p>
+<pre><code class="language-sh">echo &quot;__version__ = \&quot;$(git describe --tags --always)\&quot;&quot; | sudo tee tolktak/_version.py
+</code></pre>
+<h2 id="2-install-livekit">2. Install LiveKit<a class="heading-anchor" href="#2-install-livekit" aria-label="Link to section">#</a></h2>
+<p>Download <code>livekit-server</code> 1.13 for your architecture from the <a href="https://github.com/livekit/livekit/releases">LiveKit releases</a> and install it to <code>/usr/local/bin/</code>.</p>
+<h2 id="3-generate-the-configuration">3. Generate the configuration<a class="heading-anchor" href="#3-generate-the-configuration" aria-label="Link to section">#</a></h2>
+<p>The same <code>init.sh</code> as for Docker writes both files. Run it in <code>deploy/</code> and move the results:</p>
+<pre><code class="language-sh">cd /opt/tolktak/deploy
+sudo ./init.sh talk.example.com lk.example.com     # or: ./init.sh --http 203.0.113.10
+sudo mkdir -p /etc/tolktak
+sudo mv .env livekit.yaml /etc/tolktak/
+</code></pre>
+<p><code>.env</code> does not set the listen address and data directory, which Docker Compose otherwise supplies. Add them to <code>/etc/tolktak/.env</code>, using <code>0.0.0.0:8080</code> as the listen address if you run without a certificate:</p>
+<pre><code class="language-sh">TOLKTAK_LISTEN=127.0.0.1:8080
+TOLKTAK_DATA_DIR=/var/lib/tolktak
+LIVEKIT_INTERNAL_URL=http://127.0.0.1:7880
+</code></pre>
+<h2 id="4-create-the-services">4. Create the services<a class="heading-anchor" href="#4-create-the-services" aria-label="Link to section">#</a></h2>
+<pre><code class="language-sh">sudo useradd --system --home /var/lib/tolktak --create-home tolktak
+sudo chown root:tolktak /etc/tolktak/.env /etc/tolktak/livekit.yaml
+sudo chmod 640 /etc/tolktak/.env /etc/tolktak/livekit.yaml
+</code></pre>
+<p><code>/etc/systemd/system/tolktak.service</code>:</p>
+<pre><code class="language-ini">[Unit]
+Description=TolkTak server
+After=network-online.target livekit.service
+Wants=network-online.target
+
+[Service]
+User=tolktak
+WorkingDirectory=/opt/tolktak/server
+EnvironmentFile=/etc/tolktak/.env
+ExecStart=/opt/tolktak/server/.venv/bin/tolktak-server
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<p><code>/etc/systemd/system/livekit.service</code>:</p>
+<pre><code class="language-ini">[Unit]
+Description=LiveKit media server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=tolktak
+ExecStart=/usr/local/bin/livekit-server --config /etc/tolktak/livekit.yaml
+Restart=on-failure
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<pre><code class="language-sh">sudo systemctl daemon-reload
+sudo systemctl enable --now livekit tolktak
+journalctl -u tolktak -f
+</code></pre>
+<h2 id="5-finish">5. Finish<a class="heading-anchor" href="#5-finish" aria-label="Link to section">#</a></h2>
+<p>With HTTPS, set up the <a href="/en/docs/guides/reverse-proxy/">reverse proxy</a>. Then open the server's address and register the administrator account, as described in <a href="/en/docs/install/docker/#4-create-the-administrator">Install with Docker</a>.</p>
+<p>To upgrade:</p>
+<pre><code class="language-sh">cd /opt/tolktak/server
+sudo git checkout tolktak/_version.py      # only if you wrote the version into it
+sudo git pull
+sudo UV_PYTHON_INSTALL_DIR=/opt/tolktak/python &quot;$(command -v uv)&quot; sync --no-dev
+sudo systemctl restart tolktak
+</code></pre>
+<p>Database migrations run on start.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/install/source.md">Page source<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Documentation"><a href="/en/docs/install/docker/"><span>Previous</span><strong>Install with Docker</strong></a><a href="/en/docs/guides/domains/"><span>Next</span><strong>Domains and addresses<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></strong></a></nav></div>
+    <aside class="doc-toc"><strong>On this page</strong><nav><a class="h2" href="#1-install-the-server">1. Install the server</a><a class="h2" href="#2-install-livekit">2. Install LiveKit</a><a class="h2" href="#3-generate-the-configuration">3. Generate the configuration</a><a class="h2" href="#4-create-the-services">4. Create the services</a><a class="h2" href="#5-finish">5. Finish</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/en/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Voice, video and chat on your own server.</p></div>
+    <div><strong>Documentation</strong><a href="/en/docs/install/desktop-app/">Desktop app guide</a><a href="/en/docs/install/docker/">Run a server</a><a href="/en/docs/operations/troubleshooting/">Troubleshooting</a></div>
+    <div><strong>Project</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/en/releases/">Release history</a><a href="/en/docs/contributing/">Contributing</a><a href="/en/docs/security/">Security</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Open source · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Search documentation"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="What would you like to set up?" aria-label="Search documentation"><button class="close-search icon-button" type="button" aria-label="Close"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Try: microphone, ports, invites</p><div class="search-results"></div></dialog></body></html>

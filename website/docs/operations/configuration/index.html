@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Настройки — TolkTak</title><meta name="description" content="Сервер настраивается переменными окружения. В Docker они находятся в deploy/.env, при запуске через systemd — в /etc/tolktak/.env. После изменений выполните docker compos">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/docs/operations/configuration/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/operations/configuration/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/operations/configuration/">
+<meta property="og:type" content="website"><meta property="og:title" content="Настройки — TolkTak"><meta property="og:description" content="Сервер настраивается переменными окружения. В Docker они находятся в deploy/.env, при запуске через systemd — в /etc/tolktak/.env. После изменений выполните docker compos"><meta property="og:url" content="https://tolktak.d4enst.ru/docs/operations/configuration/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="ru">
+<a class="skip" href="#main">К содержимому</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Меню</span></button>
+    <nav id="site-nav" aria-label="Меню">
+      <a href="/#features">Возможности</a>
+      <a href="/download/" >Скачать</a>
+      <a href="/docs/" aria-current="page">Документация</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/en/docs/operations/configuration/" lang="en" hreflang="en" aria-label="Read in English">EN</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/docs/">Документация</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Разделы документации</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Поиск по документации</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Разделы документации"><div class="docs-nav-group"><strong>Начало работы</strong><a href="/docs/" >Начало работы</a><a href="/docs/install/desktop-app/" >Приложение</a><a href="/docs/install/requirements/" >Требования</a><a href="/docs/install/docker/" >Установка через Docker</a><a href="/docs/install/source/" >Установка из исходников</a></div><div class="docs-nav-group"><strong>Сеть и база данных</strong><a href="/docs/guides/domains/" >Домены и адреса</a><a href="/docs/guides/certificates/" >HTTPS и сертификаты</a><a href="/docs/guides/reverse-proxy/" >Обратный прокси</a><a href="/docs/guides/firewall/" >Файрвол и порты</a><a href="/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Управление сервером</strong><a href="/docs/operations/configuration/" aria-current="page">Настройки</a><a href="/docs/operations/administration/" >Управление сервером</a><a href="/docs/operations/maintenance/" >Обновления и резервные копии</a><a href="/docs/operations/troubleshooting/" >Решение проблем</a></div><div class="docs-nav-group"><strong>Разработка</strong><a href="/docs/development/architecture/" >Архитектура</a><a href="/docs/development/building/" >Сборка и тестирование</a><a href="/docs/development/api/" >HTTP и WebSocket API</a></div><div class="docs-nav-group"><strong>Проект</strong><a href="/docs/contributing/" >Участие в проекте</a><a href="/docs/security/" >Безопасность</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/docs/">Документация</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Управление сервером</span></div><article class="prose"><h1 id="настройки">Настройки</h1>
+<p>Сервер настраивается переменными окружения. В Docker они находятся в <code>deploy/.env</code>, при <a href="/docs/install/source/">запуске через systemd</a> — в <code>/etc/tolktak/.env</code>. После изменений выполните <code>docker compose up -d</code> или перезапустите службу.</p>
+<h2 id="основные-параметры">Основные параметры<a class="heading-anchor" href="#основные-параметры" aria-label="Ссылка на раздел">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Таблица с горизонтальной прокруткой"><table>
+<thead>
+<tr>
+<th>Переменная</th>
+<th>По умолчанию</th>
+<th>Назначение</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TOLKTAK_SERVER_NAME</code></td>
+<td><code>TolkTak</code></td>
+<td>Имя в приложении и на странице сервера</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_REGISTRATION</code></td>
+<td><code>invite</code></td>
+<td><code>open</code>, <code>invite</code> или <code>closed</code>. Первый аккаунт доступен при любом режиме и становится администратором</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_MAX_UPLOAD_MB</code></td>
+<td><code>50</code></td>
+<td>Размер одного файла в МБ. Лимит прокси должен быть выше</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_CLIENT_DOWNLOAD_URL</code></td>
+<td>Пусто</td>
+<td>Ссылка на приложение на странице сервера. Пустое значение скрывает кнопку</td>
+</tr>
+<tr>
+<td><code>LIVEKIT_PUBLIC_URL</code></td>
+<td>Обязателен</td>
+<td>Доступный участникам адрес LiveKit: <code>wss://</code> с HTTPS, <code>ws://</code> без него</td>
+</tr>
+<tr>
+<td><code>LIVEKIT_API_KEY</code></td>
+<td>Обязателен</td>
+<td>Ключ из <code>keys</code> в <code>livekit.yaml</code></td>
+</tr>
+<tr>
+<td><code>LIVEKIT_API_SECRET</code></td>
+<td>Обязателен</td>
+<td>Секрет из того же файла, не короче 32 символов</td>
+</tr>
+<tr>
+<td><code>LIVEKIT_INTERNAL_URL</code></td>
+<td><code>http://127.0.0.1:7880</code></td>
+<td>Адрес API LiveKit для самого сервера</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_LISTEN</code></td>
+<td><code>:8080</code></td>
+<td>Адрес прослушивания. В Compose задаётся через bind и port</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_DATA_DIR</code></td>
+<td><code>./data</code></td>
+<td>Загрузки и SQLite. В контейнере — <code>/data</code></td>
+</tr>
+<tr>
+<td><code>TOLKTAK_DATABASE_URL</code></td>
+<td>Пусто</td>
+<td>Пусто — SQLite в каталоге данных. <code>postgres://user:password@host:5432/dbname</code> — PostgreSQL. Допустим <code>sqlite:///absolute/path.db</code></td>
+</tr>
+<tr>
+<td><code>TOLKTAK_TRUST_PROXY</code></td>
+<td>Выключен</td>
+<td><code>1</code> доверяет <code>X-Forwarded-For</code>. Включайте только при доступе исключительно через свой прокси</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_DEBUG</code></td>
+<td>Выключен</td>
+<td><code>1</code> включает подробные журналы</td>
+</tr>
+</tbody>
+</table></div>
+<p>Если обязательная переменная не задана или значение недопустимо, сервер завершится с сообщением о причине.</p>
+<h2 id="параметры-docker-compose">Параметры Docker Compose<a class="heading-anchor" href="#параметры-docker-compose" aria-label="Ссылка на раздел">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Таблица с горизонтальной прокруткой"><table>
+<thead>
+<tr>
+<th>Переменная</th>
+<th>По умолчанию</th>
+<th>Назначение</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TOLKTAK_VERSION</code></td>
+<td><code>latest</code></td>
+<td>Тег образа сервера. Укажите версию, чтобы обновляться вручную</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_BIND</code>, <code>LIVEKIT_BIND</code></td>
+<td><code>127.0.0.1</code></td>
+<td><code>0.0.0.0</code> при прямом HTTP-доступе</td>
+</tr>
+<tr>
+<td><code>TOLKTAK_PORT</code>, <code>LIVEKIT_PORT</code></td>
+<td><code>8080</code>, <code>7880</code></td>
+<td>HTTP-порты</td>
+</tr>
+<tr>
+<td><code>RTC_TCP_PORT</code></td>
+<td><code>7881</code></td>
+<td>Медиа по TCP</td>
+</tr>
+<tr>
+<td><code>RTC_UDP_START</code>, <code>RTC_UDP_END</code></td>
+<td><code>50000</code>, <code>60000</code></td>
+<td>Диапазон медиа по UDP</td>
+</tr>
+<tr>
+<td><code>TURN_UDP_PORT</code></td>
+<td><code>3478</code></td>
+<td>TURN</td>
+</tr>
+<tr>
+<td><code>TURN_RELAY_START</code>, <code>TURN_RELAY_END</code></td>
+<td><code>30000</code>, <code>40000</code></td>
+<td>Диапазон TURN relay</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>init.sh</code> записывает порты также в <code>livekit.yaml</code>. Изменение только <code>.env</code> не перенастроит LiveKit. Порядок изменения описан в <a href="/docs/guides/firewall/">инструкции по портам</a>.</p>
+<h2 id="livekit">LiveKit<a class="heading-anchor" href="#livekit" aria-label="Ссылка на раздел">#</a></h2>
+<ul>
+<li><code>rtc.use_external_ip</code> определяет публичный IP через STUN. Для сервера в интернете оставьте <code>true</code>.</li>
+<li><code>rtc.interfaces</code> ограничивает сетевые интерфейсы. Полезно при наличии VPN и Docker-мостов.</li>
+<li><code>turn</code> включает встроенный TURN по UDP. TURN по TLS на 443 в шаблоне не настроен.</li>
+<li><code>webhook.urls</code> должен вести на <code>/api/v1/livekit/webhook</code> сервера TolkTak: так обновляется список участников комнат.</li>
+</ul>
+<p>Полный список параметров — в <a href="https://docs.livekit.io/home/self-hosting/deployment/">официальной документации LiveKit</a>.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/ru/operations/configuration.md">Исходник страницы<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Документация"><a href="/docs/guides/postgres/"><span>Назад</span><strong>PostgreSQL</strong></a><a href="/docs/operations/administration/"><span>Далее</span><strong>Управление сервером<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></strong></a></nav></div>
+    <aside class="doc-toc"><strong>На этой странице</strong><nav><a class="h2" href="#основные-параметры">Основные параметры</a><a class="h2" href="#параметры-docker-compose">Параметры Docker Compose</a><a class="h2" href="#livekit">LiveKit</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Голос, видео и чат на своём сервере.</p></div>
+    <div><strong>Документация</strong><a href="/docs/install/desktop-app/">Инструкция к приложению</a><a href="/docs/install/docker/">Установить сервер</a><a href="/docs/operations/troubleshooting/">Решение проблем</a></div>
+    <div><strong>Проект</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/releases/">История версий</a><a href="/docs/contributing/">Участие в проекте</a><a href="/docs/security/">Безопасность</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Открытый код · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Поиск по документации"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="Что хотите настроить?" aria-label="Поиск по документации"><button class="close-search icon-button" type="button" aria-label="Закрыть"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Например: микрофон, порты, приглашения</p><div class="search-results"></div></dialog></body></html>

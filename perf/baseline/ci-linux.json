@@ -1,0 +1,13 @@
+{
+  "note": "Limits for perf/ci.sh on a GitHub ubuntu-24.04 runner (no GPU), about 2x the measured values: they catch a broken background saver or a doubled voice cost, not small drifts. The best repeat counts (perf/check.mjs).",
+  "checks": [
+    { "label": "idle-tray", "metric": "perf0.total.cpu.mean", "max": 1.5, "why": "measured 0.06-0.3 % of a core with hidden=true; 3 % means the background saver is not engaging" },
+    { "label": "idle-chat", "metric": "perf0.total.cpu.mean", "max": 3, "why": "measured 0.7-0.9 %" },
+    { "label": "idle-tray", "metric": "perf0.total.mem.mean", "max": 450, "why": "measured 324 MB PSS" },
+    { "label": "voice2", "metric": "perf0.total.cpu.mean", "max": 60, "why": "measured 28 % (no GPU, busy box)" },
+    { "label": "voice2", "metric": "perf1.total.cpu.mean", "max": 60, "why": "measured 23 %" },
+    { "label": "voice2", "metric": "perf0.audio.underrunEvents", "max": 3, "why": "0-1 at context start-up" },
+    { "label": "voice2", "metric": "perf1.audio.underrunEvents", "max": 3, "why": "0-1 at context start-up" },
+    { "label": "voice2-back", "metric": "perf0.total.cpu.mean", "max": 60, "optional": true, "why": "window in the background should not cost more than in front" }
+  ]
+}

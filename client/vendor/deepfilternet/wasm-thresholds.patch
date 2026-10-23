@@ -1,0 +1,15 @@
+diff --git a/libDF/src/wasm.rs b/libDF/src/wasm.rs
+index 2e02095..0d6a297 100644
+--- a/libDF/src/wasm.rs
++++ b/libDF/src/wasm.rs
+@@ -11,7 +11,9 @@ pub struct DFState(crate::tract::DfTract);
+ #[wasm_bindgen]
+ impl DFState {
+     fn new(model_bytes: &[u8], channels: usize, atten_lim: f32) -> Self {
+-        let r_params = RuntimeParams::default_with_ch(channels).with_atten_lim(atten_lim);
++        let r_params = RuntimeParams::default_with_ch(channels)
++            .with_atten_lim(atten_lim)
++            .with_thresholds(-15., 35., 35.);
+         let df_params = DfParams::from_bytes(model_bytes).expect("Could not load model from path");
+         let m =
+             DfTract::new(df_params, &r_params).expect("Could not initialize DeepFilter runtime.");

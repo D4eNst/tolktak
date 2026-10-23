@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HTTPS и сертификаты — TolkTak</title><meta name="description" content="HTTPS защищает пароли, сообщения и файлы при передаче между устройством и сервером. В конфигурации TolkTak сертификаты устанавливаются на обратном прокси.">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/docs/guides/certificates/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/guides/certificates/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/guides/certificates/">
+<meta property="og:type" content="website"><meta property="og:title" content="HTTPS и сертификаты — TolkTak"><meta property="og:description" content="HTTPS защищает пароли, сообщения и файлы при передаче между устройством и сервером. В конфигурации TolkTak сертификаты устанавливаются на обратном прокси."><meta property="og:url" content="https://tolktak.d4enst.ru/docs/guides/certificates/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="ru">
+<a class="skip" href="#main">К содержимому</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Меню</span></button>
+    <nav id="site-nav" aria-label="Меню">
+      <a href="/#features">Возможности</a>
+      <a href="/download/" >Скачать</a>
+      <a href="/docs/" aria-current="page">Документация</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/en/docs/guides/certificates/" lang="en" hreflang="en" aria-label="Read in English">EN</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/docs/">Документация</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Разделы документации</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Поиск по документации</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Разделы документации"><div class="docs-nav-group"><strong>Начало работы</strong><a href="/docs/" >Начало работы</a><a href="/docs/install/desktop-app/" >Приложение</a><a href="/docs/install/requirements/" >Требования</a><a href="/docs/install/docker/" >Установка через Docker</a><a href="/docs/install/source/" >Установка из исходников</a></div><div class="docs-nav-group"><strong>Сеть и база данных</strong><a href="/docs/guides/domains/" >Домены и адреса</a><a href="/docs/guides/certificates/" aria-current="page">HTTPS и сертификаты</a><a href="/docs/guides/reverse-proxy/" >Обратный прокси</a><a href="/docs/guides/firewall/" >Файрвол и порты</a><a href="/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Управление сервером</strong><a href="/docs/operations/configuration/" >Настройки</a><a href="/docs/operations/administration/" >Управление сервером</a><a href="/docs/operations/maintenance/" >Обновления и резервные копии</a><a href="/docs/operations/troubleshooting/" >Решение проблем</a></div><div class="docs-nav-group"><strong>Разработка</strong><a href="/docs/development/architecture/" >Архитектура</a><a href="/docs/development/building/" >Сборка и тестирование</a><a href="/docs/development/api/" >HTTP и WebSocket API</a></div><div class="docs-nav-group"><strong>Проект</strong><a href="/docs/contributing/" >Участие в проекте</a><a href="/docs/security/" >Безопасность</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/docs/">Документация</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Сеть и база данных</span></div><article class="prose"><h1 id="https-и-сертификаты">HTTPS и сертификаты</h1>
+<p>HTTPS защищает пароли, сообщения и файлы при передаче между устройством и сервером. В конфигурации TolkTak сертификаты устанавливаются на обратном прокси.</p>
+<h2 id="публичный-сертификат">Публичный сертификат<a class="heading-anchor" href="#публичный-сертификат" aria-label="Ссылка на раздел">#</a></h2>
+<p>Для сервера в интернете нужен доверенный сертификат на каждое из <a href="/docs/guides/domains/">двух имён</a>. Один сертификат также может покрывать оба имени.</p>
+<ul>
+<li><strong>nginx:</strong> получение и продление через ACME-клиент, например Certbot. Центр сертификации <a href="https://letsencrypt.org/getting-started/">Let's Encrypt</a> выдаёт бесплатные сертификаты.</li>
+<li><strong>Caddy:</strong> <a href="https://caddyserver.com/docs/automatic-https">автоматическое получение и продление</a> для доменов в конфигурации.</li>
+</ul>
+<p>При ручной настройке ACME-клиента доступны разные способы подтверждения домена:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Таблица с горизонтальной прокруткой"><table>
+<thead>
+<tr>
+<th>Способ</th>
+<th>Что требуется</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HTTP-01</td>
+<td>Домен указывает на сервер; порт 80/TCP доступен из интернета.</td>
+</tr>
+<tr>
+<td>DNS-01</td>
+<td>TXT-запись в DNS. Подходит при закрытом порте 80 и для wildcard-сертификатов.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Условия описаны в <a href="https://letsencrypt.org/docs/challenge-types/">документации Let's Encrypt</a>. Продление должно быть автоматическим; после замены сертификата nginx требуется перечитать конфигурацию.</p>
+<h2 id="самоподписанный-сертификат">Самоподписанный сертификат<a class="heading-anchor" href="#самоподписанный-сертификат" aria-label="Ссылка на раздел">#</a></h2>
+<p>Для закрытой сети возможен сертификат собственного центра сертификации. Такой вариант требует отдельной настройки доверия на каждом устройстве участников.</p>
+<p>Имя или IP сервера должны быть указаны в поле Subject Alternative Name. Приложение не отключает проверку сертификатов: недоверенная цепочка, несовпадение имени или истёкший срок помешают подключению.</p>
+<h2 id="работа-без-сертификата">Работа без сертификата<a class="heading-anchor" href="#работа-без-сертификата" aria-label="Ссылка на раздел">#</a></h2>
+<p>Для локальной сети доступен режим HTTP:</p>
+<pre><code class="language-sh">./init.sh --http 192.168.1.20
+</code></pre>
+<p>Здесь используется адрес своей машины. Пароли, сообщения и файлы передаются без шифрования HTTP. Голос и видео между приложением и LiveKit защищены DTLS-SRTP; сквозное шифрование в TolkTak пока не реализовано.</p>
+<p>Настройка маршрутизации HTTPS — в разделе <a href="/docs/guides/reverse-proxy/">«Обратный прокси»</a>.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/ru/guides/certificates.md">Исходник страницы<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Документация"><a href="/docs/guides/domains/"><span>Назад</span><strong>Домены и адреса</strong></a><a href="/docs/guides/reverse-proxy/"><span>Далее</span><strong>Обратный прокси<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></strong></a></nav></div>
+    <aside class="doc-toc"><strong>На этой странице</strong><nav><a class="h2" href="#публичный-сертификат">Публичный сертификат</a><a class="h2" href="#самоподписанный-сертификат">Самоподписанный сертификат</a><a class="h2" href="#работа-без-сертификата">Работа без сертификата</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Голос, видео и чат на своём сервере.</p></div>
+    <div><strong>Документация</strong><a href="/docs/install/desktop-app/">Инструкция к приложению</a><a href="/docs/install/docker/">Установить сервер</a><a href="/docs/operations/troubleshooting/">Решение проблем</a></div>
+    <div><strong>Проект</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/releases/">История версий</a><a href="/docs/contributing/">Участие в проекте</a><a href="/docs/security/">Безопасность</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Открытый код · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Поиск по документации"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="Что хотите настроить?" aria-label="Поиск по документации"><button class="close-search icon-button" type="button" aria-label="Закрыть"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Например: микрофон, порты, приглашения</p><div class="search-results"></div></dialog></body></html>

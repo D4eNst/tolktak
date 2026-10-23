@@ -1,0 +1,57 @@
+{
+  "version": "0.1.1",
+  "tag": "v0.1.1",
+  "published": "2026-10-22T20:24:16Z",
+  "url": "https://github.com/D4eNst/tolktak/releases/tag/v0.1.1",
+  "notes": "",
+  "assets": [
+    {
+      "name": "TolkTak-0.1.1-linux-amd64.deb",
+      "size": 110230136,
+      "url": "https://github.com/D4eNst/tolktak/releases/download/v0.1.1/TolkTak-0.1.1-linux-amd64.deb",
+      "digest": "sha256:ff9524bf08e81d6c13b73a5ab6d24a0b2477ec662fb6bbd402582ed9ee634fc8"
+    },
+    {
+      "name": "TolkTak-0.1.1-linux-x86_64.AppImage",
+      "size": 135461064,
+      "url": "https://github.com/D4eNst/tolktak/releases/download/v0.1.1/TolkTak-0.1.1-linux-x86_64.AppImage",
+      "digest": "sha256:4bb0291ea812a679e810787a7d2123849a6c0aefef70419a2b922095a0f81051"
+    },
+    {
+      "name": "TolkTak-0.1.1-mac-arm64.dmg",
+      "size": 129724081,
+      "url": "https://github.com/D4eNst/tolktak/releases/download/v0.1.1/TolkTak-0.1.1-mac-arm64.dmg",
+      "digest": "sha256:cc3718a177c99846d54eacf6ff9627a1f3d7e3101553e7f0e0d05a3aaf9b42e6"
+    },
+    {
+      "name": "TolkTak-0.1.1-mac-arm64.zip",
+      "size": 129242091,
+      "url": "https://github.com/D4eNst/tolktak/releases/download/v0.1.1/TolkTak-0.1.1-mac-arm64.zip",
+      "digest": "sha256:8baea5b4a8f5e1fb36da35279f93d3c75d88e693b174093c89c6fa087a3ca257"
+    },
+    {
+      "name": "TolkTak-0.1.1-mac-x64.dmg",
+      "size": 133940351,
+      "url": "https://github.com/D4eNst/tolktak/releases/download/v0.1.1/TolkTak-0.1.1-mac-x64.dmg",
+      "digest": "sha256:947286ca79743d775c35bd253f4e2ec06dd7c65d69366670d6f155e78c1dce5b"
+    },
+    {
+      "name": "TolkTak-0.1.1-mac-x64.zip",
+      "size": 133527585,
+      "url": "https://github.com/D4eNst/tolktak/releases/download/v0.1.1/TolkTak-0.1.1-mac-x64.zip",
+      "digest": "sha256:62b4cadb0671993198b4ae90c61f407ff19b98b6a56633a04d10b0e6ce98b67d"
+    },
+    {
+      "name": "TolkTak-0.1.1-win.zip",
+      "size": 153334806,
+      "url": "https://github.com/D4eNst/tolktak/releases/download/v0.1.1/TolkTak-0.1.1-win.zip",
+      "digest": "sha256:0e872c573fc7fd06e8926e409922f7167d7d4bfb0b3e7f1b0d52742cd8fb8bb2"
+    },
+    {
+      "name": "TolkTak-Setup-0.1.1.exe",
+      "size": 114394170,
+      "url": "https://github.com/D4eNst/tolktak/releases/download/v0.1.1/TolkTak-Setup-0.1.1.exe",
+      "digest": "sha256:a1e36f07e40a85d378c54c145099b3d3cb0bd1f740bb724a8ac3aa0e424533e6"
+    }
+  ]
+}

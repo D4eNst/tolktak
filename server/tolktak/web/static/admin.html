@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Administration · TolkTak</title>
+<link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><img class="logo" src="/static/logo.svg" alt="" width="22" height="22"> TolkTak</a>
+  <nav>
+    <a href="/docs" data-i18n="nav.docs">Docs</a>
+    <a href="/admin" aria-current="page" data-i18n="nav.admin">Admin</a>
+    <a href="https://github.com/D4eNst/tolktak" rel="noopener">GitHub</a>
+    <span class="lang-switch" role="group" aria-label="Language">
+      <button type="button" data-set-lang="en">EN</button><button type="button" data-set-lang="ru">RU</button>
+    </span>
+  </nav>
+</header>
+<main class="card">
+  <h1 data-i18n="title">Administration</h1>
+  <form id="login">
+    <label><span data-i18n="login.username">Username</span>
+      <input name="username" required autocomplete="username"></label>
+    <label><span data-i18n="login.password">Password</span>
+      <input name="password" type="password" required autocomplete="current-password"></label>
+    <button type="submit" data-i18n="login.submit">Sign in</button>
+    <p id="login-msg" class="msg err" role="alert"></p>
+  </form>
+  <section id="panel" hidden>
+    <h2 data-i18n="inv.title">Invites</h2>
+    <form id="new-invite" class="row">
+      <label><span data-i18n="inv.uses">Max uses</span>
+        <input name="max_uses" type="number" min="1" max="1000" value="1"></label>
+      <label><span data-i18n="inv.days">Valid for, days</span>
+        <input name="days" type="number" min="1" max="365" value="7"></label>
+      <button type="submit" data-i18n="inv.create">Create</button>
+    </form>
+    <p id="panel-msg" class="msg err" role="alert"></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th data-i18n="inv.code">Code</th><th data-i18n="inv.used">Used</th><th data-i18n="inv.expires">Expires</th><th></th></tr></thead>
+        <tbody id="invites"></tbody>
+      </table>
+    </div>
+    <p class="muted"><span data-i18n="inv.link">Invite link:</span> <code id="link-example"></code></p>
+  </section>
+</main>
+<script src="/static/i18n.js"></script>
+<script src="/static/admin.js"></script>
+</body>
+</html>

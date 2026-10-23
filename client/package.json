@@ -1,0 +1,150 @@
+{
+  "name": "tolktak",
+  "productName": "TolkTak",
+  "version": "0.1.0",
+  "description": "TolkTak — self-hosted voice, chat, screen sharing and watch-together",
+  "license": "AGPL-3.0-or-later",
+  "author": "TolkTak contributors",
+  "main": "dist/main.js",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit -p .",
+    "start": "npm run build && electron .",
+    "dist:win": "npm run build && electron-builder --win --x64",
+    "test:e2e": "playwright test",
+    "dist:win:zip": "npm run build && electron-builder --win zip --x64",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2",
+    "koffi": "2.16.2"
+  },
+  "devDependencies": {
+    "@jitsi/rnnoise-wasm": "0.2.1",
+    "@playwright/test": "1.64.1",
+    "@preact/signals": "2.11.3",
+    "@sapphi-red/web-noise-suppressor": "^0.4.1",
+    "@types/node": "^22.20.5",
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "livekit-client": "2.23.0",
+    "preact": "10.29.8",
+    "rcedit": "5.0.2",
+    "typescript": "6.0.3"
+  },
+  "build": {
+    "appId": "org.tolktak.client",
+    "productName": "TolkTak",
+    "copyright": "TolkTak contributors, AGPL-3.0-or-later",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.map",
+      "package.json",
+      "!node_modules/koffi/build/koffi/{darwin*,freebsd*,linux*,openbsd*,musl*,win32_ia32,win32_arm64}/**",
+      "!node_modules/koffi/{src,doc,vendor}/**"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "TolkTak-Setup-${version}.${ext}",
+      "shortcutName": "TolkTak",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "multiLanguageInstaller": true,
+      "installerLanguages": [
+        "en_US",
+        "ru_RU"
+      ]
+    },
+    "electronLanguages": [
+      "ru",
+      "en-US"
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    },
+    "afterPack": "scripts/after-pack.cjs",
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.social-networking",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "TolkTak-${version}-mac-${arch}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "D4eNst",
+        "repo": "tolktak"
+      }
+    ],
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Network",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "artifactName": "TolkTak-${version}-linux-${arch}.${ext}",
+      "maintainer": "TolkTak contributors <tolktak@users.noreply.github.com>",
+      "syncDesktopName": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/D4eNst/tolktak"
+  },
+  "homepage": "https://github.com/D4eNst/tolktak",
+  "desktopName": "tolktak.desktop"
+}

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Domains and addresses — TolkTak</title><meta name="description" content="In the standard setup, TolkTak and LiveKit run on the same machine with separate host names. The reverse proxy routes requests to the appropriate service.">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/en/docs/guides/domains/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/guides/domains/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/guides/domains/">
+<meta property="og:type" content="website"><meta property="og:title" content="Domains and addresses — TolkTak"><meta property="og:description" content="In the standard setup, TolkTak and LiveKit run on the same machine with separate host names. The reverse proxy routes requests to the appropriate service."><meta property="og:url" content="https://tolktak.d4enst.ru/en/docs/guides/domains/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="en">
+<a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/en/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span></button>
+    <nav id="site-nav" aria-label="Menu">
+      <a href="/en/#features">Features</a>
+      <a href="/en/download/" >Download</a>
+      <a href="/en/docs/" aria-current="page">Documentation</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/docs/guides/domains/" lang="ru" hreflang="ru" aria-label="Читать по-русски">RU</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/en/docs/">Documentation</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Documentation sections</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search documentation</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Documentation sections"><div class="docs-nav-group"><strong>Getting started</strong><a href="/en/docs/" >Getting started</a><a href="/en/docs/install/desktop-app/" >Desktop app</a><a href="/en/docs/install/requirements/" >Requirements</a><a href="/en/docs/install/docker/" >Install with Docker</a><a href="/en/docs/install/source/" >Install from source</a></div><div class="docs-nav-group"><strong>Network and database</strong><a href="/en/docs/guides/domains/" aria-current="page">Domains and addresses</a><a href="/en/docs/guides/certificates/" >HTTPS certificates</a><a href="/en/docs/guides/reverse-proxy/" >Reverse proxy</a><a href="/en/docs/guides/firewall/" >Firewall and ports</a><a href="/en/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Server administration</strong><a href="/en/docs/operations/configuration/" >Configuration</a><a href="/en/docs/operations/administration/" >Administration</a><a href="/en/docs/operations/maintenance/" >Maintenance</a><a href="/en/docs/operations/troubleshooting/" >Troubleshooting</a></div><div class="docs-nav-group"><strong>Development</strong><a href="/en/docs/development/architecture/" >Architecture</a><a href="/en/docs/development/building/" >Building and testing</a><a href="/en/docs/development/api/" >HTTP and WebSocket API</a></div><div class="docs-nav-group"><strong>Project</strong><a href="/en/docs/contributing/" >Contributing to TolkTak</a><a href="/en/docs/security/" >Security policy</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/en/docs/">Documentation</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Network and database</span></div><article class="prose"><h1 id="domains-and-addresses">Domains and addresses</h1>
+<h2 id="with-https-two-host-names">With HTTPS: two host names<a class="heading-anchor" href="#with-https-two-host-names" aria-label="Link to section">#</a></h2>
+<p>In the standard setup, TolkTak and LiveKit run on the same machine with separate host names. The reverse proxy routes requests to the appropriate service.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Horizontally scrollable table"><table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Record type</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>talk.example.com</code></td>
+<td>A</td>
+<td><code>203.0.113.10</code></td>
+</tr>
+<tr>
+<td><code>lk.example.com</code></td>
+<td>A</td>
+<td><code>203.0.113.10</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>The names and IP above are examples. Use your own domains and the server's public address. Only add an AAAA record when IPv6 is configured; otherwise some devices may try an address that cannot be reached.</p>
+<h2 id="check-dns">Check DNS<a class="heading-anchor" href="#check-dns" aria-label="Link to section">#</a></h2>
+<pre><code class="language-sh">dig +short talk.example.com A
+dig +short lk.example.com A
+</code></pre>
+<p>For records without proxying, both commands should return the server's public IP. DNS changes may take time to appear.</p>
+<p>Pass the same names to the setup script: TolkTak first, then LiveKit.</p>
+<pre><code class="language-sh">./init.sh talk.example.com lk.example.com
+</code></pre>
+<h2 id="dns-provider-proxying">DNS provider proxying<a class="heading-anchor" href="#dns-provider-proxying" aria-label="Link to section">#</a></h2>
+<p>This guide assumes direct connections to the server. With a provider that offers a CDN proxy, use <strong>DNS only</strong> for both names. In this mode, DNS returns the server's own address; see <a href="https://developers.cloudflare.com/dns/proxy-status/">Cloudflare's documentation</a>.</p>
+<p>LiveKit media ports and TURN must be reachable directly. An ordinary HTTP proxy does not forward UDP traffic.</p>
+<h2 id="without-a-certificate-one-address">Without a certificate: one address<a class="heading-anchor" href="#without-a-certificate-one-address" aria-label="Link to section">#</a></h2>
+<p>A local network setup can use one address with separate ports:</p>
+<ul>
+<li><code>http://192.168.1.20:8080</code> — TolkTak;</li>
+<li><code>ws://192.168.1.20:7880</code> — LiveKit.</li>
+</ul>
+<p>Generate the configuration for this example with:</p>
+<pre><code class="language-sh">./init.sh --http 192.168.1.20
+</code></pre>
+<p>Replace <code>192.168.1.20</code> with your machine's address. HTTP sends passwords, messages and files without encryption. For internet access, continue with <a href="/en/docs/guides/certificates/">HTTPS certificates</a>, then the <a href="/en/docs/guides/reverse-proxy/">reverse proxy</a>.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/guides/domains.md">Page source<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Documentation"><a href="/en/docs/install/source/"><span>Previous</span><strong>Install from source</strong></a><a href="/en/docs/guides/certificates/"><span>Next</span><strong>HTTPS certificates<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></strong></a></nav></div>
+    <aside class="doc-toc"><strong>On this page</strong><nav><a class="h2" href="#with-https-two-host-names">With HTTPS: two host names</a><a class="h2" href="#check-dns">Check DNS</a><a class="h2" href="#dns-provider-proxying">DNS provider proxying</a><a class="h2" href="#without-a-certificate-one-address">Without a certificate: one address</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/en/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Voice, video and chat on your own server.</p></div>
+    <div><strong>Documentation</strong><a href="/en/docs/install/desktop-app/">Desktop app guide</a><a href="/en/docs/install/docker/">Run a server</a><a href="/en/docs/operations/troubleshooting/">Troubleshooting</a></div>
+    <div><strong>Project</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/en/releases/">Release history</a><a href="/en/docs/contributing/">Contributing</a><a href="/en/docs/security/">Security</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Open source · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Search documentation"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="What would you like to set up?" aria-label="Search documentation"><button class="close-search icon-button" type="button" aria-label="Close"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Try: microphone, ports, invites</p><div class="search-results"></div></dialog></body></html>

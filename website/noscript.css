@@ -1,0 +1,8 @@
+.search-trigger, .gallery-tabs, .copy-button, .menu-button, .docs-menu-button { display: none !important; }
+@media (max-width: 600px) {
+  .site-header { height: auto; position: static; }
+  .header-inner { display: block; padding-top: 15px; }
+  .site-header nav { display: flex; position: static; flex-direction: row; flex-wrap: wrap; padding: 10px 0; border: 0; box-shadow: none; }
+  .site-header nav a { padding: 8px 12px 8px 0; font-size: 12px; }
+  #docs-sections { display: block; max-height: none; }
+}

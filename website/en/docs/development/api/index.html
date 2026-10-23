@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HTTP and WebSocket API — TolkTak</title><meta name="description" content="The desktop app uses this API, and so can your own tools and scripts. It is a JSON API under /api/v1.">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/en/docs/development/api/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/development/api/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/development/api/">
+<meta property="og:type" content="website"><meta property="og:title" content="HTTP and WebSocket API — TolkTak"><meta property="og:description" content="The desktop app uses this API, and so can your own tools and scripts. It is a JSON API under /api/v1."><meta property="og:url" content="https://tolktak.d4enst.ru/en/docs/development/api/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="en">
+<a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/en/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span></button>
+    <nav id="site-nav" aria-label="Menu">
+      <a href="/en/#features">Features</a>
+      <a href="/en/download/" >Download</a>
+      <a href="/en/docs/" aria-current="page">Documentation</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/docs/development/api/" lang="ru" hreflang="ru" aria-label="Читать по-русски">RU</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/en/docs/">Documentation</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Documentation sections</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search documentation</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Documentation sections"><div class="docs-nav-group"><strong>Getting started</strong><a href="/en/docs/" >Getting started</a><a href="/en/docs/install/desktop-app/" >Desktop app</a><a href="/en/docs/install/requirements/" >Requirements</a><a href="/en/docs/install/docker/" >Install with Docker</a><a href="/en/docs/install/source/" >Install from source</a></div><div class="docs-nav-group"><strong>Network and database</strong><a href="/en/docs/guides/domains/" >Domains and addresses</a><a href="/en/docs/guides/certificates/" >HTTPS certificates</a><a href="/en/docs/guides/reverse-proxy/" >Reverse proxy</a><a href="/en/docs/guides/firewall/" >Firewall and ports</a><a href="/en/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Server administration</strong><a href="/en/docs/operations/configuration/" >Configuration</a><a href="/en/docs/operations/administration/" >Administration</a><a href="/en/docs/operations/maintenance/" >Maintenance</a><a href="/en/docs/operations/troubleshooting/" >Troubleshooting</a></div><div class="docs-nav-group"><strong>Development</strong><a href="/en/docs/development/architecture/" >Architecture</a><a href="/en/docs/development/building/" >Building and testing</a><a href="/en/docs/development/api/" aria-current="page">HTTP and WebSocket API</a></div><div class="docs-nav-group"><strong>Project</strong><a href="/en/docs/contributing/" >Contributing to TolkTak</a><a href="/en/docs/security/" >Security policy</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/en/docs/">Documentation</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Development</span></div><article class="prose"><h1 id="http-and-websocket-api">HTTP and WebSocket API</h1>
+<p>The desktop app uses this API, and so can your own tools and scripts. It is a JSON API under <code>/api/v1</code>.</p>
+<blockquote>
+<p><strong>Stability.</strong> The API is not versioned beyond <code>/v1</code> yet and may change between minor releases while TolkTak is at 0.x. Check the release notes before upgrading a server that your scripts depend on. <a href="https://github.com/D4eNst/tolktak/blob/main/client/src/renderer/api.ts"><code>client/src/renderer/api.ts</code></a> is the reference client and always matches the server of the same version.</p>
+</blockquote>
+<h2 id="conventions">Conventions<a class="heading-anchor" href="#conventions" aria-label="Link to section">#</a></h2>
+<ul>
+<li>Requests and responses are JSON (<code>Content-Type: application/json</code>), except file uploads and downloads.</li>
+<li>Timestamps are Unix milliseconds. IDs are integers, except file IDs, which are random strings.</li>
+<li>Errors have an HTTP status and a body of the form <code>{&quot;error&quot;: {&quot;code&quot;: &quot;invite_invalid&quot;, &quot;message&quot;: &quot;Invite code is invalid, expired or used up&quot;}}</code>. <code>code</code> is stable and meant for programs; <code>message</code> is English text for people.</li>
+<li>Rate-limited requests get <code>429</code> with code <code>rate_limited</code>.</li>
+</ul>
+<h2 id="authentication">Authentication<a class="heading-anchor" href="#authentication" aria-label="Link to section">#</a></h2>
+<pre><code class="language-http">POST /api/v1/auth/login
+{&quot;username&quot;: &quot;alice&quot;, &quot;password&quot;: &quot;…&quot;, &quot;device&quot;: &quot;my-script&quot;}
+</code></pre>
+<p>returns <code>{&quot;token&quot;: &quot;…&quot;, &quot;user&quot;: {…}}</code>. Send the token on every other request:</p>
+<pre><code class="language-http">Authorization: Bearer &lt;token&gt;
+</code></pre>
+<p>A token is valid until <code>POST /api/v1/auth/logout</code>. <code>POST /api/v1/auth/register</code> takes <code>username</code>, <code>display_name</code>, <code>password</code> and, in invite mode, <code>invite</code>.</p>
+<p>For automation, create a separate account for the script, so its token can be revoked without affecting a person.</p>
+<h2 id="endpoints">Endpoints<a class="heading-anchor" href="#endpoints" aria-label="Link to section">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Horizontally scrollable table"><table>
+<thead>
+<tr>
+<th>Method and path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /server</code></td>
+<td>Server name, version, registration mode, LiveKit address. No authentication.</td>
+</tr>
+<tr>
+<td><code>POST /auth/register</code>, <code>/auth/login</code>, <code>/auth/logout</code></td>
+<td>Accounts and sessions.</td>
+</tr>
+<tr>
+<td><code>GET /me</code>, <code>PATCH /me</code>, <code>POST /me/password</code></td>
+<td>Own profile (<code>display_name</code>, <code>about</code>, <code>status</code>, <code>avatar</code>) and password.</td>
+</tr>
+<tr>
+<td><code>GET /users</code></td>
+<td>All users on the server.</td>
+</tr>
+<tr>
+<td><code>GET /channels</code></td>
+<td>Channels the user is in: direct messages and group text channels, with the last message and unread count.</td>
+</tr>
+<tr>
+<td><code>POST /dms</code></td>
+<td>Open a direct-message channel with <code>user_id</code>.</td>
+</tr>
+<tr>
+<td><code>GET /channels/{id}/messages</code></td>
+<td>History. Query: <code>before</code>, <code>after</code>, <code>limit</code>, <code>q</code> (search).</td>
+</tr>
+<tr>
+<td><code>POST /channels/{id}/messages</code></td>
+<td>Send: <code>text</code>, <code>nonce</code> (client-generated, makes retries safe), optional <code>reply_to</code> and <code>attachments</code> (file IDs).</td>
+</tr>
+<tr>
+<td><code>POST /channels/{id}/read</code></td>
+<td>Mark read up to <code>message_id</code>.</td>
+</tr>
+<tr>
+<td><code>PATCH /messages/{id}</code>, <code>DELETE /messages/{id}</code></td>
+<td>Edit or delete own message.</td>
+</tr>
+<tr>
+<td><code>POST /messages/{id}/reactions</code></td>
+<td>Toggle the reaction <code>emoji</code>.</td>
+</tr>
+<tr>
+<td><code>POST</code>, <code>DELETE /messages/{id}/pin</code>; <code>GET /channels/{id}/pins</code></td>
+<td>Pinned messages.</td>
+</tr>
+<tr>
+<td><code>POST /files?name=…</code></td>
+<td>Upload; the body is the raw file. Returns <code>{&quot;file&quot;: {&quot;id&quot;, …}}</code>.</td>
+</tr>
+<tr>
+<td><code>GET /files/{id}[/{name}]</code></td>
+<td>Download. No authentication; see <a href="/en/docs/development/architecture/#security-model">security model</a>.</td>
+</tr>
+<tr>
+<td><code>GET /groups</code>, <code>POST /groups</code>, <code>PATCH</code>, <code>DELETE /groups/{id}</code></td>
+<td>Groups.</td>
+</tr>
+<tr>
+<td><code>POST /groups/{id}/members</code>, <code>DELETE /groups/{id}/members/{uid}</code>, <code>PUT /groups/{id}/members/{uid}/role</code></td>
+<td>Membership and roles.</td>
+</tr>
+<tr>
+<td><code>POST /groups/{id}/channels</code>, <code>PATCH</code>, <code>DELETE /text-channels/{id}</code></td>
+<td>Text channels.</td>
+</tr>
+<tr>
+<td><code>POST /groups/{id}/rooms</code>, <code>PATCH</code>, <code>DELETE /rooms/{id}</code></td>
+<td>Voice rooms.</td>
+</tr>
+<tr>
+<td><code>POST /voice/join</code>, <code>POST /voice/leave</code></td>
+<td>Get a LiveKit URL and token for <code>room_id</code> (group room) or <code>channel_id</code> (direct call).</td>
+</tr>
+<tr>
+<td><code>POST /calls/{channel}/ring</code>, <code>/decline</code>, <code>/cancel</code></td>
+<td>Direct-message calls.</td>
+</tr>
+<tr>
+<td><code>GET</code>, <code>POST /admin/invites</code>, <code>DELETE /admin/invites/{code}</code></td>
+<td>Invites. Administrator only.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Paths in the table are relative to <code>/api/v1</code>. <code>GET /healthz</code> (outside <code>/api/v1</code>) returns <code>ok</code> for health checks.</p>
+<h2 id="events">Events<a class="heading-anchor" href="#events" aria-label="Link to section">#</a></h2>
+<p>Open a WebSocket to <code>/api/v1/ws</code> and send the token as the first frame within 10 seconds:</p>
+<pre><code class="language-json">{&quot;type&quot;: &quot;auth&quot;, &quot;token&quot;: &quot;…&quot;}
+</code></pre>
+<p>The token is never put in the URL, so it does not end up in proxy logs. The server answers with <code>hello</code> (your user, who is online, current voice rooms, server name and version) and then pushes events as <code>{&quot;type&quot;: &quot;…&quot;, &quot;data&quot;: {…}}</code>:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Horizontally scrollable table"><table>
+<thead>
+<tr>
+<th>Event</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message.created</code>, <code>message.updated</code></td>
+<td>A message was sent, edited, deleted, reacted to or pinned.</td>
+</tr>
+<tr>
+<td><code>channel.created</code>, <code>channel.deleted</code>, <code>channel.read</code></td>
+<td>Channels appeared or disappeared; read position changed on another device.</td>
+</tr>
+<tr>
+<td><code>group.updated</code>, <code>group.deleted</code></td>
+<td>Group settings, members, rooms or text channels changed.</td>
+</tr>
+<tr>
+<td><code>user.created</code>, <code>user.updated</code>, <code>presence</code></td>
+<td>Accounts and online status.</td>
+</tr>
+<tr>
+<td><code>typing</code></td>
+<td>Someone is typing in a channel.</td>
+</tr>
+<tr>
+<td><code>voice.room</code></td>
+<td>Who is in a voice room, with mute, deafen, camera and screen flags.</td>
+</tr>
+<tr>
+<td><code>call.ring</code>, <code>call.declined</code>, <code>call.cancelled</code>, <code>call.ended</code></td>
+<td>Direct-message calls.</td>
+</tr>
+<tr>
+<td><code>ping</code></td>
+<td>Every 25 seconds. Treat 70 seconds without any frame as a dead connection.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Events tell you that something changed; after a reconnect, fetch what you missed through REST (<code>GET /channels</code>, then <code>messages?after=…</code>).</p>
+<p>A client can send <code>{&quot;type&quot;: &quot;typing&quot;, &quot;channel_id&quot;: …}</code>.</p>
+<h2 id="voice">Voice<a class="heading-anchor" href="#voice" aria-label="Link to section">#</a></h2>
+<p><code>POST /voice/join</code> returns a LiveKit <code>url</code>, <code>token</code> and <code>room</code>. Connect with any <a href="https://docs.livekit.io/home/client/connect/">LiveKit SDK</a> to publish or subscribe to audio and video. Tokens are scoped to that one room.</p>
+<h2 id="bot-api-planned">Bot API (planned)<a class="heading-anchor" href="#bot-api-planned" aria-label="Link to section">#</a></h2>
+<p>There is no dedicated bot API yet. Today a script can act as a regular user through the API above. Planned for a later version:</p>
+<ul>
+<li>bot accounts created by the administrator, with tokens that do not expire with a login session and are marked as bots in the app;</li>
+<li>per-bot permissions instead of full user rights;</li>
+<li>outgoing webhooks for events, as an alternative to holding a WebSocket open;</li>
+<li>slash commands registered by bots.</li>
+</ul>
+<p>Ideas and use cases are welcome in <a href="https://github.com/D4eNst/tolktak/issues">issues</a>.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/development/api.md">Page source<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Documentation"><a href="/en/docs/development/building/"><span>Previous</span><strong>Building and testing</strong></a></nav></div>
+    <aside class="doc-toc"><strong>On this page</strong><nav><a class="h2" href="#conventions">Conventions</a><a class="h2" href="#authentication">Authentication</a><a class="h2" href="#endpoints">Endpoints</a><a class="h2" href="#events">Events</a><a class="h2" href="#voice">Voice</a><a class="h2" href="#bot-api-planned">Bot API (planned)</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/en/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Voice, video and chat on your own server.</p></div>
+    <div><strong>Documentation</strong><a href="/en/docs/install/desktop-app/">Desktop app guide</a><a href="/en/docs/install/docker/">Run a server</a><a href="/en/docs/operations/troubleshooting/">Troubleshooting</a></div>
+    <div><strong>Project</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/en/releases/">Release history</a><a href="/en/docs/contributing/">Contributing</a><a href="/en/docs/security/">Security</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Open source · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Search documentation"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="What would you like to set up?" aria-label="Search documentation"><button class="close-search icon-button" type="button" aria-label="Close"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Try: microphone, ports, invites</p><div class="search-results"></div></dialog></body></html>

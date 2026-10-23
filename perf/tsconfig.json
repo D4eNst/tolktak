@@ -1,0 +1,11 @@
+{
+  "extends": "../client/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    "typeRoots": ["../client/node_modules/@types"],
+    "types": ["node"],
+    "paths": { "*": ["./../client/node_modules/*"] }
+  },
+  "include": ["src", "../client/e2e/stack.ts"]
+}

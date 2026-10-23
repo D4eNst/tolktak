@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Сборка и тестирование — TolkTak</title><meta name="description" content="Нужны Python 3.14, uv, Node.js 22 с npm и LiveKit Server 1.13. Docker нужен только для проверки контейнерного развёртывания.">
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#f5f7fb">
+<link rel="canonical" href="https://tolktak.d4enst.ru/docs/development/building/"><link rel="alternate" hreflang="ru" href="https://tolktak.d4enst.ru/docs/development/building/"><link rel="alternate" hreflang="en" href="https://tolktak.d4enst.ru/en/docs/development/building/">
+<meta property="og:type" content="website"><meta property="og:title" content="Сборка и тестирование — TolkTak"><meta property="og:description" content="Нужны Python 3.14, uv, Node.js 22 с npm и LiveKit Server 1.13. Docker нужен только для проверки контейнерного развёртывания."><meta property="og:url" content="https://tolktak.d4enst.ru/docs/development/building/"><meta property="og:image" content="https://tolktak.d4enst.ru/img/stage.webp">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><noscript><link rel="stylesheet" href="/noscript.css"></noscript>
+<link rel="preload" href="/fonts/golos-text.ttf" as="font" type="font/ttf" crossorigin>
+<script src="/site.js" defer></script></head><body data-page="docs" data-lang="ru">
+<a class="skip" href="#main">К содержимому</a><header class="site-header"><div class="header-inner">
+    <a class="brand" href="/" aria-label="TolkTak"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Меню</span></button>
+    <nav id="site-nav" aria-label="Меню">
+      <a href="/#features">Возможности</a>
+      <a href="/download/" >Скачать</a>
+      <a href="/docs/" aria-current="page">Документация</a>
+      <a class="source-link" href="https://github.com/D4eNst/tolktak"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg><span>GitHub</span></a>
+      <a class="language" href="/en/docs/development/building/" lang="en" hreflang="en" aria-label="Read in English">EN</a>
+    </nav></div></header><main id="main" class="docs-layout wrap">
+    <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="/docs/">Документация</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Разделы документации</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Поиск по документации</span><kbd>/</kbd></button>
+    <nav id="docs-sections" aria-label="Разделы документации"><div class="docs-nav-group"><strong>Начало работы</strong><a href="/docs/" >Начало работы</a><a href="/docs/install/desktop-app/" >Приложение</a><a href="/docs/install/requirements/" >Требования</a><a href="/docs/install/docker/" >Установка через Docker</a><a href="/docs/install/source/" >Установка из исходников</a></div><div class="docs-nav-group"><strong>Сеть и база данных</strong><a href="/docs/guides/domains/" >Домены и адреса</a><a href="/docs/guides/certificates/" >HTTPS и сертификаты</a><a href="/docs/guides/reverse-proxy/" >Обратный прокси</a><a href="/docs/guides/firewall/" >Файрвол и порты</a><a href="/docs/guides/postgres/" >PostgreSQL</a></div><div class="docs-nav-group"><strong>Управление сервером</strong><a href="/docs/operations/configuration/" >Настройки</a><a href="/docs/operations/administration/" >Управление сервером</a><a href="/docs/operations/maintenance/" >Обновления и резервные копии</a><a href="/docs/operations/troubleshooting/" >Решение проблем</a></div><div class="docs-nav-group"><strong>Разработка</strong><a href="/docs/development/architecture/" >Архитектура</a><a href="/docs/development/building/" aria-current="page">Сборка и тестирование</a><a href="/docs/development/api/" >HTTP и WebSocket API</a></div><div class="docs-nav-group"><strong>Проект</strong><a href="/docs/contributing/" >Участие в проекте</a><a href="/docs/security/" >Безопасность</a></div></nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="/docs/">Документация</a><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Разработка</span></div><article class="prose"><h1 id="сборка-и-тестирование">Сборка и тестирование</h1>
+<p>Нужны Python 3.14, <a href="https://docs.astral.sh/uv/">uv</a>, Node.js 22 с npm и LiveKit Server 1.13. Docker нужен только для проверки контейнерного развёртывания.</p>
+<h2 id="структура-репозитория">Структура репозитория<a class="heading-anchor" href="#структура-репозитория" aria-label="Ссылка на раздел">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Таблица с горизонтальной прокруткой"><table>
+<thead>
+<tr>
+<th>Каталог</th>
+<th>Содержимое</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>server/</code></td>
+<td>Python-сервер, REST и WebSocket, база, миграции и тесты</td>
+</tr>
+<tr>
+<td><code>client/src/main/</code></td>
+<td>Основной процесс Electron, захват и обновления</td>
+</tr>
+<tr>
+<td><code>client/src/preload/</code></td>
+<td>IPC-мост</td>
+</tr>
+<tr>
+<td><code>client/src/renderer/</code></td>
+<td>Интерфейс, обработка звука, переводы и API-клиент</td>
+</tr>
+<tr>
+<td><code>client/e2e/</code></td>
+<td>Сквозные тесты Playwright</td>
+</tr>
+<tr>
+<td><code>deploy/</code></td>
+<td>Compose и шаблоны конфигурации</td>
+</tr>
+<tr>
+<td><code>website/</code></td>
+<td>Продуктовый сайт и генератор документации</td>
+</tr>
+<tr>
+<td><code>perf/</code>, <code>tools/voice-scores/</code></td>
+<td>Проверки ресурсов и качества голоса</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="проверки-сервера">Проверки сервера<a class="heading-anchor" href="#проверки-сервера" aria-label="Ссылка на раздел">#</a></h2>
+<pre><code class="language-sh">cd server
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run pytest
+</code></pre>
+<p>Тесты используют временную SQLite-базу. Для проверки PostgreSQL задайте <code>TOLKTAK_TEST_POSTGRES</code> с адресом отдельной тестовой базы.</p>
+<h2 id="локальный-стек">Локальный стек<a class="heading-anchor" href="#локальный-стек" aria-label="Ссылка на раздел">#</a></h2>
+<p>LiveKit должен объявлять реальный LAN-адрес машины: Chromium игнорирует loopback ICE-кандидаты. Замените <code>192.168.1.20</code> адресом своего компьютера. Создайте <code>livekit-dev.yaml</code> вне репозитория:</p>
+<pre><code class="language-yaml">port: 7880
+bind_addresses: [&quot;0.0.0.0&quot;]
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50200
+  use_external_ip: false
+  node_ip: 192.168.1.20
+keys:
+  devkey: dev-secret-0123456789abcdefghijklmnop
+webhook:
+  api_key: devkey
+  urls: [&quot;http://127.0.0.1:8080/api/v1/livekit/webhook&quot;]
+</code></pre>
+<p>В первом терминале:</p>
+<pre><code class="language-sh">livekit-server --config livekit-dev.yaml
+</code></pre>
+<p>Во втором:</p>
+<pre><code class="language-sh">cd server
+TOLKTAK_REGISTRATION=open \
+LIVEKIT_API_KEY=devkey \
+LIVEKIT_API_SECRET=dev-secret-0123456789abcdefghijklmnop \
+LIVEKIT_PUBLIC_URL=ws://192.168.1.20:7880 \
+uv run tolktak-server
+</code></pre>
+<p>Это тестовые ключи для локальной разработки. Сервер слушает 8080 и хранит данные в <code>server/data/</code>. Откройте <code>http://localhost:8080</code> и зарегистрируйтесь.</p>
+<h2 id="приложение">Приложение<a class="heading-anchor" href="#приложение" aria-label="Ссылка на раздел">#</a></h2>
+<pre><code class="language-sh">cd client
+npm ci
+npm start
+</code></pre>
+<p>Введите <code>localhost:8080</code> как адрес сервера.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Таблица с горизонтальной прокруткой"><table>
+<thead>
+<tr>
+<th>Команда</th>
+<th>Назначение</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>npm run build</code></td>
+<td>Сборка через esbuild в <code>dist/</code></td>
+</tr>
+<tr>
+<td><code>npm run watch</code></td>
+<td>Пересборка при изменениях; Electron запускается отдельно</td>
+</tr>
+<tr>
+<td><code>npm run typecheck</code></td>
+<td>Проверка TypeScript</td>
+</tr>
+<tr>
+<td><code>npm run test:e2e</code></td>
+<td>Сквозные тесты</td>
+</tr>
+<tr>
+<td><code>npm run dist:win</code></td>
+<td>NSIS и zip на Windows</td>
+</tr>
+<tr>
+<td><code>npm run dist:mac</code></td>
+<td>DMG и zip на macOS</td>
+</tr>
+<tr>
+<td><code>npm run dist:linux</code></td>
+<td>AppImage и deb</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>TOLKTAK_DEFAULT_SERVER</code> задаёт адрес по умолчанию при сборке. <code>TOLKTAK_USER_DATA</code> выбирает отдельный профиль приложения. <code>TOLKTAK_NO_UPDATES</code> отключает проверку обновлений в упакованной сборке.</p>
+<h2 id="сквозные-тесты">Сквозные тесты<a class="heading-anchor" href="#сквозные-тесты" aria-label="Ссылка на раздел">#</a></h2>
+<pre><code class="language-sh">cd client
+npm run build
+LIVEKIT_BIN=/path/to/livekit-server npx playwright test
+</code></pre>
+<p>Тесты запускают реальный сервер, LiveKit и renderer. Проверки медиа используют декодированные кадры, уровни звука и RTP-статистику. Electron-тестам нужен дисплей; в Linux без дисплея используйте Xvfb. Тесты разрывов сети с <code>iptables</code> требуют root. Тестовая локаль — <code>ru-RU</code>.</p>
+<p>Проверки шумоподавления находятся в <code>voice-quality.spec.ts</code>, <code>voice-worklet.spec.ts</code>, <code>denoise.spec.ts</code>. Проверка CPU — в <code>voice-cpu.spec.ts</code>, регрессии ресурсов — в <code>perf/ci.sh</code>. Windows-захват проверяется на реальной Windows-машине через <code>client/e2e/windows.spec.ts</code>.</p>
+<p>Полная последовательность Windows-проверок и описание переменных доступны в <a href="/en/docs/development/building/">английской версии</a>.</p>
+<h2 id="сайт">Сайт<a class="heading-anchor" href="#сайт" aria-label="Ссылка на раздел">#</a></h2>
+<pre><code class="language-sh">cd website
+npm ci
+npm run build
+npm run check
+npm run preview
+</code></pre>
+<p>Откройте напечатанный локальный адрес. Генератор берёт инструкции из <code>docs/</code> и <code>docs/ru/</code>, создаёт HTML и поисковый индекс. Для публикации достаточно статического веб-сервера; Node.js в рабочем окружении сайта не нужен.</p>
+</article><div class="doc-source"><a href="https://github.com/D4eNst/tolktak/blob/main/docs/ru/development/building.md">Исходник страницы<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 7-5 5 5 5m10-10 5 5-5 5m-3-14-4 18"/></svg></a></div><nav class="doc-pagination" aria-label="Документация"><a href="/docs/development/architecture/"><span>Назад</span><strong>Архитектура</strong></a><a href="/docs/development/api/"><span>Далее</span><strong>HTTP и WebSocket API<svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></strong></a></nav></div>
+    <aside class="doc-toc"><strong>На этой странице</strong><nav><a class="h2" href="#структура-репозитория">Структура репозитория</a><a class="h2" href="#проверки-сервера">Проверки сервера</a><a class="h2" href="#локальный-стек">Локальный стек</a><a class="h2" href="#приложение">Приложение</a><a class="h2" href="#сквозные-тесты">Сквозные тесты</a><a class="h2" href="#сайт">Сайт</a></nav></aside></main><footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/"><img src="/img/logo.svg" width="32" height="32" alt=""><span>TolkTak</span></a><p>Голос, видео и чат на своём сервере.</p></div>
+    <div><strong>Документация</strong><a href="/docs/install/desktop-app/">Инструкция к приложению</a><a href="/docs/install/docker/">Установить сервер</a><a href="/docs/operations/troubleshooting/">Решение проблем</a></div>
+    <div><strong>Проект</strong><a href="https://github.com/D4eNst/tolktak">GitHub</a><a href="/releases/">История версий</a><a href="/docs/contributing/">Участие в проекте</a><a href="/docs/security/">Безопасность</a></div></div>
+    <div class="footer-bottom"><span>© TolkTak contributors</span><a href="https://github.com/D4eNst/tolktak/blob/main/LICENSE">Открытый код · AGPL-3.0-or-later</a></div></footer><dialog class="search-dialog" aria-label="Поиск по документации"><div class="search-bar"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" id="docs-query" autocomplete="off" placeholder="Что хотите настроить?" aria-label="Поиск по документации"><button class="close-search icon-button" type="button" aria-label="Закрыть"><svg class="icon " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><p class="search-status" role="status">Например: микрофон, порты, приглашения</p><div class="search-results"></div></dialog></body></html>

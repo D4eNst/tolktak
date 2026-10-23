@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The server address is chosen by the user, so connect-src must allow any https/wss origin
+         (plus plain http/ws for LAN servers). Scripts and styles are local only (blob: and wasm for the bundled audio worklets). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: mediastream: https: http:; connect-src 'self' https: wss: http: ws:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>TolkTak</title>
+    <link rel="stylesheet" href="renderer.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="renderer.js"></script>
+  </body>
+</html>
