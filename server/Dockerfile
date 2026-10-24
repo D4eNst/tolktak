@@ -17,7 +17,8 @@ RUN useradd --system --uid 65532 --home-dir /nonexistent --shell /usr/sbin/nolog
 COPY --from=build /app/.venv /app/.venv
 # A fresh named volume copies this directory, so the non-root user can write the database.
 COPY --from=build --chown=65532:65532 /out/data /data
-ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 TOLKTAK_DATA_DIR=/data TOLKTAK_LISTEN=:8080
+ARG REPOSITORY=D4eNst/tolktak
+ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 TOLKTAK_DATA_DIR=/data TOLKTAK_LISTEN=:8080 TOLKTAK_REPOSITORY=${REPOSITORY}
 VOLUME ["/data"]
 EXPOSE 8080
 USER 65532

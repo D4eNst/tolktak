@@ -37,10 +37,18 @@ class Config:
     listen_host: str = "0.0.0.0"
     listen_port: int = 8080
     debug: bool = False
+    # "auto", "manual" or "off".
+    updates: str = "manual"
+    # Whose GitHub releases the server follows; release images are built with their own repository.
+    repository: str = "D4eNst/tolktak"
 
     @property
     def files_dir(self) -> Path:
         return self.data_dir / "files"
+
+    @property
+    def updates_dir(self) -> Path:
+        return self.data_dir / "updates"
 
 
 def _env(key: str, default: str = "") -> str:
@@ -82,6 +90,9 @@ def from_env() -> Config:
     if db and not db.startswith(("sqlite://", "postgres://", "postgresql://")):
         raise ConfigError("TOLKTAK_DATABASE_URL must start with postgres://, postgresql:// or sqlite://")
     host, port = parse_listen(_env("TOLKTAK_LISTEN", ":8080"))
+    updates = _env("TOLKTAK_UPDATES", "manual")
+    if updates not in ("auto", "manual", "off"):
+        raise ConfigError(f"TOLKTAK_UPDATES must be auto, manual or off, got {updates!r}")
     return Config(
         server_name=_env("TOLKTAK_SERVER_NAME", "TolkTak"),
         registration=reg,
@@ -104,4 +115,6 @@ def from_env() -> Config:
         listen_host=host,
         listen_port=port,
         debug=_env("TOLKTAK_DEBUG") == "1",
+        updates=updates,
+        repository=_env("TOLKTAK_REPOSITORY", "D4eNst/tolktak"),
     )

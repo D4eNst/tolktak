@@ -97,6 +97,8 @@ def create_app(cfg: Config, server: Server | None = None, init_db: bool = True) 
             asyncio.create_task(_prune_loop(srv)),
             asyncio.create_task(_remove_unused_files_loop(srv)),
         ]
+        if srv.updater.enabled:
+            tasks.append(asyncio.create_task(srv.updater.run()))
         sqlite_file = db.sqlite_path(cfg.database_url, cfg.data_dir) if init_db else None
         if sqlite_file is not None:
             tasks.append(asyncio.create_task(sqlite_backend.checkpoint_loop(sqlite_file)))
