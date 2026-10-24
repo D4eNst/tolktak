@@ -32,6 +32,9 @@ export function ExternalLink({ href, children }: { href: string; children: Compo
   );
 }
 
+// Direction overrides can make a link read as a different address.
+const BIDI = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+
 function inline(text: string, key = 'i'): ComponentChildren[] {
   const out: ComponentChildren[] = [];
   let last = 0;
@@ -50,18 +53,22 @@ function inline(text: string, key = 'i'): ComponentChildren[] {
     else if (m[6] || m[7]) out.push(<em key={k}>{inline(tok.slice(1, -1), k)}</em>);
     else if (m[8]) {
       const [, label, href] = /^\[([^\]]+)\]\((.+)\)$/.exec(tok)!;
+      // The label can claim any address, so the real host follows it.
+      const host = URL.parse(href)?.hostname ?? href;
       out.push(
         <ExternalLink key={k} href={href}>
-          {label}
+          {label.replace(BIDI, '')}
         </ExternalLink>,
+        <span key={k + 'h'} class="muted"> ({host.replace(BIDI, '')})</span>,
       );
-    } else if (m[9])
+    } else if (m[9]) {
+      const shown = tok.replace(BIDI, '');
       out.push(
         <ExternalLink key={k} href={tok}>
-          {tok.length > 80 ? tok.slice(0, 77) + '…' : tok}
+          {shown.length > 80 ? shown.slice(0, 77) + '…' : shown}
         </ExternalLink>,
       );
-    else if (m[10]) {
+    } else if (m[10]) {
       const name = tok.slice(1).toLowerCase();
       const u = [...users.value.values()].find((x) => x.username.toLowerCase() === name);
       if (u) out.push(<span key={k} class={'mention' + (u.id === me.value?.id ? ' me' : '')}>@{u.display_name}</span>);
