@@ -11,7 +11,7 @@ from ..livekit import WebhookError
 from ..realtime import VoiceMember, event
 from ..server import Server, background, current_user, dm_room_name, group_room_name, parse_room_name
 from ..store import chat, groups, now
-from .common import Body, json_response, no_content, path_id, read_json, server
+from .common import Body, json_response, no_content, path_id, read_body, read_json, server
 
 router = APIRouter(prefix="/api/v1")
 log = logging.getLogger("tolktak")
@@ -124,9 +124,9 @@ def _identity(p) -> int:
 @router.post("/livekit/webhook")
 async def livekit_webhook(request: Request):
     s = server(request)
-    body = await request.body()
+    body = await read_body(request, 1 << 20)
     try:
-        ev = s.lk.receive_webhook(request.headers.get("authorization", ""), body[: 1 << 20])
+        ev = s.lk.receive_webhook(request.headers.get("authorization", ""), body)
     except WebhookError as e:
         log.warning("rejected livekit webhook: %s", e)
         raise ApiError(401, "unauthorized", "Invalid webhook signature") from None
