@@ -45,7 +45,7 @@ Be clear with your users about this:
 
 - You, as the operator, can read everything stored on the server: messages, files and the account list. There is no end-to-end encryption. Voice and video are not recorded or stored.
 - A file is available to anyone who has its link, without signing in. Links are random and are not guessable.
-- Deleting a message erases its text and its attachment list from the database. The uploaded files themselves stay on disk.
+- Deleting a message erases its text and its attached files, unless a file is still used elsewhere, for example as a profile picture. Deleting a chat or a group removes the files attached in it the same way.
 
 See the [security model](../development/architecture.md#security-model) for the details.
 

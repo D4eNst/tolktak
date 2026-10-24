@@ -10,6 +10,7 @@ from ..server import Server, background, current_user, group_room_name
 from ..store import chat, groups, valid_name
 from .auth import image_file, trimmed_max
 from .common import Body, json_response, no_content, path_id, read_json, server
+from .files import remove_unused_files
 from .voice import remove_from_sfu
 
 router = APIRouter(prefix="/api/v1")
@@ -40,6 +41,12 @@ async def load_group(gid: int, me: int, need: Need) -> dict:
 async def publish_group(s: Server, gid: int) -> None:
     g = await groups.group_by_id(gid)
     s.hub.send_to(g["members"], event("group.updated", g))
+
+
+async def remove_group(s: Server, g: dict) -> None:
+    fids = await chat.attachments_in([c["id"] for c in g["text_channels"]])
+    await groups.delete_group(g["id"])
+    await remove_unused_files(s, fids)
 
 
 def kick_rooms(s: Server, g: dict, uid: int | None) -> None:
@@ -118,8 +125,8 @@ async def update_group(request: Request, user: User):
 async def delete_group(request: Request, user: User):
     gid = path_id(request)
     g = await load_group(gid, user["id"], Need.OWNER)
-    await groups.delete_group(gid)
     s = server(request)
+    await remove_group(s, g)
     kick_rooms(s, g, None)
     s.hub.send_to(g["members"], event("group.deleted", {"id": gid}))
     return no_content()
@@ -160,7 +167,7 @@ async def remove_member(request: Request, user: User):
     kick_rooms(s, g, uid)
     if len(g["members"]) == 1:
         # Last member left: the group disappears.
-        await groups.delete_group(gid)
+        await remove_group(s, g)
         s.hub.send_to([uid], event("group.deleted", {"id": gid}))
         return no_content()
     if uid == g["owner_id"]:
@@ -284,8 +291,10 @@ async def delete_text_channel(request: Request, user: User):
     cid, g = await text_channel_for_mod(request, user["id"])
     if cid == g["channel_id"]:
         raise ApiError(400, "main_channel", "The main group chat cannot be deleted")
+    fids = await chat.attachments_in([cid])
     await groups.delete_text_channel(cid)
     s = server(request)
+    await remove_unused_files(s, fids)
     s.hub.send_to(g["members"], event("channel.deleted", {"id": cid}))
     await publish_group(s, g["id"])
     return no_content()

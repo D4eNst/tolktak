@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from ..errors import ApiError, NotFound
-from ..server import current_user
+from ..server import Server, current_user
 from ..sniff import SNIFF_LEN, detect_content_type, image_size, type_by_extension
 from ..store import files
 from .common import json_response, query_int, server
@@ -95,6 +95,12 @@ async def upload(request: Request, user: User):
             with contextlib.suppress(OSError):
                 os.remove(path)
     return json_response({"file": files.file_dict(meta)}, 201)
+
+
+async def remove_unused_files(s: Server, fids: list[str]) -> None:
+    for fid in await files.delete_unused(fids):
+        with contextlib.suppress(OSError):
+            os.remove(s.cfg.files_dir / fid)
 
 
 # Rendered by the client; everything else is downloaded.

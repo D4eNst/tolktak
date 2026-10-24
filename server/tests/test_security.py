@@ -239,3 +239,41 @@ def test_file_names_lose_hidden_characters(make_env):
     assert body["file"]["name"] == "invoicegpj.exe"
     _, body = e.upload(a, "line\nbreak\u2066.txt", b"text")
     assert body["file"]["name"] == "linebreak.txt"
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + bytes(64)
+
+
+def test_attachments_are_deleted_with_their_message(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    _, body = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})
+    cid = body["channel"]["id"]
+    gone = e.upload(a, "photo.png", PNG)[1]["file"]["id"]
+    kept = e.upload(a, "me.png", PNG)[1]["file"]["id"]
+    e.do("PATCH", "/api/v1/me", a, {"avatar": kept})
+    msg = {"text": "", "nonce": "n1", "attachments": [gone, kept]}
+    _, body = e.do("POST", f"/api/v1/channels/{cid}/messages", a, msg)
+    assert e.do("DELETE", f"/api/v1/messages/{body['message']['id']}", a)[0] == 200
+    assert e.c.get(f"/api/v1/files/{gone}").status_code == 404
+    assert not (e.server.cfg.files_dir / gone).exists()
+    assert e.c.get(f"/api/v1/files/{kept}").status_code == 200, "a file still used as a profile picture stays"
+
+
+def test_attachments_are_deleted_with_their_chat_and_group(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, body = e.do("POST", "/api/v1/groups", a, {"name": "G", "members": []})
+    g = body["group"]
+    _, body = e.do("POST", f"/api/v1/groups/{g['id']}/channels", a, {"name": "second"})
+    second = body["channel"]["id"]
+    in_second = e.upload(a, "a.png", PNG)[1]["file"]["id"]
+    in_main = e.upload(a, "b.png", PNG)[1]["file"]["id"]
+    for cid, fid in ((second, in_second), (g["channel_id"], in_main)):
+        e.do("POST", f"/api/v1/channels/{cid}/messages", a, {"text": "", "nonce": fid, "attachments": [fid]})
+    assert e.do("DELETE", f"/api/v1/text-channels/{second}", a)[0] == 204
+    assert e.c.get(f"/api/v1/files/{in_second}").status_code == 404
+    assert e.c.get(f"/api/v1/files/{in_main}").status_code == 200
+    assert e.do("DELETE", f"/api/v1/groups/{g['id']}", a)[0] == 204
+    assert e.c.get(f"/api/v1/files/{in_main}").status_code == 404
