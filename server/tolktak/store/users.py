@@ -98,6 +98,9 @@ async def create_user(username: str, display_name: str, password: str, invite_co
     pw_hash = await hash_password(password)
     try:
         async with in_transaction(CONN) as tx:
+            if db.is_postgres(tx):
+                # Registrations take turns, or two first accounts at once both become admins.
+                await db.execute("SELECT pg_advisory_xact_lock(7461)", [], tx)
             if invite_code:
                 n = await db.execute(
                     "UPDATE invites SET uses = uses + 1 WHERE code = ? AND uses < max_uses AND expires_at > ?",
