@@ -19,6 +19,8 @@ router = APIRouter(prefix="/api/v1")
 
 User = Annotated[dict, Depends(current_user)]
 
+MAX_SIDE = 16384
+
 
 def clean_name(raw: str) -> str:
     name = raw.replace("\\", "/").rstrip("/")
@@ -75,6 +77,8 @@ async def upload(request: Request, user: User):
             if w == 0:
                 # Formats not parsed here (webp, avif): accept the client's measurement.
                 w, h = query_int(request, "w"), query_int(request, "h")
+                if not (0 < w <= MAX_SIDE and 0 < h <= MAX_SIDE):
+                    w = h = 0
             if w:
                 meta["width"] = w
             if h:
