@@ -167,3 +167,16 @@ def test_websocket_of_a_deleted_session_closes(make_env, monkeypatch):
             if msg["type"] == "websocket.close":
                 break
         assert (msg["type"], msg.get("code")) == ("websocket.close", 4001)
+
+
+def test_only_dm_members_can_ring(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    c, _ = e.user("carol")
+    _, body = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})
+    cid = body["channel"]["id"]
+    for action in ("ring", "decline", "cancel"):
+        assert e.do("POST", f"/api/v1/calls/{cid}/{action}", c)[0] == 404, f"an outsider could {action} a call"
+    codes = [e.do("POST", f"/api/v1/calls/{cid}/ring", a)[0] for _ in range(15)]
+    assert codes[0] == 204 and 429 in codes, "ringing must be rate limited"
