@@ -180,3 +180,18 @@ def test_only_dm_members_can_ring(make_env):
         assert e.do("POST", f"/api/v1/calls/{cid}/{action}", c)[0] == 404, f"an outsider could {action} a call"
     codes = [e.do("POST", f"/api/v1/calls/{cid}/ring", a)[0] for _ in range(15)]
     assert codes[0] == 204 and 429 in codes, "ringing must be rate limited"
+
+
+def test_group_creation_is_rate_limited(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    codes = [e.do("POST", "/api/v1/groups", a, {"name": f"spam {i}", "members": [b_id]})[0] for i in range(30)]
+    assert codes[0] == 201 and 429 in codes, "one account must not flood others with groups"
+
+
+def test_profile_updates_are_rate_limited(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    codes = [e.do("PATCH", "/api/v1/me", a, {"status": f"s{i}"})[0] for i in range(30)]
+    assert codes[0] == 200 and 429 in codes, "every profile update is broadcast to all connected users"

@@ -158,8 +158,10 @@ async def update_me(request: Request, user: User):
         if req.avatar and not await image_file(req.avatar, user["id"]):
             raise ApiError(400, "bad_avatar", "Avatar must be an image you uploaded")
         patch["avatar"] = req.avatar
+    s = server(request)
+    s.limit(f"profile:{user['id']}", 10, 10, "Too many profile changes, slow down")
     u = await users.update_profile(user["id"], **patch)
-    server(request).hub.broadcast_all(event("user.updated", u))
+    s.hub.broadcast_all(event("user.updated", u))
     return json_response({"user": u})
 
 

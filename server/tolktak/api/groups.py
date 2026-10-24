@@ -76,8 +76,10 @@ async def create_group(request: Request, user: User):
     channel_name, ok = valid_name(req.channel_name, 40)
     if not ok:
         channel_name = "general"
+    s = server(request)
+    s.limit(f"group:{user['id']}", 10, 5, "Too many new groups, try again in a minute")
     g = await groups.create_group(name, user["id"], req.members, room_name, channel_name)
-    server(request).hub.send_to(g["members"], event("group.updated", g))
+    s.hub.send_to(g["members"], event("group.updated", g))
     return json_response({"group": g}, 201)
 
 
