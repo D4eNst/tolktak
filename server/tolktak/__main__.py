@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import sys
 from dataclasses import replace
 
@@ -75,13 +76,14 @@ def main() -> None:
         print(__version__)
         return
     if args[:1] == ["copy-db"]:
-        if len(args) != 3:
-            print("usage: tolktak-server copy-db FROM_URL TO_URL", file=sys.stderr)
+        if len(args) not in (2, 3):
+            print("usage: tolktak-server copy-db FROM_URL [TO_URL, default TOLKTAK_DATABASE_URL]", file=sys.stderr)
             sys.exit(2)
         logs.setup(False)
         from .copydb import copy
 
-        sys.exit(asyncio.run(copy(args[1], args[2])))
+        to = args[2] if len(args) == 3 else os.environ.get("TOLKTAK_DATABASE_URL", "")
+        sys.exit(asyncio.run(copy(args[1], to)))
     if args[:1] == ["copy-files"]:
         if len(args) != 1:
             print("usage: tolktak-server copy-files", file=sys.stderr)
