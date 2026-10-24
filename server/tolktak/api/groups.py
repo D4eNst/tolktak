@@ -131,7 +131,7 @@ class AddMembersReq(Body):
 async def add_members(request: Request, user: User):
     gid = path_id(request)
     req = await read_json(request, AddMembersReq)
-    g = await load_group(gid, user["id"], Need.MEMBER)
+    g = await load_group(gid, user["id"], Need.MOD)
     if len(g["members"]) + len(req.user_ids) > MAX_GROUP_MEMBERS:
         raise ApiError(400, "too_many_members", "A group can have at most 200 members")
     await groups.add_group_members(gid, req.user_ids)

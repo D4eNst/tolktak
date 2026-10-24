@@ -98,7 +98,9 @@ def test_groups_rooms_and_voice_access(make_env):
     code, res = e.do("POST", f"/api/v1/groups/{gid}/rooms", b, {"name": "Кино"})
     assert (code, err_code(res)) == (403, "moderators_only")
     assert e.do("POST", f"/api/v1/groups/{gid}/rooms", a, {"name": "Кино"})[0] == 201
-    assert e.do("POST", f"/api/v1/groups/{gid}/members", b, {"user_ids": [c_id]})[0] == 204
+    code, res = e.do("POST", f"/api/v1/groups/{gid}/members", b, {"user_ids": [c_id]})
+    assert (code, err_code(res)) == (403, "moderators_only"), "only moderators add members"
+    assert e.do("POST", f"/api/v1/groups/{gid}/members", a, {"user_ids": [c_id]})[0] == 204
     _, gs = e.do("GET", "/api/v1/groups", c)
     assert len(gs["groups"]) == 1
     assert e.do("DELETE", f"/api/v1/groups/{gid}/members/{a_id}", a)[0] == 204
