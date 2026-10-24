@@ -37,6 +37,9 @@ jobs:
       - name: Set version from tag
         shell: bash
         run: npm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"
+      - name: Publish to and update from this repository
+        shell: bash
+        run: npm pkg set "build.publish[0].owner=$GITHUB_REPOSITORY_OWNER" "build.publish[0].repo=${GITHUB_REPOSITORY#*/}"
       - run: npm run build
       - name: Package and publish
         shell: bash
