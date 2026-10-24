@@ -42,6 +42,10 @@ type Bridge = {
   readAsset(name: string): Promise<Uint8Array>;
   installUpdate(): Promise<void>;
   onUpdateReady(fn: (version: string) => void): () => void;
+  /** A build that cannot install updates itself offers the release page instead. */
+  onUpdateAvailable(fn: (update: { version: string; url: string }) => void): () => void;
+  /** The app follows the version of its server. */
+  serverVersion(server: { version: string; min_client?: string }): Promise<void>;
   /** Windows: open but fully covered by other windows. */
   onOccluded(fn: (occluded: boolean) => void): () => void;
 };
@@ -113,6 +117,10 @@ const browserFallback: Bridge = {
   onUpdateReady() {
     return () => {};
   },
+  onUpdateAvailable() {
+    return () => {};
+  },
+  async serverVersion() {},
   onOccluded() {
     return () => {};
   },

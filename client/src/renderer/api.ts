@@ -54,7 +54,17 @@ export type Group = {
 export type ProfilePatch = { display_name?: string; about?: string; status?: string; avatar?: string };
 export type VoiceMember = { user_id: number; muted: boolean; deafened: boolean; camera: boolean; screen: boolean; joined_at: number };
 export type VoiceRoom = { room: string; members: VoiceMember[] };
-export type ServerInfo = { name: string; version: string; registration: string; livekit_url: string; client_download_url: string };
+export type ServerInfo = { name: string; version: string; registration: string; livekit_url: string; client_download_url: string; min_client: string };
+export type ServerUpdate = {
+  version: string;
+  mode: 'auto' | 'manual' | 'off';
+  enabled: boolean;
+  agent: boolean;
+  available: { version: string; urgent: boolean } | null;
+  state: 'idle' | 'pulling' | 'waiting' | 'restarting' | 'failed';
+  error: string;
+  apply_by: number | null;
+};
 
 /** `code` is localised by the UI, `message` is the fallback text. */
 export class ApiError extends Error {
@@ -99,6 +109,8 @@ export class Api {
   }
 
   serverInfo = () => this.req<ServerInfo>('GET', '/server');
+  serverUpdate = () => this.req<ServerUpdate>('GET', '/admin/update');
+  updateServerNow = () => this.req<ServerUpdate>('POST', '/admin/update');
   login = (username: string, password: string, device: string) =>
     this.req<{ token: string; user: User }>('POST', '/auth/login', { username, password, device });
   logout = () => this.req<void>('POST', '/auth/logout');

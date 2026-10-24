@@ -5,6 +5,7 @@ const watch = process.argv.includes('--watch');
 const prod = process.env.NODE_ENV === 'production';
 mkdirSync('dist', { recursive: true });
 cpSync('src/renderer/index.html', 'dist/index.html');
+cpSync('src/launch/index.html', 'dist/launch.html');
 cpSync('src/renderer/assets', 'dist/assets', { recursive: true });
 // DeepFilterNet3 (~19 MB) is read from disk only when chosen.
 mkdirSync('dist/assets/dfn', { recursive: true });
@@ -31,6 +32,8 @@ const inlineFiles = {
 const builds = [
   { ...common, entryPoints: ['src/main/main.ts'], outfile: 'dist/main.js', platform: 'node', format: 'cjs', external: ['electron', 'koffi', 'electron-updater'] },
   { ...common, entryPoints: ['src/preload/preload.ts'], outfile: 'dist/preload.js', platform: 'node', format: 'cjs', external: ['electron'] },
+  { ...common, entryPoints: ['src/preload/launch.ts'], outfile: 'dist/launch-preload.js', platform: 'node', format: 'cjs', external: ['electron'] },
+  { ...common, entryPoints: ['src/launch/launch.ts'], outfile: 'dist/launch.js', platform: 'browser', format: 'esm', loader: { '.css': 'css' }, external: ['assets/*'] },
   {
     ...common,
     entryPoints: ['src/renderer/main.tsx'],

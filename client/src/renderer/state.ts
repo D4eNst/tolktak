@@ -1,5 +1,5 @@
 import { batch, computed, signal } from '@preact/signals';
-import { Api, ApiError, Channel, FileMeta, Group, Message, normalizeServer, ServerInfo, User, VoiceMember } from './api';
+import { Api, ApiError, Channel, FileMeta, Group, Message, normalizeServer, ServerInfo, ServerUpdate, User, VoiceMember } from './api';
 import { bridge } from './bridge';
 import { t } from './i18n';
 import { Realtime } from './realtime';
@@ -13,6 +13,9 @@ export type IncomingCall = { channelId: number; from: number };
 export const session = signal<{ api: Api; me: User; server: ServerInfo } | null>(null);
 export const booting = signal(true);
 export const connection = signal<'online' | 'connecting' | 'offline'>('connecting');
+export const serverUpdate = signal<ServerUpdate | null>(null);
+/** The version the server is restarting into; null when it is not updating. */
+export const serverRestarting = signal<string | null>(null);
 export const users = signal<Map<number, User>>(new Map());
 export const online = signal<Set<number>>(new Set());
 export const channels = signal<Map<number, Channel>>(new Map());
@@ -25,7 +28,7 @@ export const toasts = signal<Toast[]>([]);
 export const incomingCall = signal<IncomingCall | null>(null);
 export const switcherOpen = signal(false);
 export const settingsOpen = signal<false | SettingsTab>(false);
-export type SettingsTab = 'profile' | 'voice' | 'video' | 'keys' | 'watch' | 'app';
+export type SettingsTab = 'profile' | 'voice' | 'video' | 'keys' | 'watch' | 'app' | 'server';
 export const replyTo = signal<Map<number, Message>>(new Map());
 export const drafts = signal<Map<number, string>>(new Map());
 
@@ -153,6 +156,12 @@ export function toast(text: string, kind: Toast['kind'] = 'info', ms = 4500) {
   setTimeout(() => (toasts.value = toasts.value.filter((x) => x.id !== item.id)), ms);
 }
 
+/** Keeps the Server tab current for an administrator who has opened it. */
+function refreshServerUpdate() {
+  const s = session.value;
+  if (s?.me.is_admin && serverUpdate.value) s.api.serverUpdate().then((u) => (serverUpdate.value = u), () => {});
+}
+
 export function errorText(e: unknown): string {
   if (e instanceof ApiError) {
     const code = e.status === 413 ? 'too_large' : e.code;
@@ -278,12 +287,19 @@ function handleEvent(ev: Ev) {
   const d = ev.data;
   switch (ev.type) {
     case 'hello': {
+      bridge.serverVersion(d.server);
+      refreshServerUpdate();
       batch(() => {
+        serverRestarting.value = null;
         online.value = new Set(d.online as number[]);
         voiceRooms.value = new Map((d.voice as { room: string; members: VoiceMember[] }[]).map((r) => [r.room, r.members]));
       });
       break;
     }
+    case 'server.update':
+      serverRestarting.value = d.state === 'restarting' ? d.version : null;
+      refreshServerUpdate();
+      break;
     case 'presence': {
       const s = new Set(online.value);
       if (d.online) s.add(d.user_id);

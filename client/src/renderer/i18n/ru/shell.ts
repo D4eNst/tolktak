@@ -118,6 +118,7 @@ const ru: typeof en = {
     searchHint: 'для поиска.',
   },
   offlineBanner: 'Нет связи с сервером. Переподключение…',
+  restartingBanner: (v) => `Сервер обновляется до ${v}. Переподключимся, как только он запустится…`,
   stage: {
     you: '(вы)',
     poorConnection: 'Слабое соединение',

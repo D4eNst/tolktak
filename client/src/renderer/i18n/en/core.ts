@@ -48,6 +48,8 @@ export default {
     bad_username: 'Username: 3–32 characters, Latin letters, digits, _ . -',
     bad_password: 'Password must be at least 8 characters',
     invite_required: 'An invite code is required',
+    no_update: 'No update is available',
+    no_agent: 'The updater is not running, so the server has to be updated by hand',
     registration_closed: 'Registration on this server is closed',
     username_taken: 'This username is already taken',
     invite_invalid: 'The invite code is invalid or used up',

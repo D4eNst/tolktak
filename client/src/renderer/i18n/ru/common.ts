@@ -12,7 +12,9 @@ const ru: typeof en = {
   copyFailed: 'Не удалось скопировать',
   update: {
     ready: (v: string) => `Обновление TolkTak ${v} готово к установке`,
+    available: (v: string) => `Доступна версия TolkTak ${v}`,
     restart: 'Перезапустить',
+    download: 'Скачать',
     later: 'Позже',
   },
   time: {
