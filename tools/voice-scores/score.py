@@ -1,5 +1,6 @@
 """Usage: uv run --project tools/voice-scores python score.py <dir>. Exit 1 on a failed threshold."""
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -15,7 +16,12 @@ from scipy.signal import resample_poly
 
 HERE = Path(__file__).resolve().parent
 DNSMOS_DIR = Path.home() / ".cache" / "tolktak-voice-scores" / "dnsmos"
-DNSMOS_URL = "https://raw.githubusercontent.com/microsoft/DNS-Challenge/master/DNSMOS/DNSMOS/sig_bak_ovr.onnx"
+DNSMOS_URL = (
+    "https://raw.githubusercontent.com/microsoft/DNS-Challenge/82f1b17e7776a43eee395d0f45bae8abb700ad00"
+    "/DNSMOS/DNSMOS/sig_bak_ovr.onnx"
+)
+# Git's object id of the model at that commit.
+DNSMOS_BLOB = "814b8dc6dafa729c0b821a64bef2e7156dc0c01a"
 
 
 def resample(x, src, dst):
@@ -36,11 +42,19 @@ def delay(ref, y, max_lag):
     return int(np.argmax(c))
 
 
+def blob_id(f: Path) -> str:
+    data = f.read_bytes()
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
 def download_dnsmos():
     DNSMOS_DIR.mkdir(parents=True, exist_ok=True)
     f = DNSMOS_DIR / "sig_bak_ovr.onnx"
-    if not f.exists() or f.stat().st_size < 100_000:
+    if not f.exists() or blob_id(f) != DNSMOS_BLOB:
         subprocess.run(["curl", "-sSfL", "--retry", "4", "-o", str(f), DNSMOS_URL], check=True)
+        if blob_id(f) != DNSMOS_BLOB:
+            f.unlink()
+            sys.exit("the downloaded DNSMOS model is not the pinned one")
 
 
 def dnsmos_scorer():
