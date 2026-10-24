@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { resolve, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
+const root = fileURLToPath(new URL('../dist/', import.meta.url));
 async function files(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
   const groups = await Promise.all(entries.filter(e => e.name !== 'node_modules').map(e => e.isDirectory() ? files(resolve(dir, e.name)) : [resolve(dir, e.name)]));
@@ -39,10 +39,10 @@ for (const lang of ['', '/en']) {
     if (!html || (hash && !html.includes(`id="${hash}"`))) issues.push(`Invalid search target: ${entry.url}`);
   }
 }
-const release = JSON.parse(await readFile(resolve(root, 'releases.json'), 'utf8'));
-for (const asset of release.assets) {
-  const address = new URL(asset.url);
-  if (address.origin !== 'https://github.com' || !address.pathname.startsWith('/D4eNst/tolktak/releases/download/') || !asset.size) issues.push(`Invalid download asset: ${asset.name}`);
+for (const [page, html] of cache) {
+  for (const [, href] of html.matchAll(/href="(https:\/\/github\.com\/[^"]+\/releases\/download\/[^"]+)"/g)) {
+    if (!href.startsWith('https://github.com/D4eNst/tolktak/releases/download/')) issues.push(`${page}: unexpected download URL ${href}`);
+  }
 }
 if (issues.length) { console.error(issues.join('\n')); process.exitCode = 1; }
-else console.log(`Checked ${pages.length} HTML pages, ${links} internal links/assets, both search indexes and release URLs.`);
+else console.log(`Checked ${pages.length} HTML pages, ${links} internal links/assets, both search indexes and download URLs.`);

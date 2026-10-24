@@ -1,4 +1,4 @@
-<img src="website/img/logo.svg" width="72" height="72" align="right" alt="">
+<img src="website/assets/img/logo.svg" width="72" height="72" align="right" alt="">
 
 # TolkTak
 
@@ -11,7 +11,7 @@
 [![Лицензия: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 [![Последний релиз](https://img.shields.io/github/v/release/D4eNst/tolktak)](https://github.com/D4eNst/tolktak/releases)
 
-![Голосовая комната TolkTak с демонстрацией экрана](website/img/stage.webp)
+![Голосовая комната TolkTak с демонстрацией экрана](website/assets/img/stage.webp)
 
 Проект находится на ранней стадии разработки.
 

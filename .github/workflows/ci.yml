@@ -23,9 +23,9 @@ jobs:
           cache-dependency-path: website/package-lock.json
       - run: npm ci
       - run: npm run build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: npm run check
-      - name: Check generated pages are up to date
-        run: git diff --exit-code -- .
 
   server:
     runs-on: ubuntu-latest
