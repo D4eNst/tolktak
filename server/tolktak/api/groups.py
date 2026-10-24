@@ -259,11 +259,11 @@ async def create_text_channel(request: Request, user: User):
     g = await load_group(gid, user["id"], Need.MOD)
     if len(g["text_channels"]) >= 30:
         raise ApiError(400, "too_many_channels", "A group can have at most 30 chats")
-    cid = await groups.create_text_channel(gid, name)
+    cid, position = await groups.create_text_channel(gid, name)
     s = server(request)
     s.hub.send_to(g["members"], event("channel.created", chat.channel_summary(cid, "group", group_id=gid)))
     await publish_group(s, gid)
-    return json_response({"channel": {"id": cid, "name": name, "position": 0}}, 201)
+    return json_response({"channel": {"id": cid, "name": name, "position": position}}, 201)
 
 
 async def text_channel_for_mod(request: Request, uid: int) -> tuple[int, dict]:

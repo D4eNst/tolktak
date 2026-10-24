@@ -71,6 +71,7 @@ def test_group_roles_and_text_channels(make_env):
     assert e.do("PUT", f"/api/v1/groups/{gid}/members/{mod_id}/role", owner, {"role": "mod"})[0] == 204
     code, body = e.do("POST", f"/api/v1/groups/{gid}/channels", mod, {"name": "мемы"})
     assert code == 201, body
+    assert body["channel"]["position"] == 1, "the main chat is at position 0"
     tc = body["channel"]["id"]
     assert e.do("POST", f"/api/v1/channels/{tc}/messages", mem, {"text": "привет", "nonce": "m1"})[0] == 200
     _, body = e.do("GET", "/api/v1/channels", mem)
