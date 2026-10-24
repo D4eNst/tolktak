@@ -12,6 +12,7 @@ from ..errors import NotFound
 from ..realtime import Conn, event
 from ..server import Server
 from ..store import chat, users
+from ..updates import MIN_CLIENT_VERSION
 
 router = APIRouter(prefix="/api/v1")
 log = logging.getLogger("tolktak")
@@ -76,7 +77,7 @@ async def ws_endpoint(ws: WebSocket):
             "user": user,
             "online": s.hub.online(),
             "voice": await s.hub.visible_voice(s.can_see_room(user["id"])),
-            "server": {"name": s.cfg.server_name, "version": s.version},
+            "server": {"name": s.cfg.server_name, "version": s.version, "min_client": MIN_CLIENT_VERSION},
         }
         await ws.send_text(event("hello", hello).decode())
         writer = asyncio.create_task(_writer(ws, conn, token))

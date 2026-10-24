@@ -8,6 +8,7 @@ from ..errors import ApiError, Conflict, Forbidden, NotFound
 from ..realtime import event
 from ..server import admin_user, current_user
 from ..store import files, users, valid_name
+from ..updates import MIN_CLIENT_VERSION
 from .common import Body, json_response, no_content, read_json, server
 
 router = APIRouter(prefix="/api/v1")
@@ -30,6 +31,7 @@ async def server_info(request: Request):
         "registration": reg,
         "livekit_url": s.livekit_url(request),
         "client_download_url": s.cfg.client_download_url,
+        "min_client": MIN_CLIENT_VERSION,
     })  # fmt: skip
 
 
