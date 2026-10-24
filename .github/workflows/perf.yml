@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 40
     env:
       LIVEKIT_VERSION: 1.13.10
+      LIVEKIT_SHA256: c25a3e45fb922e9a93c6443d10c0ed041ba64342097e38632331736630283165
       PERF_CI_REPEATS: ${{ github.event.inputs.repeats || '2' }}
       PERF_HOST_NOTE: GitHub Actions ubuntu-24.04 runner (shared VM, no GPU)
     steps:
@@ -46,7 +47,9 @@ jobs:
       - name: LiveKit server
         run: |
           mkdir -p "$RUNNER_TEMP/lk"
-          curl -fsSL "https://github.com/livekit/livekit/releases/download/v${LIVEKIT_VERSION}/livekit_${LIVEKIT_VERSION}_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP/lk"
+          curl -fsSL -o "$RUNNER_TEMP/lk.tar.gz" "https://github.com/livekit/livekit/releases/download/v${LIVEKIT_VERSION}/livekit_${LIVEKIT_VERSION}_linux_amd64.tar.gz"
+          echo "$LIVEKIT_SHA256  $RUNNER_TEMP/lk.tar.gz" | sha256sum -c
+          tar -xzf "$RUNNER_TEMP/lk.tar.gz" -C "$RUNNER_TEMP/lk"
           echo "LIVEKIT_BIN=$RUNNER_TEMP/lk/livekit-server" >> "$GITHUB_ENV"
       - run: npm ci
         working-directory: client
