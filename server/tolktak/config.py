@@ -17,6 +17,8 @@ class Config:
     livekit_internal_url: str = "http://127.0.0.1:7880"
     livekit_api_key: str = ""
     livekit_api_secret: str = ""
+    # Start livekit-server as a child process with keys kept in the data directory.
+    embedded_livekit: bool = False
     client_download_url: str = ""
     # Use X-Forwarded-For for rate limiting (enable only behind a reverse proxy).
     trust_proxy: bool = False
@@ -54,8 +56,9 @@ def parse_listen(addr: str) -> tuple[str, int]:
 
 
 def from_env() -> Config:
+    embedded = _env("TOLKTAK_EMBEDDED_LIVEKIT") == "1"
     key, secret = _env("LIVEKIT_API_KEY"), _env("LIVEKIT_API_SECRET")
-    if not key or len(secret) < 32:
+    if not embedded and (not key or len(secret) < 32):
         raise ConfigError("LIVEKIT_API_KEY and LIVEKIT_API_SECRET (>= 32 chars) are required")
     reg = _env("TOLKTAK_REGISTRATION", "invite")
     if reg not in ("open", "invite", "closed"):
@@ -86,6 +89,7 @@ def from_env() -> Config:
         livekit_internal_url=_env("LIVEKIT_INTERNAL_URL", "http://127.0.0.1:7880").rstrip("/"),
         livekit_api_key=key,
         livekit_api_secret=secret,
+        embedded_livekit=embedded,
         client_download_url=_env("TOLKTAK_CLIENT_DOWNLOAD_URL"),
         trust_proxy=_env("TOLKTAK_TRUST_PROXY") == "1",
         data_dir=Path(_env("TOLKTAK_DATA_DIR", "./data")),
