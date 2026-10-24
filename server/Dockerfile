@@ -12,7 +12,7 @@ RUN echo "__version__ = \"${VERSION}\"" > tolktak/_version.py \
  && uv sync --locked --no-dev --no-editable \
  && mkdir -p /out/data
 
-FROM python:3.14-slim@sha256:35caba83af2fe6da9a5d922f9b0156f21d1246a48278c58a08bd253303ba42e8
+FROM python:3.14-slim@sha256:35caba83af2fe6da9a5d922f9b0156f21d1246a48278c58a08bd253303ba42e8 AS server
 RUN useradd --system --uid 65532 --home-dir /nonexistent --shell /usr/sbin/nologin tolktak
 COPY --from=build /app/.venv /app/.venv
 # A fresh named volume copies this directory, so the non-root user can write the database.
@@ -22,3 +22,9 @@ VOLUME ["/data"]
 EXPOSE 8080
 USER 65532
 ENTRYPOINT ["tolktak-server"]
+
+# The image for a single `docker run`: the server starts LiveKit itself.
+FROM server AS full
+COPY --from=livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a /livekit-server /usr/local/bin/livekit-server
+ENV TOLKTAK_EMBEDDED_LIVEKIT=1
+EXPOSE 7880 7881 7882/udp

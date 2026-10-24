@@ -90,6 +90,8 @@ def create_app(cfg: Config, server: Server | None = None, init_db: bool = True) 
         users.reset_caches()
         if init_db:
             await db.init(cfg.database_url, cfg.data_dir)
+            if await users.count_users() == 0:
+                log.info("no accounts yet: the first one to register becomes the administrator")
         tasks = [
             asyncio.create_task(voice.reconcile_loop(srv, 20)),
             asyncio.create_task(_prune_loop(srv)),
