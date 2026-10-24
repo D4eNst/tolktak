@@ -7,7 +7,9 @@ import {
   type IpcMainInvokeEvent,
   Menu,
   nativeImage,
+  net,
   powerSaveBlocker,
+  protocol,
   safeStorage,
   session,
   shell,
@@ -16,6 +18,7 @@ import {
 } from 'electron';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { globalPushToTalk, type HotkeyName, type Hotkeys, installHotkeys, uninstallHotkeys } from './hotkeys';
 import { watchOcclusion } from './occlusion';
 import { installUpdater } from './updater';
@@ -339,6 +342,20 @@ function installIpc() {
   });
 }
 
+// The page is loaded from file://, which would otherwise let it read any file on the disk.
+function restrictFileProtocol() {
+  protocol.handle('file', (req) => {
+    let rel: string;
+    try {
+      rel = path.relative(__dirname, fileURLToPath(req.url));
+    } catch {
+      return new Response(null, { status: 403 });
+    }
+    if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return new Response(null, { status: 403 });
+    return net.fetch(req, { bypassCustomProtocolHandlers: true });
+  });
+}
+
 function installPermissions() {
   const allowed = new Set(['media', 'display-capture', 'notifications', 'fullscreen', 'clipboard-sanitized-write', 'speaker-selection']);
   const ours = (wc: Electron.WebContents | null) => !!wc && wc.id === win?.webContents.id;
@@ -360,6 +377,7 @@ app.whenReady().then(() => {
   settings = readSettings();
   // First, so that nothing failing below can keep the app from receiving a fix.
   installUpdater(() => win);
+  restrictFileProtocol();
   installPermissions();
   installDisplayMediaHandler();
   installIpc();
