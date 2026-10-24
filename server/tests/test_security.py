@@ -3,7 +3,9 @@ import time
 
 from conftest import decode_jwt, post_webhook
 
-from tolktak.api import voice
+from tolktak import db
+from tolktak.api import voice, ws
+from tolktak.store import users
 
 
 def record_removals(e) -> list[tuple[str, str]]:
@@ -14,6 +16,17 @@ def record_removals(e) -> list[tuple[str, str]]:
 
     e.server.lk.remove_participant = remove
     return removed
+
+
+def next_event_or_close(ws) -> tuple[str, int]:
+    """Skips presence events; a socket that stays open gets the message the test sends next."""
+    while True:
+        msg = ws.receive()
+        if msg["type"] == "websocket.close":
+            return "closed", msg["code"]
+        ev = json.loads(msg["text"])
+        if ev["type"] not in ("hello", "presence"):
+            return ev["type"], 0
 
 
 def eventually(check, timeout: float = 2) -> bool:
@@ -97,3 +110,60 @@ def test_reconcile_drops_non_members_from_voice(make_env):
     e.c.portal.call(voice.reconcile_once, e.server)
     assert [m.user_id for m in e.server.hub.voice_members(room)] == [a_id]
     assert eventually(lambda: removed == [(room, str(b_id))])
+
+
+def test_password_change_ends_other_sessions(make_env):
+    e = make_env()
+    t1, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    _, body = e.do("POST", "/api/v1/auth/login", body={"username": "alice", "password": "password123"})
+    t2 = body["token"]
+    _, body = e.do("POST", "/api/v1/dms", t1, {"user_id": b_id})
+    cid = body["channel"]["id"]
+    with e.c.websocket_connect("/api/v1/ws") as ws:
+        ws.send_text(json.dumps({"type": "auth", "token": t2}))
+        new = {"old_password": "password123", "new_password": "password456"}
+        assert e.do("POST", "/api/v1/me/password", t1, new)[0] == 204
+        e.do("POST", f"/api/v1/channels/{cid}/messages", t1, {"text": "after", "nonce": "n1"})
+        assert next_event_or_close(ws) == ("closed", 4001)
+    assert e.do("GET", "/api/v1/me", t2)[0] == 401
+    assert e.do("GET", "/api/v1/me", t1)[0] == 200, "the session that changed the password stays"
+
+
+def test_logout_closes_the_sessions_websocket(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    b, b_id = e.user("bob")
+    _, body = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})
+    cid = body["channel"]["id"]
+    with e.c.websocket_connect("/api/v1/ws") as ws:
+        ws.send_text(json.dumps({"type": "auth", "token": b}))
+        assert e.do("POST", "/api/v1/auth/logout", b)[0] == 204
+        e.do("POST", f"/api/v1/channels/{cid}/messages", a, {"text": "after", "nonce": "n1"})
+        assert next_event_or_close(ws) == ("closed", 4001)
+
+
+def test_session_deleted_in_database_stops_working(make_env, monkeypatch):
+    e = make_env()
+    a, _ = e.user("alice")
+    assert e.do("GET", "/api/v1/me", a)[0] == 200
+    e.c.portal.call(db.execute, "DELETE FROM sessions")
+    later = users.now() + 61_000
+    monkeypatch.setattr(users, "now", lambda: later)
+    assert e.do("GET", "/api/v1/me", a)[0] == 401
+
+
+def test_websocket_of_a_deleted_session_closes(make_env, monkeypatch):
+    monkeypatch.setattr(ws, "PING_EVERY", 0.05)
+    e = make_env()
+    a, _ = e.user("alice")
+    with e.c.websocket_connect("/api/v1/ws") as sock:
+        sock.send_text(json.dumps({"type": "auth", "token": a}))
+        e.c.portal.call(db.execute, "DELETE FROM sessions")
+        later = users.now() + 61_000
+        monkeypatch.setattr(users, "now", lambda: later)
+        for _ in range(100):
+            msg = sock.receive()
+            if msg["type"] == "websocket.close":
+                break
+        assert (msg["type"], msg.get("code")) == ("websocket.close", 4001)

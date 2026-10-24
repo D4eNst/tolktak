@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from dataclasses import asdict, dataclass
 
 import orjson
@@ -18,12 +18,15 @@ def event(type_: str, data=None) -> bytes:
 
 
 class Conn:
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, session: bytes):
         self.user_id = user_id
+        self.session = session
         self.queue: asyncio.Queue[bytes | None] = asyncio.Queue(SEND_QUEUE)
         self.closed = False
         # Set by the hub when the connection cannot keep up.
         self.kicked = False
+        # Set by the hub when the session has ended.
+        self.revoked = False
 
     def close(self) -> None:
         if not self.closed:
@@ -33,6 +36,13 @@ class Conn:
                 self.queue.put_nowait(None)
             except asyncio.QueueFull:
                 pass
+
+    def drop(self) -> None:
+        """Closes without sending what is still queued."""
+        self.closed = True
+        while not self.queue.empty():
+            self.queue.get_nowait()
+        self.queue.put_nowait(None)
 
 
 @dataclass
@@ -59,8 +69,8 @@ class Hub:
         self.voice: dict[str, dict[int, VoiceMember]] = {}
         self.audience = audience
 
-    def register(self, user_id: int) -> Conn:
-        c = Conn(user_id)
+    def register(self, user_id: int, session: bytes) -> Conn:
+        c = Conn(user_id, session)
         first = not self.conns.get(user_id)
         self.conns.setdefault(user_id, set()).add(c)
         if first:
@@ -76,6 +86,12 @@ class Hub:
         c.close()
         if last:
             self.broadcast_all(event("presence", {"user_id": c.user_id, "online": False}))
+
+    def end_sessions(self, uid: int, sessions: Collection[bytes]) -> None:
+        for c in list(self.conns.get(uid, ())):
+            if c.session in sessions:
+                c.revoked = True
+                c.drop()
 
     def online(self) -> list[int]:
         return sorted(self.conns)
@@ -93,10 +109,7 @@ class Hub:
                 # Slow consumer: the client reconnects and resyncs.
                 log.warning("dropping slow websocket user=%d", uid)
                 c.kicked = True
-                c.closed = True
-                while not c.queue.empty():
-                    c.queue.get_nowait()
-                c.queue.put_nowait(None)
+                c.drop()
 
     def send_to(self, users, b: bytes) -> None:
         for u in set(users):

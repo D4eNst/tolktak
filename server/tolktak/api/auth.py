@@ -101,8 +101,10 @@ async def login(request: Request):
 
 
 @router.post("/auth/logout")
-async def logout(request: Request, _: User):
-    await users.delete_session(request.state.token)
+async def logout(request: Request, user: User):
+    token = request.state.token
+    await users.delete_session(token)
+    server(request).hub.end_sessions(user["id"], [users.token_hash(token)])
     return no_content()
 
 
@@ -171,11 +173,13 @@ async def change_password(request: Request, user: User):
     req = await read_json(request, PasswordReq)
     if not 8 <= len(req.new_password.encode()) <= 256:
         raise ApiError(400, "bad_password", "Password must be 8-256 characters")
-    server(request).limit("pw:" + user["username"], 5, 2, "Too many attempts, try again in a minute")
+    s = server(request)
+    s.limit("pw:" + user["username"], 5, 2, "Too many attempts, try again in a minute")
     try:
-        await users.change_password(user["id"], req.old_password, req.new_password)
+        ended = await users.change_password(user["id"], req.old_password, req.new_password, request.state.token)
     except Forbidden:
         raise ApiError(403, "bad_credentials", "Current password is incorrect") from None
+    s.hub.end_sessions(user["id"], ended)
     return no_content()
 
 

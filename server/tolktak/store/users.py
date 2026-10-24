@@ -143,12 +143,21 @@ async def list_users() -> list[dict]:
     return found
 
 
-async def change_password(uid: int, old: str, new: str) -> None:
+async def change_password(uid: int, old: str, new: str, keep_token: str) -> list[bytes]:
+    """Ends every other session of the user and returns their token hashes."""
     u = await User.get(id=uid)
     if not await check_password(u.password_hash, old):
         raise Forbidden
-    await User.filter(id=uid).update(password_hash=await hash_password(new))
+    pw_hash = await hash_password(new)
+    others = Session.filter(user_id=uid, token_hash__not=token_hash(keep_token))
+    async with in_transaction(CONN) as tx:
+        await User.filter(id=uid).using_db(tx).update(password_hash=pw_hash)
+        ended = list(await others.using_db(tx).values_list("token_hash", flat=True))
+        await others.using_db(tx).delete()
     _forget_user(uid)
+    for h in ended:
+        _session_cache.pop(h, None)
+    return ended  # ty: ignore[invalid-return-type]
 
 
 def token_hash(token: str) -> bytes:
@@ -163,7 +172,8 @@ async def create_session(uid: int, device: str) -> str:
     return token
 
 
-# One process does all writes, so these caches stay exact.
+# One process does all writes, so these caches stay exact. A session deleted in the
+# database directly stops working at its next last_seen update, within a minute.
 _session_cache: dict[bytes, list[int]] = {}  # token hash -> [session id, user id, last seen]
 _user_cache: dict[int, dict] = {}
 _CACHE_MAX = 20_000
@@ -201,7 +211,9 @@ async def user_by_token(token: str) -> dict:
     t = now()
     if last_seen < t - 60_000:
         sess[2] = t
-        await Session.filter(id=sid).update(last_seen=t)
+        if not await Session.filter(id=sid).update(last_seen=t):
+            _session_cache.pop(h, None)
+            raise NotFound
     return dict(u)
 
 

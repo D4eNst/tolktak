@@ -1,4 +1,5 @@
-"""The token comes in the first frame, never in the URL. The 25 s ping detects half-open connections."""
+"""The token comes in the first frame, never in the URL. The 25 s ping detects half-open connections and ended
+sessions."""
 
 import asyncio
 import contextlib
@@ -61,13 +62,14 @@ async def ws_endpoint(ws: WebSocket):
     if not first or first.get("type") != "auth":
         await _close(ws, 4001, "auth required")
         return
+    token = _str(first.get("token"))
     try:
-        user = await users.user_by_token(_str(first.get("token")))
+        user = await users.user_by_token(token)
     except NotFound:
         await _close(ws, 4001, "invalid token")
         return
 
-    conn = s.hub.register(user["id"])
+    conn = s.hub.register(user["id"], users.token_hash(token))
     writer = None
     try:
         hello = {
@@ -77,7 +79,7 @@ async def ws_endpoint(ws: WebSocket):
             "server": {"name": s.cfg.server_name, "version": s.version},
         }
         await ws.send_text(event("hello", hello).decode())
-        writer = asyncio.create_task(_writer(ws, conn))
+        writer = asyncio.create_task(_writer(ws, conn, token))
         reader = asyncio.create_task(_reader(ws, s, user["id"]))
         done, _ = await asyncio.wait({writer, reader}, return_when=asyncio.FIRST_COMPLETED)
         for t in done:
@@ -102,18 +104,25 @@ async def _close(ws: WebSocket, code: int, reason: str) -> None:
         await ws.close(code, reason)
 
 
-async def _writer(ws: WebSocket, conn: Conn) -> None:
+async def _writer(ws: WebSocket, conn: Conn, token: str) -> None:
     loop = asyncio.get_running_loop()
     next_ping = loop.time() + PING_EVERY
     while True:
         try:
             b = await asyncio.wait_for(conn.queue.get(), max(0, next_ping - loop.time()))
         except TimeoutError:
+            try:
+                await users.user_by_token(token)
+            except NotFound:
+                await _close(ws, 4001, "session ended")
+                return
             b = PING
             next_ping = loop.time() + PING_EVERY
         if b is None:
             if conn.kicked:
                 await _close(ws, 4008, "too slow")
+            elif conn.revoked:
+                await _close(ws, 4001, "session ended")
             return
         await asyncio.wait_for(ws.send_text(b.decode()), 10)
 
