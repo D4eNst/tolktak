@@ -46,6 +46,36 @@ async def file_by_id(fid: str) -> tuple[dict, int]:
     return file_dict(f), f.uploader_id
 
 
+async def delete_unused(fids: list[str]) -> list[str]:
+    """Deletes the records of files no message, profile or group uses and returns their ids."""
+    if not fids:
+        return []
+    fids = list(set(fids))
+    m = db.marks(len(fids))
+    found = await db.rows(f"SELECT id, uploader_id FROM files WHERE id IN ({m})", fids)
+    if not found:
+        return []
+    used = {
+        r["avatar"]
+        for r in await db.rows(
+            f"SELECT avatar FROM users WHERE avatar IN ({m}) UNION SELECT avatar FROM groups WHERE avatar IN ({m})",
+            fids + fids,
+        )
+    }
+    # Only the uploader can attach a file, so only their messages are searched.
+    uploaders = list({r["uploader_id"] for r in found})
+    for r in await db.rows(
+        f"SELECT attachments FROM messages WHERE author_id IN ({db.marks(len(uploaders))}) "
+        "AND deleted = 0 AND attachments != ''",
+        uploaders,
+    ):
+        used.update(r["attachments"].split(","))
+    unused = [r["id"] for r in found if r["id"] not in used]
+    if unused:
+        await File.filter(id__in=unused).delete()
+    return unused
+
+
 async def files_by_ids(ids: list[str]) -> dict[str, dict]:
     if not ids:
         return {}

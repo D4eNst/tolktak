@@ -260,6 +260,13 @@ async def search_messages(cid: int, q: str, limit: int) -> list[dict]:
     return out
 
 
+async def attachments_in(cids: list[int]) -> list[str]:
+    found = await db.rows(
+        f"SELECT attachments FROM messages WHERE channel_id IN ({db.marks(len(cids))}) AND attachments != ''", cids
+    )
+    return [f for r in found for f in _split(r["attachments"])]
+
+
 async def pinned_messages(cid: int) -> list[dict]:
     return await _collect(
         "channel_id = ? AND deleted = 0 AND pinned_at IS NOT NULL ORDER BY pinned_at DESC LIMIT 50", [cid]

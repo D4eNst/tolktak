@@ -8,6 +8,7 @@ from ..server import current_user
 from ..store import chat, groups
 from ..store.files import valid_file_id
 from .common import Body, json_response, no_content, path_id, query_int, read_json, server
+from .files import remove_unused_files
 
 router = APIRouter(prefix="/api/v1")
 
@@ -148,9 +149,10 @@ async def delete_message(request: Request, user: User):
         gid = await chat.group_of_channel(m["channel_id"])
         if gid == 0 or not await can_moderate_channel(m["channel_id"], user["id"]):
             raise ApiError(403, "not_own_message", "You can only delete your own messages")
-    m = await chat.delete_message(m["id"])
-    await publish_message(request, m)
-    return json_response({"message": m})
+    deleted = await chat.delete_message(m["id"])
+    await publish_message(request, deleted)
+    await remove_unused_files(server(request), [f["id"] for f in m["attachments"]])
+    return json_response({"message": deleted})
 
 
 class ReactReq(Body):
