@@ -88,6 +88,8 @@ async def receive_file(request: Request, s: Server, me: int):
             if by_ext := type_by_extension(posixpath.splitext(name)[1]):
                 ctype = by_ext
         ctype = ctype.split(";")[0].strip()
+        # Sniffing names WAV and Ogg files by container; players and INLINE_TYPES expect audio types.
+        ctype = {"audio/wave": "audio/wav", "application/ogg": "audio/ogg"}.get(ctype, ctype)
         # WebM sniffs as video, but a client voice message is audio-only WebM.
         if ctype == "video/webm" and request.headers.get("content-type", "").startswith("audio/webm"):
             ctype = "audio/webm"
