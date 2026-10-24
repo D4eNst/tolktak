@@ -1,3 +1,5 @@
+import re
+import unicodedata
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
@@ -159,12 +161,22 @@ class ReactReq(Body):
     emoji: str = ""
 
 
+# A reaction carries no text: no letters, digits, spaces or controls, except in a keycap such as 1️⃣.
+def is_emoji(s: str) -> bool:
+    if re.fullmatch("[0-9#*]\ufe0f?\u20e3", s):
+        return True
+    cats = [unicodedata.category(c) for c in s]
+    if any(c[0] in "LNZ" or c in ("Cc", "Co", "Cs") for c in cats):
+        return False
+    return any(c[0] in "SP" for c in cats)
+
+
 @router.post("/messages/{id}/reactions")
 async def react(request: Request, user: User):
     m = await message_for(request, user["id"])
     req = await read_json(request, ReactReq)
     e = req.emoji.strip()
-    if not e or len(e.encode()) > 64 or m["deleted"]:
+    if not e or len(e.encode()) > 64 or not is_emoji(e) or m["deleted"]:
         raise ApiError(400, "bad_emoji", "Invalid reaction")
     server(request).limit(f"react:{user['id']}", 30, 120, "Too many reactions, slow down")
     try:
