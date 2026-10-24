@@ -176,7 +176,8 @@ export function normalizeServer(input: string): string {
   let s = input.trim();
   if (!s) return '';
   if (!/^https?:\/\//i.test(s)) {
-    const local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(s);
+    const host = s.split(/[/:?#]/)[0];
+    const local = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(host);
     s = (local ? 'http://' : 'https://') + s;
   }
   try {
