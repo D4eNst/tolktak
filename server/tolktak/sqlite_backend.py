@@ -56,6 +56,10 @@ class _Connection:
         self._conn.close()
 
 
+def _upper(v):
+    return v.upper() if isinstance(v, str) else v
+
+
 class InlineSqliteClient(SqliteClient):
     async def create_connection(self, with_db: bool) -> None:
         if self._connection:
@@ -66,6 +70,8 @@ class InlineSqliteClient(SqliteClient):
             conn.execute(f"PRAGMA {pragma}={val}").close()
         # Checkpoints are run by checkpoint_loop, off the event loop.
         conn.execute("PRAGMA wal_autocheckpoint=0").close()
+        # Case-insensitive lookups compare UPPER() of both sides, and SQLite's own folds only ASCII.
+        conn.create_function("upper", 1, _upper, deterministic=True)
         self._connection = _Connection(conn)  # type: ignore[assignment]
         await self._post_connect()
 

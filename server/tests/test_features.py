@@ -88,3 +88,14 @@ def test_group_roles_and_text_channels(make_env):
     assert (code, err_code(res)) == (400, "main_channel")
     assert e.do("DELETE", f"/api/v1/text-channels/{tc}", mod)[0] == 204
     assert e.do("DELETE", f"/api/v1/groups/{gid}", owner)[0] == 204
+
+
+def test_search_ignores_case_beyond_ascii(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    _, body = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})
+    path = f"/api/v1/channels/{body['channel']['id']}/messages"
+    e.do("POST", path, a, {"text": "Привет, Мир", "nonce": "n1"})
+    for q in ("Привет", "привет", "ПРИВЕТ", "мир"):
+        assert len(e.do("GET", f"{path}?q={q}", a)[1]["messages"]) == 1, q
