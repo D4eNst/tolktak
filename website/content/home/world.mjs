@@ -1,0 +1,41 @@
+// The homepage sidebar mirrors the app's channel list; each row leads to one section.
+export const world = {
+  ru: {
+    title: 'Сервер для общения с открытым исходным кодом',
+    description: 'Личные и групповые чаты, аудио- и видеозвонки, настраиваемые трансляции со звуком. Для работы, игр и повседневного общения. Все возможности доступны бесплатно.',
+    rail: 'Разделы страницы',
+    group: 'Выходные',
+    groupNote: 'Всё для общения',
+    search: 'Найти людей, группы, комнаты',
+    textChannels: 'Текстовые каналы',
+    voiceRooms: 'Голосовые комнаты',
+    rows: {
+      chat: { name: 'общий', note: 'Чаты' },
+      voice: { name: 'Гостиная', note: 'Голос и видео' },
+      screen: { name: 'Игровой вечер', note: 'Экран и совместный просмотр' },
+      server: { name: 'Свой сервер', note: 'talk.example.com' },
+      download: { name: 'Скачать', note: 'Windows, macOS и Linux' },
+      sound: { name: 'Настройки звука', note: 'Шумоподавление, рация' },
+    },
+    online: 'в сети',
+  },
+  en: {
+    title: 'An open-source communication server',
+    description: 'Direct and group chats, audio and video calls, and configurable screen sharing with sound. For work, games and everyday conversations. All features are available for free.',
+    rail: 'Page sections',
+    group: 'Weekend',
+    groupNote: 'Everything you need to talk',
+    search: 'Find people, groups, rooms',
+    textChannels: 'Text channels',
+    voiceRooms: 'Voice rooms',
+    rows: {
+      chat: { name: 'general', note: 'Chats' },
+      voice: { name: 'Lounge', note: 'Voice and video' },
+      screen: { name: 'Game night', note: 'Screen sharing and watching together' },
+      server: { name: 'Your server', note: 'talk.example.com' },
+      download: { name: 'Download', note: 'Windows, macOS and Linux' },
+      sound: { name: 'Sound settings', note: 'Noise suppression, push-to-talk' },
+    },
+    online: 'online',
+  },
+};

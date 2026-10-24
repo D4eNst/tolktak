@@ -1,26 +1,17 @@
 import { readdir, readFile, access } from 'node:fs/promises';
-import { resolve, dirname, relative, posix, sep } from 'node:path';
+import { resolve, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import MarkdownIt from 'markdown-it';
+import { copy } from './copy.mjs';
 import { github } from './github.mjs';
-import { docUrl, languages } from './urls.mjs';
+import { origin, docUrl, languages } from './urls.mjs';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const roots = { ru: resolve(repo, 'docs/ru'), en: resolve(repo, 'docs') };
 const md = new MarkdownIt({ html: false, linkify: true });
 const slug = text => text.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').trim().replace(/\s+/g, '-');
 const exists = path => access(path).then(() => true, () => false);
-
-async function markdownFiles(dir, skip = []) {
-  const files = [];
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (skip.includes(entry.name)) continue;
-    const path = resolve(dir, entry.name);
-    if (entry.isDirectory()) files.push(...await markdownFiles(path));
-    else if (entry.name.endsWith('.md')) files.push(path);
-  }
-  return files;
-}
+export const sourceUrl = path => `${github}/blob/main/${relative(repo, path).split(sep).join('/')}`;
 
 function parse(lang, id, path, source) {
   const tokens = md.parse(source, {});
@@ -37,8 +28,8 @@ function parse(lang, id, path, source) {
     if (token.tag === 'h2' || token.tag === 'h3') headings.push({ level: token.tag, text, anchor });
   });
   const title = source.match(/^# (.+)$/m)?.[1] || id;
-  const description = source.split('\n\n').find(t => !/^(?:#|[-*] |\d+\. |\||```)/.test(t))
-    ?.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[`*_]/g, '').slice(0, 170);
+  const description = source.split(/\r?\n\r?\n/).map(t => t.trim()).find(t => /[.!?]$/.test(t) && !/^(?:#|[-*] |\d+\. |\||```|>)/.test(t))
+    ?.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[`*_]/g, '').replace(/\s+/g, ' ');
   return { lang, id, path, source, tokens, headings, title, description };
 }
 
@@ -63,8 +54,7 @@ function navigation(pages, groups) {
   order.push(...pages.filter(page => !seen.has(page)).sort((a, b) => a.title.localeCompare(b.title)));
   const keys = Object.keys(groups);
   const groupOf = page => page.id === 'index' ? keys[0] : page.id.includes('/') ? page.id.split('/')[0] : 'project';
-  const nav = new Map();
-  for (const page of order) nav.set(groupOf(page), [...(nav.get(groupOf(page)) || []), page]);
+  const nav = Map.groupBy(order, groupOf);
   const rank = key => key === 'project' ? Infinity : keys.includes(key) ? keys.indexOf(key) : keys.length;
   return [...nav].sort(([a], [b]) => rank(a) - rank(b)).map(([key, list]) => ({ key, label: groups[key] || key, pages: list }));
 }
@@ -73,8 +63,10 @@ export async function loadDocs(groups) {
   const docs = {};
   for (const lang of languages) {
     const pages = [];
-    for (const path of await markdownFiles(roots[lang], lang === 'en' ? ['ru'] : [])) {
-      const id = relative(roots[lang], path).split(sep).join('/').replace(/\.md$/, '').replace(/^README$/, 'index');
+    for (const file of await readdir(roots[lang], { recursive: true })) {
+      if (!file.endsWith('.md') || (lang === 'en' && file.startsWith('ru' + sep))) continue;
+      const id = file.split(sep).join('/').replace(/\.md$/, '').replace(/^README$/, 'index');
+      const path = resolve(roots[lang], file);
       pages.push(parse(lang, id, path, await readFile(path, 'utf8')));
     }
     docs[lang] = pages;
@@ -89,46 +81,69 @@ export async function loadDocs(groups) {
   return Object.fromEntries(languages.map(lang => {
     const nav = navigation(docs[lang], groups[lang]);
     const ordered = nav.flatMap(group => group.pages.map(page => ({ ...page, group })));
-    return [lang, { pages: ordered, nav, find: id => ordered.find(page => page.id === id), all }];
+    return [lang, { pages: ordered, nav, all }];
   }));
 }
 
 md.renderer.rules.link_open = (tokens, i, options, env, self) => {
   const token = tokens[i];
   let href = token.attrGet('href');
-  if (href?.startsWith('https://tolktak.d4enst.ru/')) {
-    href = href.replace('https://tolktak.d4enst.ru', '');
+  if (href?.startsWith(origin + '/')) {
+    href = href.slice(origin.length);
     token.attrSet('href', href);
   }
   if (href && !/^(https?:|mailto:|#|\/)/.test(href)) {
     const [pathname, anchor] = href.split('#');
     const target = resolve(dirname(env.doc.path), pathname);
     const found = env.all.find(doc => doc.path === target);
-    token.attrSet('href', found ? docUrl(found.lang, found.id) + (anchor ? '#' + anchor : '') : `${github}/blob/main/${posix.relative(repo, target)}${anchor ? '#' + anchor : ''}`);
+    token.attrSet('href', (found ? docUrl(found.lang, found.id) : sourceUrl(target)) + (anchor ? '#' + anchor : ''));
   }
   return self.renderToken(tokens, i, options);
 };
-md.renderer.rules.table_open = (_tokens, _i, _options, env) => `<div class="table-scroll" tabindex="0" role="region" aria-label="${env.doc.lang === 'ru' ? 'Таблица с горизонтальной прокруткой' : 'Horizontally scrollable table'}"><table>\n`;
+md.renderer.rules.table_open = (_tokens, _i, _options, env) => `<div class="table-scroll" tabindex="0" role="region" aria-label="${copy[env.doc.lang].docs.table}"><table>\n`;
 md.renderer.rules.table_close = () => '</table></div>\n';
 md.renderer.rules.heading_close = (tokens, i, options, env, self) => {
   if (tokens[i].tag === 'h1') return self.renderToken(tokens, i, options);
   const id = tokens[i - 2].attrGet('id');
-  return `<a class="heading-anchor" href="#${id}" aria-label="${env.doc.lang === 'ru' ? 'Ссылка на раздел' : 'Link to section'}">#</a>${self.renderToken(tokens, i, options)}`;
+  return `<a class="heading-anchor" href="#${id}" aria-hidden="true" tabindex="-1">#</a>${self.renderToken(tokens, i, options)}`;
 };
 
 export const renderDoc = (doc, all) => md.renderer.render(doc.tokens, md.options, { doc, all });
-export const renderMarkdown = source => new MarkdownIt({ html: false, linkify: true }).render(source);
-export const escape = md.utils.escapeHtml;
-export const sourceUrl = doc => `${github}/blob/main/${posix.relative(repo, doc.path)}`;
 
+// The part of a page under one h2, without the heading. Other pages quote the docs this way
+// instead of repeating their text.
+export function renderSection(doc, all, anchor) {
+  const isH2 = token => token.type === 'heading_open' && token.tag === 'h2';
+  const start = doc.tokens.findIndex(token => isH2(token) && token.attrGet('id') === anchor);
+  if (start < 0) throw new Error(`${doc.path} has no section #${anchor}`);
+  const end = doc.tokens.findIndex((token, i) => i > start && isH2(token));
+  return md.renderer.render(doc.tokens.slice(start + 3, end < 0 ? undefined : end), md.options, { doc, all });
+}
+const plain = new MarkdownIt({ html: false, linkify: true });
+// Release notes sit under their release's h2, so their own headings go one level lower.
+plain.renderer.rules.heading_open = plain.renderer.rules.heading_close = (tokens, i, options, _env, self) => {
+  tokens[i].tag = `h${Math.min(6, Number(tokens[i].tag[1]) + 1)}`;
+  return self.renderToken(tokens, i, options);
+};
+export const renderMarkdown = source => plain.render(source);
+
+// One entry for the top of each page and one per h2 section, linked to the anchors parse() gave them.
+// Heading text is the entry's title, so it is left out of the text.
 export function searchIndex(lang, pages) {
-  return pages.flatMap(doc => doc.source.split(/(?=^## )/m).map((section, i) => {
-    const title = section.match(/^## (.+)/m)?.[1] || doc.title;
-    const text = md.parse(section.replace(/^#{1,6} .+$/gm, ''), {})
-      .flatMap(token => token.children
-        ? token.children.filter(t => ['text', 'code_inline'].includes(t.type)).map(t => t.content)
-        : ['fence', 'code_block'].includes(token.type) ? [token.content] : [])
-      .join(' ').replace(/\s+/g, ' ').trim();
-    return { title, page: doc.title, url: docUrl(lang, doc.id) + (i ? '#' + slug(title) : ''), text };
-  }));
+  return pages.flatMap(doc => {
+    const entries = [{ title: doc.title, anchor: '', text: [] }];
+    doc.tokens.forEach((token, i) => {
+      if (token.type === 'heading_open' && token.tag === 'h2') {
+        const anchor = token.attrGet('id');
+        entries.push({ title: doc.headings.find(h => h.anchor === anchor).text, anchor, text: [] });
+      } else if (token.children && doc.tokens[i - 1].type !== 'heading_open') {
+        entries.at(-1).text.push(...token.children.filter(t => t.type === 'text' || t.type === 'code_inline').map(t => t.content));
+      } else if (token.type === 'fence' || token.type === 'code_block') {
+        entries.at(-1).text.push(token.content);
+      }
+    });
+    return entries.map(({ title, anchor, text }) => ({
+      title, page: doc.title, url: docUrl(lang, doc.id) + (anchor ? '#' + anchor : ''), text: text.join(' ').replace(/\s+/g, ' ').trim(),
+    }));
+  });
 }

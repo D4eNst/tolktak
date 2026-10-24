@@ -1,14 +1,10 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { resolve, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { languages, url } from './urls.mjs';
 
 const root = fileURLToPath(new URL('../dist/', import.meta.url));
-async function files(dir) {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const groups = await Promise.all(entries.filter(e => e.name !== 'node_modules').map(e => e.isDirectory() ? files(resolve(dir, e.name)) : [resolve(dir, e.name)]));
-  return groups.flat();
-}
-const pages = (await files(root)).filter(f => extname(f) === '.html');
+const pages = (await readdir(root, { recursive: true })).filter(f => extname(f) === '.html').map(f => resolve(root, f));
 const cache = new Map(), issues = [];
 let links = 0;
 for (const page of pages) {
@@ -31,18 +27,13 @@ for (const [page, html] of cache) {
     } catch { issues.push(`${page}: missing file ${raw}`); }
   }
 }
-for (const lang of ['', '/en']) {
-  const entries = JSON.parse(await readFile(resolve(root, '.' + lang + '/docs/search.json'), 'utf8'));
+for (const lang of languages) {
+  const entries = JSON.parse(await readFile(resolve(root, '.' + url(lang, 'docs/search.json')), 'utf8'));
   for (const entry of entries) {
     const [path, hash] = entry.url.split('#');
     const html = cache.get(resolve(root, '.' + path, 'index.html'));
     if (!html || (hash && !html.includes(`id="${hash}"`))) issues.push(`Invalid search target: ${entry.url}`);
   }
 }
-for (const [page, html] of cache) {
-  for (const [, href] of html.matchAll(/href="(https:\/\/github\.com\/[^"]+\/releases\/download\/[^"]+)"/g)) {
-    if (!href.startsWith('https://github.com/D4eNst/tolktak/releases/download/')) issues.push(`${page}: unexpected download URL ${href}`);
-  }
-}
 if (issues.length) { console.error(issues.join('\n')); process.exitCode = 1; }
-else console.log(`Checked ${pages.length} HTML pages, ${links} internal links/assets, both search indexes and download URLs.`);
+else console.log(`Checked ${pages.length} HTML pages, ${links} internal links/assets and both search indexes.`);

@@ -31,22 +31,24 @@ only on loopback. Stop it with Ctrl+C.
   which the docs link to them, starting from `README.md`. English copies of
   top-level Russian pages are read from the repository root, as GitHub expects
   `SECURITY.md` and `CONTRIBUTING.md` there.
-- `content/`: homepage and download page copy in both languages, and reviewed
-  release notes in `content/releases/<version>.<lang>.md`. Without a reviewed
-  file, the release description from GitHub is shown.
+- `content/`: page copy in both languages (`content/home/` has one file per
+  homepage section).
 - `tools/copy.mjs`: shared interface labels and the names of documentation groups.
   A new docs folder appears under its own name until it gets a label here.
-- `assets/`: styles, scripts, fonts and images, copied to `dist/` as they are.
+- `tools/pages/`: page templates; `tools/pages/home/` has one template per
+  homepage section.
+- `assets/`: styles, scripts, fonts and images, copied to `dist/`. Each folder in
+  `assets/css/` is concatenated into one stylesheet; scripts are ES modules.
 
 Markdown links to other guides become local website links. Source-code links
 still point to the repository. `npm run check` validates internal links, anchors,
-page metadata, search targets and download URLs.
+page metadata and search targets.
 
 ## Publishing
 
 The `Website` workflow builds and checks the site whenever `docs/`, `website/`,
-`SECURITY.md` or `CONTRIBUTING.md` change on `main`, and whenever a release is
-published, edited or deleted. It can also be started by hand. A new release or a
+`SECURITY.md`, `CONTRIBUTING.md` or `deploy/nginx.conf.example` change on `main`,
+and whenever a release is published, unpublished, edited or deleted. It can also be started by hand. A new release or a
 documentation change therefore reaches the site without editing the website.
 
 The workflow uploads `dist/` over SSH with `rsync --delete` once these repository
@@ -68,15 +70,19 @@ harmless elsewhere, for example with `command="rrsync /srv/tolktak-website"` in 
 Serve the directory from the domain root with any static HTTP server. Paths such
 as `/docs/install/docker/` resolve to their `index.html`. Configure the web
 server to use `404.html` for unknown paths and keep directory listings disabled.
+English pages have their own `en/404.html`; in nginx, add
+`location /en/ { error_page 404 /en/404.html; }`.
 Style and script file names carry no version, so send `Cache-Control: no-cache`
 for HTML, CSS, JavaScript and JSON: browsers then check for a newer copy on every
 visit instead of keeping an old one.
 
 No registration, analytics or external font requests are used. Search runs in
-the browser from the generated local JSON index. Documentation and download links
-are available without JavaScript; JavaScript adds search, copy buttons, screenshot
-tabs and platform highlighting.
+the browser from the generated local JSON index. Every text and link works
+without JavaScript; scripts add the interactive scenes, search, copy buttons and
+picking the download for the visitor's system.
 
-Golos Text is self-hosted under [SIL OFL 1.1](assets/fonts/OFL.txt). The Markdown
-generator uses markdown-it (MIT). The palette, layout and writing direction are
-recorded in [DESIGN.md](DESIGN.md).
+Golos Text and JetBrains Mono are self-hosted under SIL OFL 1.1
+([Golos Text](assets/fonts/OFL-GolosText.txt),
+[JetBrains Mono](assets/fonts/OFL-JetBrainsMono.txt)), subset to Latin and
+Cyrillic. The Markdown generator uses markdown-it (MIT). The direction, palette
+and writing rules are recorded in [DESIGN.md](DESIGN.md).
