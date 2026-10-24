@@ -1,0 +1,221 @@
+.w-world {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  gap: 56px;
+  align-items: start;
+}
+.w-rooms {
+  min-width: 0;
+}
+.w-rail {
+  position: sticky;
+  top: calc(var(--w-header) + 24px);
+  margin: 24px 0 96px;
+  padding: 10px;
+  border: 1px solid var(--w-line);
+  border-radius: 18px;
+  background: var(--w-panel);
+  font-size: 14px;
+}
+.w-rail-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 650;
+}
+.w-rail-group:hover {
+  background: var(--w-raised);
+}
+.w-badge {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--w-raised);
+  font: 700 11.5px/1 var(--w-sans);
+  color: var(--w-ink-2);
+}
+.w-rail-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 6px 0 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--w-line);
+  border-radius: 9px;
+  background: var(--w-app-bg);
+  color: var(--w-muted);
+  font-size: 13px;
+  text-align: left;
+}
+.w-rail-search > span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.w-rail-cap {
+  margin: 14px 8px 6px;
+  font: 650 11px/1 var(--w-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--w-faint);
+}
+.w-rail-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  color: var(--w-ink-2);
+  text-decoration: none;
+  transition: background-color 160ms var(--w-ease), color 160ms var(--w-ease);
+}
+.w-rail-row:hover {
+  background: var(--w-raised);
+  color: var(--w-ink);
+}
+.w-rail-row .icon {
+  color: var(--w-faint);
+}
+.w-rail-row--voice .icon {
+  color: var(--w-speak);
+}
+.w-rail-row small {
+  grid-column: 2 / 4;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--w-faint);
+}
+.w-rail-row.is-here {
+  background: var(--w-raised);
+  color: var(--w-ink);
+}
+.w-rail-row.is-here::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--w-accent);
+}
+.w-rail-count {
+  font: 650 11px/1 var(--w-sans);
+  color: var(--w-speak);
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(54, 208, 143, 0.12);
+}
+.w-rail-people {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 6px 34px;
+}
+.w-rail-people li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--w-muted);
+}
+.w-rail-people .w-ava.is-speaking {
+  box-shadow: 0 0 0 2px var(--w-panel), 0 0 0 3.5px var(--w-speak);
+}
+.w-rail-sep {
+  height: 1px;
+  margin: 10px 4px;
+  background: var(--w-line);
+}
+.w-rail-me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--w-app-bg);
+}
+.w-rail-me b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.w-rail-me div > span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--w-faint);
+  line-height: 1.3;
+}
+.w-rail-gear {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: var(--w-muted);
+}
+.w-rail-gear:hover,
+.w-rail-gear.is-here {
+  background: var(--w-raised);
+  color: var(--w-accent);
+}
+
+.w-scene {
+  position: relative;
+  padding: 120px 0;
+  scroll-margin-top: var(--w-header);
+}
+.w-scene + .w-scene {
+  border-top: 1px solid var(--w-line);
+}
+.w-rooms > .w-scene {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  gap: 56px;
+  align-items: center;
+}
+.w-scene-text {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+.w-scene-text .w-room {
+  margin-bottom: 4px;
+}
+.w-scene-text .w-facts {
+  margin-top: 12px;
+}
+.w-stage {
+  position: relative;
+  min-width: 0;
+}
+
+@media (max-width: 1279px) {
+  .w-world {
+    display: block;
+  }
+  .w-rail {
+    display: none;
+  }
+}
+@media (max-width: 1000px) {
+  .w-rooms > .w-scene {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .w-scene {
+    padding: 72px 0;
+  }
+}

@@ -1,0 +1,22 @@
+.w-missing {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 20px;
+  min-height: calc(100vh - var(--w-header) - 120px);
+  padding-top: 64px;
+  padding-bottom: 96px;
+}
+.w-missing .w-room {
+  padding: 6px 10px;
+  border: 1px solid var(--w-line-2);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--w-ink-2);
+}
+.w-missing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-top: 8px;
+}

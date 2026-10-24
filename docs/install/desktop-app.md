@@ -30,15 +30,13 @@ The app requests microphone and camera access when they are first used. If acces
 
 On macOS, screen sharing requires separate permission under Privacy & Security. TolkTak may need to be restarted after changing it.
 
-## Platform differences
+## Platform limitations
 
-| System | Screen-sharing audio |
-|---|---|
-| Windows 11 | Audio from the selected app when sharing a window. When sharing the entire screen, call participants' voices are excluded from system audio. |
-| Windows 10 | All system audio, including call participants' voices. The app displays a warning before sharing. |
-| macOS and Linux | Video without audio. |
+The early version currently has a few limitations that depend on the system. They are planned to be addressed in future versions.
 
-Push to talk works outside the TolkTak window on Windows. On macOS and Linux, it requires the app window to have focus. Global hotkey support on Linux with Wayland depends on the desktop environment.
+- **macOS and Linux:** screen sharing has no audio, and push to talk works only while the TolkTak window has focus.
+- **Windows 10:** screen sharing sends all system audio, including call participants' voices. The app warns about this before sharing starts.
+- **Linux with Wayland:** global hotkey support depends on the desktop environment.
 
 ## Updates
 

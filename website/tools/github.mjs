@@ -1,9 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { installers } from './release.mjs';
 
 export const github = 'https://github.com/D4eNst/tolktak';
 const api = 'https://api.github.com/repos/D4eNst/tolktak/releases?per_page=100';
 const cache = new URL('../.cache/releases.json', import.meta.url);
-const installers = [/Setup.*\.exe$/i, /win\.zip$/, /mac-arm64\.dmg$/, /mac-x64\.dmg$/, /\.deb$/, /\.AppImage$/];
 
 function snapshot(release) {
   return {
@@ -12,9 +12,8 @@ function snapshot(release) {
     published: release.published_at,
     url: release.html_url,
     notes: release.body || '',
-    assets: release.assets.filter(asset => installers.some(re => re.test(asset.name))).map(({ name, size, browser_download_url, digest }) => ({
-      name, size, url: browser_download_url, ...(digest ? { digest } : {}),
-    })),
+    assets: release.assets.filter(asset => installers.some(re => re.test(asset.name)))
+      .map(({ name, size, browser_download_url: url, digest }) => ({ name, size, url, digest })),
   };
 }
 
@@ -36,10 +35,10 @@ export async function loadReleases() {
     await mkdir(new URL('.', cache), { recursive: true });
     await writeFile(cache, JSON.stringify(releases, null, 2) + '\n');
   } catch (error) {
-    releases = JSON.parse(await readFile(cache, 'utf8').catch(() => {
-      throw new Error(`Cannot load releases from GitHub (${error.message}) and there is no cached copy`);
-    }));
+    const cached = await readFile(cache, 'utf8').catch(() => null);
+    if (!cached) throw new Error(`Cannot load releases from GitHub (${error.message}) and there is no cached copy`);
     console.warn(`Using cached releases: ${error.message}`);
+    releases = JSON.parse(cached);
   }
   const latest = releases.find(r => installers.every(re => r.assets.some(asset => re.test(asset.name))));
   if (!latest) throw new Error('No published release has all installers');

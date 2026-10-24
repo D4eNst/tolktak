@@ -1,31 +1,50 @@
 # Website direction
 
 TolkTak is a self-hosted communication server for personal use, communities and
-organisations. The homepage introduces chats, calls and screen sharing, shows
-the interface and explains self-hosting. The app is the main visual.
+organisations. The site shows a place where one's own group talks: chat, voice,
+video, screen sharing and a server of their own. One person sets up the server;
+everyone else downloads the app and signs in, so every page keeps both paths in
+view: download the app, or set up a server.
 
-- Paper `#f5f7fb`, white `#ffffff`, ink `#192641`, secondary `#5b687d`,
-  orange `#e87146`, pale blue `#e8eef7`.
-- Self-hosted Golos Text, 400–800. Large, compact headings; readable body text.
-- Quiet header; left-aligned introduction beside a real app screenshot;
-  full-width screenshot viewer; separate download and documentation pages.
-- Reserve orange for the logo and primary action. No gradients outside the
-  existing logo, decorative badges, invented testimonials or usage statistics.
-- The author supplies the meaning and reviews Russian copy before it is added.
-  Agreed text lives in `content/home.mjs`; English follows the same meaning.
-- Describe capabilities without addressing the reader with instructions. Keep
-  detailed feature lists and setup instructions in the documentation.
-- Keep the audience broad. The author story, comparisons with Discord or
-  TeamSpeak, bot API and AI plans do not belong on this homepage.
-- Omit introductions that repeat the page title or nearby links. The self-hosting
-  overview needs one sentence and its three guide links.
-- App setup should cover the build and sign-in. Skip code-signing notices and
-  detailed operating-system installation steps in these introductory pages.
+## Homepage
 
-The initial idea of a floating call notification was dropped: it would look like
-an invented product feature. The existing screenshots carry that job instead.
+- The visitor first gathers a group of people with the pointer. Further down the
+  same people move into an isometric house: the house is the server, a floor is a
+  group, rooms are its text channels and voice rooms, lit where people talk.
+- Below, each feature is a room with its own small interaction that demonstrates
+  the real feature: chat, voice and video, screen sharing and watching together,
+  sound settings, the server itself. The page ends with the house at night and
+  the download block.
+- The section navigation looks like the app's channel list and follows the
+  scroll. Ctrl+K opens a quick switcher like the app's.
+- Every effect says something about the product. Physics, flights and loops stop
+  off screen and give way to calm final states with reduced motion. Without
+  JavaScript every text and link is present.
 
-Documentation is generated from Markdown, readable without JavaScript, with
-section links, a table of contents and previous/next navigation. Search runs
-locally in the browser. Downloads link to verified release assets, with a checked
-in release snapshot so the buttons also work without a GitHub API request.
+## Download and documentation
+
+- The download page is calmer: one auto-detected button, all builds as plain
+  links with sizes and checksums, how to connect to a server, and what each system
+  cannot do yet. Release data comes from GitHub at build time.
+- Documentation has none of the homepage effects: a section menu styled like the
+  channel list, a table of contents, local search, previous and next pages,
+  readable code blocks and tables, and a light theme for long reading.
+
+## Look
+
+- The app's dark palette: ground `#111015`, panels `#16151b`, ink `#f3eef0`,
+  muted `#9a91a3`, orange accent `#ff8a3d`, green `#36d08f` only for a speaking
+  ring or connected voice, red `#ef4b55` only for LIVE and leaving a call.
+- The logo gradient appears only on the logo and the primary download button.
+- Golos Text for everything, set tight and heavy in headings; JetBrains Mono for
+  room labels, addresses and code. Both are self-hosted.
+- Interface fragments are redrawn from the app with its real labels and icons;
+  the people and conversations are sample data.
+
+## Copy
+
+- The author supplies the meaning and reviews Russian copy; English follows the
+  same meaning in a calm, professional tone. Describe capabilities without
+  addressing the reader with instructions; interaction hints stay under five words.
+- Product facts only. No testimonials, user counts, ratings, comparisons with
+  other products, plans or features that do not exist.
