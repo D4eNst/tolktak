@@ -90,8 +90,8 @@ class Env:
 def make_env(tmp_path: Path, database_url: str):
     clients = []
 
-    def make(registration: str = "open") -> Env:
-        client = TestClient(create_app(make_config(tmp_path, database_url, registration)))
+    def make(registration: str = "open", **kw) -> Env:
+        client = TestClient(create_app(make_config(tmp_path, database_url, registration, **kw)))
         client.__enter__()
         clients.append(client)
         return Env(client)

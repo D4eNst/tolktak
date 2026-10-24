@@ -32,7 +32,7 @@ sudo nginx -t && sudo systemctl reload nginx
 | `Upgrade`, `Connection` | Передача WebSocket для событий чата и подключения к звонкам. |
 | `client_max_body_size` | Лимит тела запроса. В примере `60m` при лимите файла TolkTak в 50 МБ. |
 | `proxy_read_timeout` | Ожидание данных от сервиса: 120 секунд для TolkTak и 3600 для LiveKit в примере. |
-| `X-Forwarded-For` | Адрес участника для ограничения частоты запросов. |
+| `X-Forwarded-For` | Адрес участника для ограничения частоты запросов. TolkTak читает последний адрес в заголовке, поэтому прокси должен задавать его или дописывать в конец. |
 
 При изменении `TOLKTAK_MAX_UPLOAD_MB` лимит nginx должен оставаться выше с учётом служебных данных запроса. Превышение лимита возвращает HTTP 413. Передача WebSocket описана в [документации nginx](https://nginx.org/ru/docs/http/websocket.html).
 
