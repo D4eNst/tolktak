@@ -28,13 +28,13 @@ jobs:
       PERF_CI_REPEATS: ${{ github.event.inputs.repeats || '2' }}
       PERF_HOST_NOTE: GitHub Actions ubuntu-24.04 runner (shared VM, no GPU)
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: client/package-lock.json
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           python-version: '3.14'
           enable-cache: true
@@ -54,7 +54,7 @@ jobs:
         working-directory: server
       - name: Perf scenarios and regression check
         run: perf/ci.sh "$RUNNER_TEMP/perf"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: perf-linux
