@@ -85,13 +85,15 @@ class LoginReq(Body):
 async def login(request: Request):
     s = server(request)
     req = await read_json(request, LoginReq)
-    key = f"login:{s.client_ip(request)}:{req.username.lower()}"
-    s.limit(key, 8, 4, "Too many login attempts, try again in a minute")
+    username = req.username.strip()
+    ip = s.client_ip(request)
+    s.limit("login-ip:" + ip, 10, 5, "Too many login attempts, try again in a minute")
+    s.limit("login-user:" + username.lower()[:64], 10, 5, "Too many login attempts, try again in a minute")
     try:
-        u = await users.authenticate(req.username.strip(), req.password)
+        u = await users.authenticate(username, req.password)
     except NotFound:
         # The name shows whether the account exists, the password is never logged.
-        log.info("login failed username=%r ip=%s", req.username.strip()[:64], s.client_ip(request))
+        log.info("login failed username=%r ip=%s", username[:64], ip)
         raise ApiError(401, "bad_credentials", "Invalid username or password") from None
     device = req.device.encode()[:64].decode(errors="ignore")
     token = await users.create_session(u["id"], device)
