@@ -343,3 +343,16 @@ def test_concurrent_first_accounts_make_one_admin(make_env):
 
     made = e.c.portal.call(register_both)
     assert sorted(u["is_admin"] for u in made) == [False, True]
+
+
+def test_reactions_are_emoji(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    _, body = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})
+    _, body = e.do("POST", f"/api/v1/channels/{body['channel']['id']}/messages", a, {"text": "hi", "nonce": "n1"})
+    path = f"/api/v1/messages/{body['message']['id']}/reactions"
+    for text in ("SCAM", "visit x.co", "1", "\u202e", "2024\u20e3"):
+        assert e.do("POST", path, a, {"emoji": text})[0] == 400, f"{text!r} is not a reaction"
+    for emoji in ("👍", "❤️‍🔥", "1️⃣", "🇷🇺", "👍🏽"):
+        assert e.do("POST", path, a, {"emoji": emoji})[0] == 200, emoji
