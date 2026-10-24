@@ -3,6 +3,7 @@
 import contextlib
 import os
 import posixpath
+import re
 from typing import Annotated
 from urllib.parse import quote
 
@@ -21,8 +22,12 @@ User = Annotated[dict, Depends(current_user)]
 
 MAX_SIDE = 16384
 
+# Control and text direction characters: an override shows "a\u202egpj.exe" as "aexe.jpg".
+_HIDDEN = re.compile("[\x00-\x1f\x7f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+
 
 def clean_name(raw: str) -> str:
+    raw = _HIDDEN.sub("", raw)
     name = raw.replace("\\", "/").rstrip("/")
     name = posixpath.basename(name) if name else ("/" if raw.replace("\\", "/") else ".")
     name = name.strip()
