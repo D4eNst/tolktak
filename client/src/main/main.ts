@@ -4,6 +4,7 @@ import {
   clipboard,
   desktopCapturer,
   ipcMain,
+  type IpcMainInvokeEvent,
   Menu,
   nativeImage,
   powerSaveBlocker,
@@ -15,7 +16,7 @@ import {
 } from 'electron';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { globalPushToTalk, type Hotkeys, installHotkeys, uninstallHotkeys } from './hotkeys';
+import { globalPushToTalk, type HotkeyName, type Hotkeys, installHotkeys, uninstallHotkeys } from './hotkeys';
 import { watchOcclusion } from './occlusion';
 import { installUpdater } from './updater';
 import { audioPidForWindow, exeForPid, hwndFromSourceId, processLoopbackSupported, windowsBuild } from './winaudio';
@@ -51,19 +52,44 @@ type Persisted = {
 };
 const settingsFile = () => path.join(app.getPath('userData'), 'tolktak.json');
 
-function readSettings(): Persisted {
-  try {
-    const raw = JSON.parse(readFileSync(settingsFile(), 'utf8')) as Persisted & { tokenEnc?: string };
-    if (raw.tokenEnc && safeStorage.isEncryptionAvailable()) {
-      raw.token = safeStorage.decryptString(Buffer.from(raw.tokenEnc, 'base64'));
+// Settings come from a file and from the renderer: only known keys of the expected types are kept.
+function cleanSettings(raw: unknown): Persisted {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const out: Persisted = {};
+  if (typeof r.server === 'string' && (r.server === '' || /^https?:\/\/[^\s]{1,2000}$/i.test(r.server))) out.server = r.server;
+  if (typeof r.token === 'string' && /^[\x21-\x7e]{0,256}$/.test(r.token)) out.token = r.token;
+  for (const k of ['minimizeToTray', 'openAtLogin', 'allowWin10Loopback'] as const) {
+    if (typeof r[k] === 'boolean') out[k] = r[k];
+  }
+  if (r.hotkeys && typeof r.hotkeys === 'object') {
+    const keys = r.hotkeys as Record<string, unknown>;
+    out.hotkeys = {};
+    for (const name of ['mute', 'deafen', 'ptt'] as HotkeyName[]) {
+      const accel = keys[name];
+      if (typeof accel === 'string' && accel.length <= 64) out.hotkeys[name] = accel;
     }
-    delete raw.tokenEnc;
-    if (raw.muteShortcut && !raw.hotkeys) raw.hotkeys = { mute: raw.muteShortcut };
-    delete raw.muteShortcut;
-    return raw;
+  }
+  return out;
+}
+
+function readSettings(): Persisted {
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(settingsFile(), 'utf8'));
   } catch {
     return { minimizeToTray: true };
   }
+  if (!raw || typeof raw !== 'object') return { minimizeToTray: true };
+  if (typeof raw.tokenEnc === 'string' && safeStorage.isEncryptionAvailable()) {
+    try {
+      raw.token = safeStorage.decryptString(Buffer.from(raw.tokenEnc, 'base64'));
+    } catch (err) {
+      // Encrypted under another OS account or keychain: sign in again, keep the other settings.
+      console.warn('settings: cannot decrypt the saved token', err);
+    }
+  }
+  if (typeof raw.muteShortcut === 'string' && !raw.hotkeys) raw.hotkeys = { mute: raw.muteShortcut };
+  return cleanSettings(raw);
 }
 
 function writeSettings(s: Persisted) {
@@ -86,7 +112,9 @@ const STRINGS = {
 };
 const str = () => (app.getLocale().toLowerCase().startsWith('ru') ? STRINGS.ru : STRINGS.en);
 
-type CaptureChoice = { id: string; audio: 'app' | 'system' | 'system-all' | 'none' };
+const AUDIO_MODES = ['app', 'system', 'system-all', 'none'] as const;
+type CaptureChoice = { id: string; audio: (typeof AUDIO_MODES)[number] };
+let offeredSources = new Set<string>();
 let pendingChoice: CaptureChoice | null = null;
 let lastAudioInfo: { device: string; pid?: number; exe?: string } | null = null;
 
@@ -212,8 +240,19 @@ function registerShortcuts() {
   installHotkeys(settings.hotkeys ?? {}, (name) => win?.webContents.send('shortcut', name));
 }
 
+// Only the app's own page may use the main process.
+function handle(channel: string, fn: (...args: any[]) => unknown) {
+  ipcMain.handle(channel, (e: IpcMainInvokeEvent, ...args: unknown[]) => {
+    const frame = e.senderFrame;
+    if (e.sender.id !== win?.webContents.id || !frame || frame.parent || !frame.url.startsWith('file://')) {
+      throw new Error(`${channel}: not allowed from this frame`);
+    }
+    return fn(...args);
+  });
+}
+
 function installIpc() {
-  ipcMain.handle('settings:get', () => ({
+  handle('settings:get', () => ({
     server: settings.server ?? '',
     token: settings.token ?? '',
     minimizeToTray: settings.minimizeToTray !== false,
@@ -221,26 +260,24 @@ function installIpc() {
     openAtLogin: !!settings.openAtLogin,
     allowWin10Loopback: !!settings.allowWin10Loopback,
   }));
-  ipcMain.handle('settings:set', (_e, patch: Partial<Persisted>) => {
-    const allowed: (keyof Persisted)[] = ['server', 'token', 'minimizeToTray', 'hotkeys', 'openAtLogin', 'allowWin10Loopback'];
-    for (const k of allowed) {
-      if (k in patch) (settings as Record<string, unknown>)[k] = (patch as Record<string, unknown>)[k];
-    }
+  handle('settings:set', (patch: unknown) => {
+    const valid = cleanSettings(patch);
+    Object.assign(settings, valid);
     writeSettings(settings);
-    if ('hotkeys' in patch) registerShortcuts();
-    if ('openAtLogin' in patch && app.isPackaged) app.setLoginItemSettings({ openAtLogin: !!settings.openAtLogin, args: ['--hidden'] });
+    if ('hotkeys' in valid) registerShortcuts();
+    if ('openAtLogin' in valid && app.isPackaged) app.setLoginItemSettings({ openAtLogin: !!settings.openAtLogin, args: ['--hidden'] });
     return true;
   });
-  ipcMain.handle('app:badge', (_e, count: number, dataUrl: string) => {
+  handle('app:badge', (count: number, dataUrl: string) => {
     if (process.platform === 'darwin') app.dock?.setBadge(count ? String(count) : '');
     else if (process.platform === 'win32') win?.setOverlayIcon(count && dataUrl ? nativeImage.createFromDataURL(dataUrl) : null, count ? str().unread(count) : '');
     else app.setBadgeCount(count);
   });
   // fetch() cannot read large assets from file://.
   const assets = new Set(['dfn/df_bg.wasm', 'dfn/model.tar.gz']);
-  ipcMain.handle('asset:read', (_e, name: string) => (assets.has(name) ? readFileSync(path.join(__dirname, 'assets', name)) : null));
-  ipcMain.handle('app:copy', (_e, text: string) => clipboard.writeText(String(text).slice(0, 10000)));
-  ipcMain.handle('app:info', () => ({
+  handle('asset:read', (name: string) => (assets.has(name) ? readFileSync(path.join(__dirname, 'assets', name)) : null));
+  handle('app:copy', (text: string) => clipboard.writeText(String(text).slice(0, 10000)));
+  handle('app:info', () => ({
     version: app.getVersion(),
     platform: process.platform,
     windowsBuild: windowsBuild(),
@@ -249,29 +286,30 @@ function installIpc() {
     chrome: process.versions.chrome,
     globalPushToTalk,
   }));
-  ipcMain.handle('capture:sources', async () => {
+  handle('capture:sources', async () => {
     const own = win?.getMediaSourceId();
     const sources = await desktopCapturer.getSources({
       types: ['window', 'screen'],
       thumbnailSize: { width: 320, height: 180 },
       fetchWindowIcons: true,
     });
-    return sources
-      .filter((s) => s.id !== own && s.name !== 'TolkTak')
-      .map((s) => ({
-        id: s.id,
-        name: s.name,
-        kind: s.id.startsWith('screen') ? 'screen' : 'window',
-        thumbnail: s.thumbnail.isEmpty() ? '' : s.thumbnail.toDataURL(),
-        icon: s.appIcon && !s.appIcon.isEmpty() ? s.appIcon.toDataURL() : '',
-      }));
+    const offered = sources.filter((s) => s.id !== own && s.name !== 'TolkTak');
+    offeredSources = new Set(offered.map((s) => s.id));
+    return offered.map((s) => ({
+      id: s.id,
+      name: s.name,
+      kind: s.id.startsWith('screen') ? 'screen' : 'window',
+      thumbnail: s.thumbnail.isEmpty() ? '' : s.thumbnail.toDataURL(),
+      icon: s.appIcon && !s.appIcon.isEmpty() ? s.appIcon.toDataURL() : '',
+    }));
   });
-  ipcMain.handle('capture:select', (_e, choice: CaptureChoice) => {
-    pendingChoice = choice;
+  handle('capture:select', (choice: Partial<CaptureChoice> | null) => {
+    if (!choice || !offeredSources.has(choice.id ?? '') || !AUDIO_MODES.includes(choice.audio as CaptureChoice['audio'])) return false;
+    pendingChoice = { id: choice.id!, audio: choice.audio! };
     return true;
   });
-  ipcMain.handle('capture:lastAudio', () => lastAudioInfo);
-  ipcMain.handle('app:inCall', (_e, inCall: boolean) => {
+  handle('capture:lastAudio', () => lastAudioInfo);
+  handle('app:inCall', (inCall: boolean) => {
     // Throttling stays on in calls: with it off a hidden window keeps decoding the watched stream.
     if (inCall && blockerId === null) blockerId = powerSaveBlocker.start('prevent-app-suspension');
     if (!inCall && blockerId !== null) {
@@ -280,21 +318,21 @@ function installIpc() {
     }
     tray?.setToolTip(inCall ? str().inVoice : 'TolkTak');
   });
-  ipcMain.handle('app:attention', () => {
+  handle('app:attention', () => {
     if (win && !win.isFocused()) win.flashFrame(true);
   });
-  ipcMain.handle('app:openExternal', (_e, url: string) => {
+  handle('app:openExternal', (url: string) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
   });
-  ipcMain.handle('app:setTitle', (_e, title: string) => win?.setTitle(String(title).slice(0, 120)));
-  ipcMain.handle('media:access', async (_e, kind: 'microphone' | 'camera', ask: boolean) => {
+  handle('app:setTitle', (title: string) => win?.setTitle(String(title).slice(0, 120)));
+  handle('media:access', async (kind: 'microphone' | 'camera', ask: boolean) => {
     if (kind !== 'microphone' && kind !== 'camera') return 'denied';
     if (process.platform !== 'darwin' && process.platform !== 'win32') return 'granted';
     const status = systemPreferences.getMediaAccessStatus(kind);
     if (status === 'not-determined' && ask && process.platform === 'darwin') return (await systemPreferences.askForMediaAccess(kind)) ? 'granted' : 'denied';
     return status;
   });
-  ipcMain.handle('media:openPrivacy', (_e, kind: 'microphone' | 'camera') => {
+  handle('media:openPrivacy', (kind: 'microphone' | 'camera') => {
     const mac = kind === 'camera' ? 'Privacy_Camera' : 'Privacy_Microphone';
     if (process.platform === 'darwin') shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?${mac}`);
     else if (process.platform === 'win32') shell.openExternal(kind === 'camera' ? 'ms-settings:privacy-webcam' : 'ms-settings:privacy-microphone');
@@ -303,8 +341,9 @@ function installIpc() {
 
 function installPermissions() {
   const allowed = new Set(['media', 'display-capture', 'notifications', 'fullscreen', 'clipboard-sanitized-write', 'speaker-selection']);
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
+  const ours = (wc: Electron.WebContents | null) => !!wc && wc.id === win?.webContents.id;
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(allowed.has(permission) && ours(wc)));
+  session.defaultSession.setPermissionCheckHandler((wc, permission) => allowed.has(permission) && ours(wc));
 }
 
 app.on('second-instance', () => {
@@ -319,13 +358,14 @@ app.whenReady().then(() => {
   // Packaged builds take the dock icon from the bundle.
   if (process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, 'assets', 'icon-512.png'));
   settings = readSettings();
+  // First, so that nothing failing below can keep the app from receiving a fix.
+  installUpdater(() => win);
   installPermissions();
   installDisplayMediaHandler();
   installIpc();
   createWindow();
   createTray();
   registerShortcuts();
-  installUpdater(() => win);
 });
 
 app.on('before-quit', () => {
