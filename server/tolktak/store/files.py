@@ -39,6 +39,11 @@ async def create_file(uploader: int, meta: dict) -> None:
     )  # fmt: skip
 
 
+async def used_bytes(uid: int) -> int:
+    found = await db.rows("SELECT COALESCE(SUM(size), 0) AS n FROM files WHERE uploader_id = ?", [uid])
+    return int(found[0]["n"])
+
+
 async def file_by_id(fid: str) -> tuple[dict, int]:
     f = await File.filter(id=fid).first()
     if f is None:
@@ -74,6 +79,17 @@ async def delete_unused(fids: list[str]) -> list[str]:
     if unused:
         await File.filter(id__in=unused).delete()
     return unused
+
+
+async def unused_before(t: int) -> list[str]:
+    """Ids of files uploaded before t that no message, profile or group uses."""
+    found = {r["id"] for r in await db.rows("SELECT id FROM files WHERE created_at < ?", [t])}
+    if found:
+        for r in await db.rows("SELECT avatar FROM users UNION SELECT avatar FROM groups"):
+            found.discard(r["avatar"])
+        for r in await db.rows("SELECT attachments FROM messages WHERE deleted = 0 AND attachments != ''"):
+            found.difference_update(r["attachments"].split(","))
+    return sorted(found)
 
 
 async def files_by_ids(ids: list[str]) -> dict[str, dict]:

@@ -67,6 +67,7 @@ export default {
     too_many_reactions: 'Too many different reactions',
     pin_forbidden: 'Only group moderators can pin messages',
     too_large: 'File is too large',
+    quota_exceeded: 'Your file storage on this server is full',
     empty: 'The file is empty',
     empty_file: 'The file is empty',
     group_not_found: 'Group not found',

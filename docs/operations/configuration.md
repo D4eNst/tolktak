@@ -9,6 +9,7 @@ The server is configured with environment variables. With Docker Compose they li
 | `TOLKTAK_SERVER_NAME` | `TolkTak` | Name shown in the app and on the website. |
 | `TOLKTAK_REGISTRATION` | `invite` | `open`: anyone can register. `invite`: an invite code is required. `closed`: nobody can. The very first account can always register and becomes the administrator. |
 | `TOLKTAK_MAX_UPLOAD_MB` | `50` | Maximum size of one uploaded file. Keep the reverse proxy's body limit above it. |
+| `TOLKTAK_USER_QUOTA_MB` | `2048` | Total size of the files one user can keep on the server. Files are freed when the messages they were sent in are deleted; files nothing uses, such as replaced pictures, are removed within two days of upload. `0` removes the limit. |
 | `TOLKTAK_CLIENT_DOWNLOAD_URL` | empty | Link to the desktop app on the server's website. Empty hides the button. |
 | `LIVEKIT_PUBLIC_URL` | required | `wss://` or `ws://` address the apps use to reach LiveKit. |
 | `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | required | Must match `keys` in `livekit.yaml`. The secret must be at least 32 characters. |

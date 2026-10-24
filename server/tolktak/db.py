@@ -250,6 +250,10 @@ AUTOINCREMENT_TABLES = ["channels", "groups", "rooms", "messages"]
 SQLITE.append("autoincrement")
 POSTGRES.append("")
 
+# 4: storage used by each user.
+SQLITE.append("CREATE INDEX files_uploader ON files(uploader_id)")
+POSTGRES.append("CREATE INDEX files_uploader ON files(uploader_id)")
+
 assert len(SQLITE) == len(POSTGRES)
 
 # Tables in foreign-key order, for copying between databases.

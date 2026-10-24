@@ -50,6 +50,7 @@ class Server:
         self.lk = lk or LiveKit(cfg.livekit_api_key, cfg.livekit_api_secret, cfg.livekit_internal_url)
         self.hub = Hub(self.room_audience)
         self.rl = RateLimiter()
+        self.upload_locks: dict[int, asyncio.Lock] = {}
 
     async def room_members(self, room: str) -> list[int]:
         """Raises on database errors, so a failed lookup never removes anyone from a room."""

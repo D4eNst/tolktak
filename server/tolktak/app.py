@@ -93,6 +93,7 @@ def create_app(cfg: Config, server: Server | None = None, init_db: bool = True) 
         tasks = [
             asyncio.create_task(voice.reconcile_loop(srv, 20)),
             asyncio.create_task(_prune_loop(srv)),
+            asyncio.create_task(_remove_unused_files_loop(srv)),
         ]
         sqlite_file = db.sqlite_path(cfg.database_url, cfg.data_dir) if init_db else None
         if sqlite_file is not None:
@@ -169,3 +170,12 @@ async def _prune_loop(srv: Server) -> None:
     while True:
         await asyncio.sleep(600)
         srv.rl.prune()
+
+
+async def _remove_unused_files_loop(srv: Server) -> None:
+    while True:
+        try:
+            await files.remove_old_unused_files(srv)
+        except Exception:
+            log.exception("remove unused files")
+        await asyncio.sleep(24 * 60 * 60)

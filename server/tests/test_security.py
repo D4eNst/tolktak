@@ -1,10 +1,13 @@
+import asyncio
 import json
 import time
 
+import httpx
 from conftest import decode_jwt, post_webhook
 
 from tolktak import db
 from tolktak.api import voice, ws
+from tolktak.api.files import remove_old_unused_files
 from tolktak.sniff import image_size
 from tolktak.store import users
 
@@ -277,3 +280,54 @@ def test_attachments_are_deleted_with_their_chat_and_group(make_env):
     assert e.c.get(f"/api/v1/files/{in_main}").status_code == 200
     assert e.do("DELETE", f"/api/v1/groups/{g['id']}", a)[0] == 204
     assert e.c.get(f"/api/v1/files/{in_main}").status_code == 404
+
+
+def test_uploads_stop_at_the_users_quota(make_env):
+    e = make_env(user_quota_bytes=100)
+    a, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    _, body = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})
+    cid = body["channel"]["id"]
+    code, body = e.upload(a, "one.png", PNG)
+    assert code == 201
+    code, res = e.upload(a, "two.png", PNG)
+    assert (code, res["error"]["code"]) == (507, "quota_exceeded")
+    msg = {"text": "", "nonce": "n1", "attachments": [body["file"]["id"]]}
+    _, body = e.do("POST", f"/api/v1/channels/{cid}/messages", a, msg)
+    e.do("DELETE", f"/api/v1/messages/{body['message']['id']}", a)
+    assert e.upload(a, "two.png", PNG)[0] == 201, "deleting a message frees its files' space"
+
+
+def test_parallel_uploads_share_the_quota(make_env):
+    e = make_env(user_quota_bytes=100)
+    a, _ = e.user("alice")
+
+    async def chunks():
+        for _ in range(6):
+            await asyncio.sleep(0.01)
+            yield b"x" * 10
+
+    async def two_uploads():
+        auth = {"Authorization": "Bearer " + a}
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=e.c.app), base_url="http://test") as c:
+            sent = [c.post("/api/v1/files", params={"name": "a.bin"}, content=chunks(), headers=auth) for _ in range(2)]
+            return sorted(r.status_code for r in await asyncio.gather(*sent))
+
+    assert e.c.portal.call(two_uploads) == [201, 507]
+
+
+def test_files_nothing_uses_are_removed_after_a_day(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    cid = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})[1]["channel"]["id"]
+    replaced, avatar, sent, unsent = [e.upload(a, f"{n}.png", PNG)[1]["file"]["id"] for n in "abcd"]
+    e.do("PATCH", "/api/v1/me", a, {"avatar": replaced})
+    e.do("PATCH", "/api/v1/me", a, {"avatar": avatar})
+    e.do("POST", f"/api/v1/channels/{cid}/messages", a, {"text": "", "nonce": "n1", "attachments": [sent]})
+    fresh = e.upload(a, "e.png", PNG)[1]["file"]["id"]
+    e.c.portal.call(db.execute, "UPDATE files SET created_at = 0 WHERE id != ?", [fresh])
+    e.c.portal.call(remove_old_unused_files, e.server)
+    for fid, code in ((replaced, 404), (unsent, 404), (avatar, 200), (sent, 200), (fresh, 200)):
+        assert e.c.get(f"/api/v1/files/{fid}").status_code == code, fid
+    assert not (e.server.cfg.files_dir / unsent).exists()
