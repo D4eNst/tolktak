@@ -5,6 +5,7 @@ from conftest import decode_jwt, post_webhook
 
 from tolktak import db
 from tolktak.api import voice, ws
+from tolktak.sniff import image_size
 from tolktak.store import users
 
 
@@ -195,3 +196,27 @@ def test_profile_updates_are_rate_limited(make_env):
     a, _ = e.user("alice")
     codes = [e.do("PATCH", "/api/v1/me", a, {"status": f"s{i}"})[0] for i in range(30)]
     assert codes[0] == 200 and 429 in codes, "every profile update is broadcast to all connected users"
+
+
+def test_jpeg_size_scan_is_bounded(tmp_path):
+    p = tmp_path / "x.jpg"
+    p.write_bytes(b"\xff\xd8\xff\x00\x00\x00" + bytes(8 << 20))
+    t = time.perf_counter()
+    assert image_size(str(p), "image/jpeg") == (0, 0)
+    assert time.perf_counter() - t < 0.05, "a crafted JPEG must not block the event loop"
+
+
+def test_client_image_size_is_validated(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    webp = b"RIFF\x00\x00\x00\x00WEBPVP8 " + bytes(32)
+
+    def upload(w: str, h: str) -> dict:
+        params = {"name": "x.webp", "w": w, "h": h}
+        r = e.c.post("/api/v1/files", params=params, content=webp, headers={"Authorization": "Bearer " + a})
+        return r.json()["file"]
+
+    f = upload("-5", "999999999")
+    assert "width" not in f and "height" not in f, f"stored {f}"
+    f = upload("640", "480")
+    assert (f["width"], f["height"]) == (640, 480)

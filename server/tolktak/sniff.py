@@ -134,34 +134,32 @@ def image_size(path: str, ctype: str) -> tuple[int, int]:
                 if head[:3] == b"GIF":
                     return struct.unpack("<HH", head[6:10])
             elif ctype == "image/jpeg":
-                return _jpeg_size(f)
+                return _jpeg_size(f.read(JPEG_SCAN))
     except OSError, struct.error:
         pass
     return 0, 0
 
 
-def _jpeg_size(f) -> tuple[int, int]:
-    if f.read(2) != b"\xff\xd8":
+# Runs on the event loop: a file whose frame header is not within this many bytes
+# and markers keeps the client's measurement.
+JPEG_SCAN = 1 << 20
+JPEG_MARKERS = 256
+
+
+def _jpeg_size(data: bytes) -> tuple[int, int]:
+    if data[:2] != b"\xff\xd8":
         return 0, 0
-    while True:
-        b = f.read(1)
-        while b and b != b"\xff":
-            b = f.read(1)
-        while b == b"\xff":
-            b = f.read(1)
-        if not b:
+    i = 2
+    for _ in range(JPEG_MARKERS):
+        i = data.find(b"\xff", i) + 1
+        if not 0 < i < len(data):
             return 0, 0
-        marker = b[0]
-        if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+        marker = data[i]
+        if marker == 0xFF or marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
             continue
-        seg = f.read(2)
-        if len(seg) < 2:
-            return 0, 0
-        length = struct.unpack(">H", seg)[0]
+        length = struct.unpack_from(">H", data, i + 1)[0]
         if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
-            sof = f.read(5)
-            if len(sof) < 5:
-                return 0, 0
-            h, w = struct.unpack(">HH", sof[1:5])
+            h, w = struct.unpack_from(">HH", data, i + 4)
             return w, h
-        f.seek(length - 2, 1)
+        i += 1 + max(length, 2)
+    return 0, 0
