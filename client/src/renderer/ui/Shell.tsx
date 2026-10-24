@@ -395,9 +395,9 @@ export function groupMenuItems(g: Group, open: (d: 'settings' | 'add') => void):
   const mod = role !== 'member';
   const tx = t().shell.group;
   return [
-    { label: tx.invite, icon: 'userPlus', run: () => open('add') },
     ...(mod
       ? ([
+          { label: tx.invite, icon: 'userPlus', run: () => open('add') },
           { label: tx.settings, icon: 'settings', run: () => open('settings') },
           {
             label: tx.newTextChannel,
@@ -422,9 +422,9 @@ export function groupMenuItems(g: Group, open: (d: 'settings' | 'add') => void):
               if (name) api().createRoom(g.id, name).catch((e) => toast(errorText(e), 'error'));
             },
           },
+          'sep',
         ] as MenuItem[])
       : []),
-    'sep',
     ...muteMenuItems('g' + g.id),
     'sep',
     role === 'owner'
