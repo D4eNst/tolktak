@@ -74,7 +74,8 @@ class Server:
 
     def client_ip(self, request: Request) -> str:
         if self.cfg.trust_proxy and (xff := request.headers.get("x-forwarded-for")):
-            return xff.split(",")[0].strip()
+            # The proxy appends the address it sees; everything before it comes from the client.
+            return xff.rsplit(",", 1)[-1].strip()
         return request.client.host if request.client else ""
 
     def limit(self, key: str, burst: float, per_minute: float, message: str) -> None:

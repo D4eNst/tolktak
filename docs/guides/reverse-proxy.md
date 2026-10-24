@@ -32,7 +32,7 @@ The `systemctl` command applies to a system using systemd. The example uses [`ht
 | `Upgrade`, `Connection` | WebSocket forwarding for chat events and call connections. |
 | `client_max_body_size` | Request body limit. The example sets `60m` for a TolkTak file limit of 50 MB. |
 | `proxy_read_timeout` | Time to wait for service data: 120 seconds for TolkTak and 3600 for LiveKit in the example. |
-| `X-Forwarded-For` | Participant address for request rate limiting. |
+| `X-Forwarded-For` | Participant address for request rate limiting. TolkTak reads the last address in the header, so the proxy must set it or append to it. |
 
 When changing `TOLKTAK_MAX_UPLOAD_MB`, keep the nginx limit higher to allow for request overhead. Requests over the limit return HTTP 413. See [nginx's documentation](https://nginx.org/en/docs/http/websocket.html) for WebSocket forwarding.
 

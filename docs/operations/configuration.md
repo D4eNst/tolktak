@@ -16,7 +16,7 @@ The server is configured with environment variables. With Docker Compose they li
 | `TOLKTAK_LISTEN` | `:8080` | Listen address. The Compose file builds it from `TOLKTAK_BIND` and `TOLKTAK_PORT`. |
 | `TOLKTAK_DATA_DIR` | `./data` | Uploaded files, and the SQLite database when `TOLKTAK_DATABASE_URL` is empty. `/data` in the container. |
 | `TOLKTAK_DATABASE_URL` | empty | Database to use. Empty: SQLite in `tolktak.db` in the data directory. `postgres://user:password@host:5432/dbname` (or `postgresql://...`) for PostgreSQL, recommended for a main server; `sqlite:///absolute/path.db` for an SQLite file elsewhere. See [PostgreSQL](../guides/postgres.md). |
-| `TOLKTAK_TRUST_PROXY` | off | `1` uses `X-Forwarded-For` as the client address for rate limits. Enable only when the server is reachable exclusively through your proxy, or clients can spoof their address. |
+| `TOLKTAK_TRUST_PROXY` | off | `1` uses the last address in `X-Forwarded-For`, the one your proxy adds, as the client address for rate limits. Enable only when the server is reachable exclusively through your proxy, or clients can spoof their address. |
 | `TOLKTAK_DEBUG` | off | `1` enables debug logging. |
 
 The server refuses to start, with a clear message, if a required variable is missing or a value is invalid.
