@@ -4,6 +4,15 @@
 
 TolkTak is in early development. Security fixes are made in the latest release only; please upgrade the server and the desktop app before reporting.
 
+## Verifying releases
+
+Release files and the server image are built by GitHub Actions in this repository, which publishes a signed build provenance attestation for each of them. Check one with the [GitHub CLI](https://cli.github.com/):
+
+```sh
+gh attestation verify TolkTak-Setup-0.1.4.exe --repo D4eNst/tolktak
+gh attestation verify oci://ghcr.io/d4enst/tolktak-server:0.1.4 --repo D4eNst/tolktak
+```
+
 ## Reporting a vulnerability
 
 Please do not report security vulnerabilities in public issues, discussions or pull requests.
