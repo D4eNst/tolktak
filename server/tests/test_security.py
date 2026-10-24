@@ -220,3 +220,13 @@ def test_client_image_size_is_validated(make_env):
     assert "width" not in f and "height" not in f, f"stored {f}"
     f = upload("640", "480")
     assert (f["width"], f["height"]) == (640, 480)
+
+
+def test_request_bodies_are_capped_before_reading(make_env):
+    e = make_env()
+    big = b'{"username": "' + b"a" * (100 << 10) + b'"}'
+    headers = {"Content-Type": "application/json"}
+    assert e.c.post("/api/v1/auth/login", content=big, headers=headers).status_code == 413
+    chunks = (big[i : i + 4096] for i in range(0, len(big), 4096))
+    assert e.c.post("/api/v1/auth/login", content=chunks, headers=headers).status_code == 413
+    assert e.c.post("/api/v1/livekit/webhook", content=bytes(2 << 20)).status_code == 413

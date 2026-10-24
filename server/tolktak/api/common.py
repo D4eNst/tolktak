@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import re
 from typing import TYPE_CHECKING
@@ -38,10 +39,21 @@ class Body(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+async def read_body(request: Request, limit: int) -> bytes:
+    too_large = ApiError(413, "too_large", "Request body is too large")
+    with contextlib.suppress(ValueError):
+        if int(request.headers.get("content-length", "0")) > limit:
+            raise too_large
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > limit:
+            raise too_large
+    return bytes(body)
+
+
 async def read_json[T: Body](request: Request, model: type[T]) -> T:
-    raw = await request.body()
-    if len(raw) > MAX_JSON:
-        raise ApiError(400, "bad_request", "Malformed request body")
+    raw = await read_body(request, MAX_JSON)
     try:
         data = orjson.loads(raw)
         if data is None:
