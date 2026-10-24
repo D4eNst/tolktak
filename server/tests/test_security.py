@@ -331,3 +331,15 @@ def test_files_nothing_uses_are_removed_after_a_day(make_env):
     for fid, code in ((replaced, 404), (unsent, 404), (avatar, 200), (sent, 200), (fresh, 200)):
         assert e.c.get(f"/api/v1/files/{fid}").status_code == code, fid
     assert not (e.server.cfg.files_dir / unsent).exists()
+
+
+def test_concurrent_first_accounts_make_one_admin(make_env):
+    e = make_env()
+
+    async def register_both():
+        return await asyncio.gather(
+            users.create_user("alice", "Alice", "password123", ""), users.create_user("bob", "Bob", "password123", "")
+        )
+
+    made = e.c.portal.call(register_both)
+    assert sorted(u["is_admin"] for u in made) == [False, True]
