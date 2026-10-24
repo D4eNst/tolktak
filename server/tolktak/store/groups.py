@@ -128,7 +128,7 @@ async def set_group_role(gid: int, uid: int, r: str) -> None:
         raise NotFound
 
 
-async def create_text_channel(gid: int, name: str) -> int:
+async def create_text_channel(gid: int, name: str) -> tuple[int, int]:
     async with in_transaction(CONN) as tx:
         t = now()
         ch = await Channel.create(kind="group", created_at=t, using_db=tx)
@@ -139,7 +139,7 @@ async def create_text_channel(gid: int, name: str) -> int:
         )
         members = await GroupMember.filter(group_id=gid).using_db(tx).values_list("user_id", flat=True)
         await ChannelMember.bulk_create([ChannelMember(channel_id=ch.id, user_id=u) for u in members], using_db=tx)
-    return ch.id
+    return ch.id, position
 
 
 async def rename_text_channel(cid: int, name: str) -> None:
