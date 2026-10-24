@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://tolktak.d4enst.ru/sitemap.xml

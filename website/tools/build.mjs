@@ -1,25 +1,19 @@
-import { readFile, writeFile, mkdir, cp } from 'node:fs/promises';
-import { resolve, dirname, posix } from 'node:path';
+import { readFile, writeFile, mkdir, cp, rm } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import MarkdownIt from 'markdown-it';
 import { copy, docGroups } from './copy.mjs';
 import { homeCopy } from '../content/home.mjs';
 import { downloadCopy } from '../content/download.mjs';
+import { github, loadReleases } from './github.mjs';
+import { loadDocs, renderDoc, renderMarkdown, searchIndex, sourceUrl, escape } from './docs.mjs';
+import { languages, base, url, docUrl } from './urls.mjs';
 
-const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
+const root = fileURLToPath(new URL('../', import.meta.url));
 const repo = resolve(root, '..');
-const github = 'https://github.com/D4eNst/tolktak';
-const release = JSON.parse(await readFile(resolve(root, 'releases.json'), 'utf8'));
-const releaseNotes = {};
-for (const lang of ['ru', 'en']) {
-  releaseNotes[lang] = await readFile(resolve(root, `content/releases/${release.version}.${lang}.md`), 'utf8').catch(() => release.notes);
-}
-const md = new MarkdownIt({ html: false, linkify: true });
-const escape = md.utils.escapeHtml;
-const slug = text => text.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').trim().replace(/\s+/g, '-');
-const base = lang => lang === 'en' ? '/en/' : '/';
-const url = (lang, path = '') => base(lang) + path;
-const docUrl = (lang, id) => url(lang, 'docs/' + (id === 'index' ? '' : id + '/'));
+const dist = resolve(root, 'dist');
+const { latest: release, releases } = await loadReleases();
+const docs = await loadDocs(docGroups);
+const notes = async (version, lang) => readFile(resolve(root, `content/releases/${version}.${lang}.md`), 'utf8').catch(() => null);
 const icons = {
   download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
   voice: '<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/>',
@@ -159,110 +153,49 @@ function downloads(lang) {
   </main>` });
 }
 
-const docs = {};
-for (const lang of ['ru', 'en']) {
-  docs[lang] = {};
-  for (const id of [...docGroups.flat(), 'security', 'contributing']) {
-    const file = id === 'index' ? 'README.md' : id + '.md';
-    const path = ['security', 'contributing'].includes(id)
-      ? (lang === 'en' ? resolve(repo, id.toUpperCase() + '.md') : resolve(repo, 'docs/ru', file))
-      : resolve(repo, lang === 'ru' ? 'docs/ru' : 'docs', file);
-    const source = await readFile(path, 'utf8');
-    const tokens = md.parse(source, {});
-    const headings = [];
-    const counts = new Map();
-    tokens.forEach((token, i) => {
-      if (token.type !== 'heading_open') return;
-      const text = tokens[i + 1].children.filter(t => t.type === 'text' || t.type === 'code_inline').map(t => t.content).join('');
-      const stem = slug(text);
-      const count = counts.get(stem) || 0;
-      counts.set(stem, count + 1);
-      const anchor = stem + (count ? '-' + count : '');
-      token.attrSet('id', anchor);
-      if (token.tag === 'h2' || token.tag === 'h3') headings.push({ level: token.tag, text, anchor });
-    });
-    const title = source.match(/^# (.+)$/m)?.[1] || id;
-    docs[lang][id] = { id, title, path, source, tokens, headings };
-  }
-}
-
-md.renderer.rules.link_open = (tokens, i, options, env, self) => {
-  const token = tokens[i];
-  let href = token.attrGet('href');
-  if (href?.startsWith('https://tolktak.d4enst.ru/')) {
-    href = href.replace('https://tolktak.d4enst.ru', '');
-    token.attrSet('href', href);
-  }
-  if (href && !/^(https?:|mailto:|#|\/)/.test(href)) {
-    const [pathname, anchor] = href.split('#');
-    const target = resolve(dirname(env.doc.path), pathname);
-    const found = Object.entries(docs).flatMap(([lang, pages]) => Object.values(pages).map(doc => ({ ...doc, lang }))).find(doc => doc.path === target);
-    token.attrSet('href', found ? docUrl(found.lang, found.id) + (anchor ? '#' + anchor : '') : `${github}/blob/main/${posix.relative(repo, target)}${anchor ? '#' + anchor : ''}`);
-  }
-  return self.renderToken(tokens, i, options);
-};
-md.renderer.rules.table_open = (_tokens, _i, _options, env) => `<div class="table-scroll" tabindex="0" role="region" aria-label="${env.lang === 'ru' ? 'Таблица с горизонтальной прокруткой' : 'Horizontally scrollable table'}"><table>\n`;
-md.renderer.rules.table_close = () => '</table></div>\n';
-const defaultHeading = (tokens, i, options, env, self) => self.renderToken(tokens, i, options);
-md.renderer.rules.heading_close = (tokens, i, options, env, self) => {
-  if (tokens[i].tag === 'h1') return defaultHeading(tokens, i, options, env, self);
-  const id = tokens[i - 2].attrGet('id');
-  return `<a class="heading-anchor" href="#${id}" aria-label="${env.lang === 'ru' ? 'Ссылка на раздел' : 'Link to section'}">#</a>${self.renderToken(tokens, i, options)}`;
-};
-
 function docPage(lang, doc) {
   const c = copy[lang];
-  const list = docGroups.flat();
-  const at = list.indexOf(doc.id);
-  const group = docGroups.findIndex(g => g.includes(doc.id));
-  const article = md.renderer.render(doc.tokens, md.options, { lang, doc });
-  const navItem = id => `<a href="${docUrl(lang, id)}" ${id === doc.id ? 'aria-current="page"' : ''}>${escape(docs[lang][id].title)}</a>`;
+  const { pages, nav, all } = docs[lang];
+  const at = pages.findIndex(page => page.id === doc.id);
+  const [prev, next] = [pages[at - 1], pages[at + 1]];
+  const navItem = page => `<a href="${docUrl(lang, page.id)}" ${page.id === doc.id ? 'aria-current="page"' : ''}>${escape(page.title)}</a>`;
   const path = 'docs/' + (doc.id === 'index' ? '' : doc.id + '/');
-  const description = doc.source.split('\n\n').find(t => !/^(?:#|[-*] |\d+\. |\||```)/.test(t))
-    ?.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[`*_]/g, '').slice(0, 170);
-  return shell({ lang, title: `${doc.title} — TolkTak`, description, path, other: docUrl(lang === 'ru' ? 'en' : 'ru', doc.id), page: 'docs', body: `<main id="main" class="docs-layout wrap">
+  return shell({ lang, title: `${doc.title} — TolkTak`, description: doc.description, path, other: docUrl(lang === 'ru' ? 'en' : 'ru', doc.id), page: 'docs', body: `<main id="main" class="docs-layout wrap">
     <aside class="docs-sidebar"><div class="docs-sidebar-head"><a class="docs-label" href="${docUrl(lang, 'index')}">${c.docs}</a><button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-sections">${icon('menu')}<span>${c.docsMenu}</span></button></div><button class="search-trigger" type="button" aria-haspopup="dialog">${icon('search')}<span>${c.search}</span><kbd>/</kbd></button>
-    <nav id="docs-sections" aria-label="${c.docsMenu}">${docGroups.map((ids, i) => `<div class="docs-nav-group"><strong>${c.groups[i]}</strong>${ids.map(navItem).join('')}</div>`).join('')}<div class="docs-nav-group"><strong>${c.footerProject}</strong>${navItem('contributing')}${navItem('security')}</div></nav></aside>
-    <div class="doc-main"><div class="breadcrumb"><a href="${docUrl(lang, 'index')}">${c.docs}</a>${icon('arrow')}<span>${group < 0 ? c.footerProject : c.groups[group]}</span></div><article class="prose">${article}</article><div class="doc-source"><a href="${github}/blob/main/${posix.relative(repo, doc.path)}">${c.edit}${icon('code')}</a></div><nav class="doc-pagination" aria-label="${c.docs}">${at > 0 ? `<a href="${docUrl(lang, list[at - 1])}"><span>${c.previous}</span><strong>${escape(docs[lang][list[at - 1]].title)}</strong></a>` : '<span></span>'}${at >= 0 && at < list.length - 1 ? `<a href="${docUrl(lang, list[at + 1])}"><span>${c.next}</span><strong>${escape(docs[lang][list[at + 1]].title)}${icon('arrow')}</strong></a>` : ''}</nav></div>
+    <nav id="docs-sections" aria-label="${c.docsMenu}">${nav.map(group => `<div class="docs-nav-group"><strong>${group.label}</strong>${group.pages.map(navItem).join('')}</div>`).join('')}</nav></aside>
+    <div class="doc-main"><div class="breadcrumb"><a href="${docUrl(lang, 'index')}">${c.docs}</a>${icon('arrow')}<span>${doc.group.label}</span></div><article class="prose">${renderDoc(doc, all)}</article><div class="doc-source"><a href="${sourceUrl(doc)}">${c.edit}${icon('code')}</a></div><nav class="doc-pagination" aria-label="${c.docs}">${prev ? `<a href="${docUrl(lang, prev.id)}"><span>${c.previous}</span><strong>${escape(prev.title)}</strong></a>` : '<span></span>'}${next ? `<a href="${docUrl(lang, next.id)}"><span>${c.next}</span><strong>${escape(next.title)}${icon('arrow')}</strong></a>` : ''}</nav></div>
     <aside class="doc-toc"><strong>${c.onPage}</strong><nav>${doc.headings.map(h => `<a class="${h.level}" href="#${h.anchor}">${escape(h.text)}</a>`).join('')}</nav></aside></main>` });
 }
 
-function history(lang) {
+async function history(lang) {
   const c = copy[lang];
-  const notes = releaseNotes[lang] ? new MarkdownIt({ html: false, linkify: true }).render(releaseNotes[lang]) : `<p>${lang === 'ru' ? 'Для этой версии нет отдельного описания изменений.' : 'No separate changelog was published for this version.'}</p>`;
-  return shell({ lang, title: `${c.releaseNotes} — TolkTak`, path: 'releases/', other: url(lang === 'ru' ? 'en' : 'ru', 'releases/'), page: 'releases', body: `<main id="main" class="wrap release-page"><div class="page-intro"><h1>${c.releaseNotes}</h1><p>${lang === 'ru' ? 'Что изменилось в текущей версии. Предыдущие релизы доступны в репозитории.' : 'What changed in the current version. Earlier releases are available in the repository.'}</p></div><article class="release-entry"><div><h2>${release.tag}</h2><time datetime="${release.published}">${release.published.slice(0, 10)}</time></div><div class="prose">${notes}<p><a href="${release.url}">${lang === 'ru' ? 'Полный релиз на GitHub' : 'Full release on GitHub'}</a></p></div></article><div class="actions"><a class="button primary" href="${url(lang, 'download/')}">${c.download}</a><a class="button secondary" href="${github}/releases">${lang === 'ru' ? 'Все релизы на GitHub' : 'All releases on GitHub'}</a></div></main>` });
+  const entries = [];
+  for (const entry of releases) {
+    const text = await notes(entry.version, lang) || entry.notes;
+    entries.push(`<article class="release-entry"><div><h2>${entry.tag}</h2><time datetime="${entry.published}">${entry.published.slice(0, 10)}</time></div><div class="prose">${text ? renderMarkdown(text) : ''}<p><a href="${entry.url}">${lang === 'ru' ? 'Релиз на GitHub' : 'Release on GitHub'}</a></p></div></article>`);
+  }
+  return shell({ lang, title: `${c.releaseNotes} — TolkTak`, path: 'releases/', other: url(lang === 'ru' ? 'en' : 'ru', 'releases/'), page: 'releases', body: `<main id="main" class="wrap release-page"><div class="page-intro"><h1>${c.releaseNotes}</h1></div>${entries.join('')}<div class="actions"><a class="button primary" href="${url(lang, 'download/')}">${c.download}</a><a class="button secondary" href="${github}/releases">${lang === 'ru' ? 'Все релизы на GitHub' : 'All releases on GitHub'}</a></div></main>` });
 }
 
 async function output(path, content) {
-  const dest = resolve(root, '.' + path);
+  const dest = resolve(dist, '.' + path);
   await mkdir(dirname(dest), { recursive: true });
   await writeFile(dest, content);
 }
 
-for (const lang of ['ru', 'en']) {
+await rm(dist, { recursive: true, force: true });
+await cp(resolve(root, 'assets'), dist, { recursive: true });
+for (const lang of languages) {
   await output(base(lang) + 'index.html', home(lang));
   await output(url(lang, 'download/index.html'), downloads(lang));
-  await output(url(lang, 'releases/index.html'), history(lang));
-  const search = [];
-  for (const doc of Object.values(docs[lang])) {
-    await output(docUrl(lang, doc.id) + 'index.html', docPage(lang, doc));
-    const sections = doc.source.split(/(?=^## )/m);
-    sections.forEach((section, i) => {
-      const title = section.match(/^## (.+)/m)?.[1] || doc.title;
-      const plainTokens = md.parse(section.replace(/^#{1,6} .+$/gm, ''), {});
-      const text = plainTokens.flatMap(token => token.children
-        ? token.children.filter(t => ['text', 'code_inline'].includes(t.type)).map(t => t.content)
-        : ['fence', 'code_block'].includes(token.type) ? [token.content] : [])
-        .join(' ').replace(/\s+/g, ' ').trim();
-      search.push({ title, page: doc.title, url: docUrl(lang, doc.id) + (i ? '#' + slug(title) : ''), text });
-    });
-  }
-  await output(url(lang, 'docs/search.json'), JSON.stringify(search));
+  await output(url(lang, 'releases/index.html'), await history(lang));
+  for (const doc of docs[lang].pages) await output(docUrl(lang, doc.id) + 'index.html', docPage(lang, doc));
+  await output(url(lang, 'docs/search.json'), JSON.stringify(searchIndex(lang, docs[lang].pages)));
 }
 const c = copy.ru;
 await output('/404.html', shell({ lang: 'ru', title: c.missingTitle + ' — TolkTak', path: '404.html', other: '/en/', body: `<main id="main" class="wrap missing-page"><p>404</p><h1>${c.missingTitle}</h1><p>${c.missingText}</p><div class="actions"><a class="button primary" href="/">${c.home}</a><a class="button secondary" href="/docs/">${c.docs}</a></div></main>` }));
-await cp(resolve(repo, 'deploy/nginx.conf.example'), resolve(root, 'docs/nginx.conf.example'));
-await writeFile(resolve(root, 'robots.txt'), 'User-agent: *\nAllow: /\nSitemap: https://tolktak.d4enst.ru/sitemap.xml\n');
-const routes = ['/', '/download/', '/releases/', '/en/', '/en/download/', '/en/releases/', ...Object.entries(docs).flatMap(([lang, pages]) => Object.keys(pages).map(id => docUrl(lang, id)))];
-await writeFile(resolve(root, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${routes.map(route => `<url><loc>https://tolktak.d4enst.ru${route}</loc></url>`).join('')}</urlset>\n`);
-console.log(`Built ${routes.length} static pages. Documentation: ${Object.keys(docs.ru).length} pages per language.`);
+await cp(resolve(repo, 'deploy/nginx.conf.example'), resolve(dist, 'docs/nginx.conf.example'));
+await output('/robots.txt', 'User-agent: *\nAllow: /\nSitemap: https://tolktak.d4enst.ru/sitemap.xml\n');
+const routes = ['/', '/download/', '/releases/', '/en/', '/en/download/', '/en/releases/', ...languages.flatMap(lang => docs[lang].pages.map(doc => docUrl(lang, doc.id)))];
+await output('/sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${routes.map(route => `<url><loc>https://tolktak.d4enst.ru${route}</loc></url>`).join('')}</urlset>\n`);
+console.log(`Built ${routes.length} pages for ${release.tag}. Documentation: ${docs.ru.pages.length} pages in Russian, ${docs.en.pages.length} in English.`);

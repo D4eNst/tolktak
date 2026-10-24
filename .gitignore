@@ -19,3 +19,5 @@ server/data/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+website/dist/
+website/.cache/

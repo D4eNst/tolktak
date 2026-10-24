@@ -1,4 +1,4 @@
-<img src="website/img/logo.svg" width="72" height="72" align="right" alt="">
+<img src="website/assets/img/logo.svg" width="72" height="72" align="right" alt="">
 
 # TolkTak
 
@@ -11,7 +11,7 @@ Direct and group chats, audio and video calls, and configurable screen sharing w
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/D4eNst/tolktak)](https://github.com/D4eNst/tolktak/releases)
 
-![A TolkTak voice room with screen sharing](website/img/stage.webp)
+![A TolkTak voice room with screen sharing](website/assets/img/stage.webp)
 
 The project is in early development.
 

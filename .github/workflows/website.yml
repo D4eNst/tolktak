@@ -1,0 +1,54 @@
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'website/**', 'SECURITY.md', 'CONTRIBUTING.md', 'deploy/nginx.conf.example', '.github/workflows/website.yml']
+  release:
+    types: [published, unpublished, edited, deleted]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    env:
+      SITE_HOST: ${{ secrets.SITE_HOST }}
+    steps:
+      # Release events check out the tag; the site always describes the default branch.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: npm run check
+      - name: Upload to the web server
+        if: env.SITE_HOST != ''
+        env:
+          SITE_USER: ${{ secrets.SITE_USER }}
+          SITE_PATH: ${{ secrets.SITE_PATH }}
+          SITE_PORT: ${{ secrets.SITE_PORT }}
+          SITE_SSH_KEY: ${{ secrets.SITE_SSH_KEY }}
+          SITE_KNOWN_HOSTS: ${{ secrets.SITE_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SITE_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SITE_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          rsync -rlzc --delete --chmod=D755,F644 -e "ssh -p ${SITE_PORT:-22}" dist/ "$SITE_USER@$SITE_HOST:${SITE_PATH:?}"
