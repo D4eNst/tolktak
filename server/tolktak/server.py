@@ -11,6 +11,7 @@ from .livekit import LiveKit
 from .ratelimit import RateLimiter
 from .realtime import Hub
 from .store import chat, groups, users
+from .updates import Updater
 
 log = logging.getLogger("tolktak")
 
@@ -53,6 +54,7 @@ class Server:
         self.hub = Hub(self.room_audience)
         self.rl = RateLimiter()
         self.upload_locks: dict[int, asyncio.Lock] = {}
+        self.updater = Updater(cfg, version, self.hub)
 
     async def room_members(self, room: str) -> list[int]:
         """Raises on database errors, so a failed lookup never removes anyone from a room."""

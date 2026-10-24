@@ -216,3 +216,15 @@ async def create_invite(request: Request, user: Admin):
 async def delete_invite(code: str, _: Admin):
     await users.delete_invite(code)
     return no_content()
+
+
+@router.get("/admin/update")
+async def update_status(request: Request, _: Admin):
+    return json_response(server(request).updater.snapshot())
+
+
+@router.post("/admin/update")
+async def update_now(request: Request, _: Admin):
+    updater = server(request).updater
+    await updater.update_now()
+    return json_response(updater.snapshot())

@@ -114,7 +114,9 @@ jobs:
           target: ${{ matrix.target }}
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: VERSION=${{ steps.meta.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            REPOSITORY=${{ github.repository }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2

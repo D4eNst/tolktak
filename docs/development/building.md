@@ -37,7 +37,7 @@ The tests use a temporary SQLite database and need no external services. To run 
 TOLKTAK_TEST_POSTGRES=postgres://tolktak:secret@127.0.0.1:5432/tolktak_test uv run pytest
 ```
 
-The release version is written into `tolktak/_version.py` when the Docker image is built (build argument `VERSION`); a checkout reports `0.1.0-dev`.
+The release version is written into `tolktak/_version.py` when the Docker image is built (build argument `VERSION`); a checkout reports `0.1.0-dev`. The build argument `REPOSITORY`, which the release workflow sets to the repository it runs in, decides whose GitHub releases the server follows for updates, so a fork's server follows the fork.
 
 `server/Dockerfile` builds two images. The default target, `full`, is `d4enst/tolktak` with `livekit-server` inside; `--target server` is `d4enst/tolktak-server`, the server alone:
 
