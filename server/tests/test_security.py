@@ -230,3 +230,12 @@ def test_request_bodies_are_capped_before_reading(make_env):
     chunks = (big[i : i + 4096] for i in range(0, len(big), 4096))
     assert e.c.post("/api/v1/auth/login", content=chunks, headers=headers).status_code == 413
     assert e.c.post("/api/v1/livekit/webhook", content=bytes(2 << 20)).status_code == 413
+
+
+def test_file_names_lose_hidden_characters(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, body = e.upload(a, "invoice\u202egpj.exe", b"MZ" + bytes(64))
+    assert body["file"]["name"] == "invoicegpj.exe"
+    _, body = e.upload(a, "line\nbreak\u2066.txt", b"text")
+    assert body["file"]["name"] == "linebreak.txt"
