@@ -65,14 +65,18 @@ async def voice_leave(request: Request, user: User):
 
 async def call_peer(request: Request, me: int) -> tuple[int, int]:
     cid = path_id(request, "channel")
+    if not await chat.is_channel_member(cid, me):
+        raise ApiError(404, "not_found", "Chat not found")
     return cid, await chat.dm_peer(cid, me)
 
 
 @router.post("/calls/{channel}/ring")
 async def call_ring(request: Request, user: User):
     cid, peer = await call_peer(request, user["id"])
+    s = server(request)
+    s.limit(f"ring:{user['id']}", 10, 6, "Too many calls, try again in a minute")
     data = {"channel_id": cid, "from": user["id"], "room": dm_room_name(cid)}
-    server(request).hub.send_to([peer], event("call.ring", data))
+    s.hub.send_to([peer], event("call.ring", data))
     return no_content()
 
 
