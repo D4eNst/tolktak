@@ -29,5 +29,7 @@ contextBridge.exposeInMainWorld('tolktak', {
   readAsset: (name: string) => ipcRenderer.invoke('asset:read', name),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateReady: listener<string>('update:ready'),
+  onUpdateAvailable: listener<{ version: string; url: string }>('update:available'),
+  serverVersion: (server: { version: string; min_client?: string }) => ipcRenderer.invoke('update:server', server),
   onOccluded: listener<boolean>('app:occluded'),
 });

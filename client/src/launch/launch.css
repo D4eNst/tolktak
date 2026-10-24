@@ -1,0 +1,125 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+body {
+  display: grid;
+  place-items: center;
+  color: #f1eaf4;
+  font: 14px/1.45 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.card {
+  box-sizing: border-box;
+  width: 320px;
+  height: 210px;
+  padding: 16px 20px 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 22px;
+  background: #16131b;
+  border: 1px solid rgba(255, 240, 255, 0.1);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  -webkit-app-region: drag;
+  transition:
+    opacity 380ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.card.leaving {
+  opacity: 0;
+  transform: scale(0.96) translateY(4px);
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.logo {
+  width: 18px;
+  height: 18px;
+  background: url('assets/logo.svg') center / contain no-repeat;
+}
+.version {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: #6c6377;
+  font-variant-numeric: tabular-nums;
+}
+.bars {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+  padding: 0 2px;
+}
+.card.has-buttons .bars {
+  height: 46px;
+}
+.bars i {
+  width: 3px;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 240, 255, 0.16);
+}
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.status {
+  font-weight: 600;
+}
+.status.bad {
+  color: #ff5d6c;
+}
+.percent {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffb547;
+  font-variant-numeric: tabular-nums;
+}
+.detail {
+  min-height: 15px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: #6c6377;
+  font-variant-numeric: tabular-nums;
+}
+.buttons {
+  display: flex;
+  gap: 8px;
+}
+.buttons:not(:empty) {
+  margin-top: 10px;
+}
+button {
+  border: 0;
+  border-radius: 9px;
+  padding: 7px 13px;
+  font: 600 12.5px/1.2 inherit;
+  font-family: inherit;
+  color: #f1eaf4;
+  background: #27212f;
+  box-shadow: inset 0 0 0 1px rgba(255, 240, 255, 0.13);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+button:hover {
+  background: #2f2839;
+}
+button.primary {
+  color: #1d0f12;
+  background: linear-gradient(135deg, #ff6a63 0%, #ff8a4c 50%, #ffbe4b 100%);
+  box-shadow: 0 4px 14px rgba(255, 110, 80, 0.25);
+}
+button.primary:hover {
+  filter: brightness(1.07);
+}

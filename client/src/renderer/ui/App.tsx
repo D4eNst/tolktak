@@ -25,17 +25,31 @@ function Toasts() {
 }
 
 function UpdateBar() {
-  const [version, setVersion] = useState<string | null>(null);
-  useEffect(() => bridge.onUpdateReady(setVersion), []);
-  if (!version) return null;
+  const [update, setUpdate] = useState<{ version: string; url?: string } | null>(null);
+  useEffect(() => {
+    const offReady = bridge.onUpdateReady((version) => setUpdate({ version }));
+    const offAvailable = bridge.onUpdateAvailable(setUpdate);
+    return () => {
+      offReady();
+      offAvailable();
+    };
+  }, []);
+  if (!update) return null;
+  const { version, url } = update;
   const tx = t().common.update;
   return (
     <div class="update-bar" role="status">
-      <span>{tx.ready(version)}</span>
-      <button class="primary" onClick={() => bridge.installUpdate()}>
-        {tx.restart}
-      </button>
-      <button class="secondary" onClick={() => setVersion(null)}>
+      <span>{url ? tx.available(version) : tx.ready(version)}</span>
+      {url ? (
+        <button class="primary" onClick={() => bridge.openExternal(url)}>
+          {tx.download}
+        </button>
+      ) : (
+        <button class="primary" onClick={() => bridge.installUpdate()}>
+          {tx.restart}
+        </button>
+      )}
+      <button class="secondary" onClick={() => setUpdate(null)}>
         {tx.later}
       </button>
     </div>

@@ -21,7 +21,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globalPushToTalk, type HotkeyName, type Hotkeys, installHotkeys, uninstallHotkeys } from './hotkeys';
 import { watchOcclusion } from './occlusion';
-import { installUpdater } from './updater';
+import { checkBeforeLaunch, closeLaunchWindow, installUpdate, installUpdater, serverChanged } from './updater';
 import { audioPidForWindow, exeForPid, hwndFromSourceId, processLoopbackSupported, windowsBuild } from './winaudio';
 
 if (process.env.TOLKTAK_USER_DATA) app.setPath('userData', path.resolve(process.env.TOLKTAK_USER_DATA));
@@ -197,6 +197,7 @@ function createWindow() {
   win.removeMenu();
   win.once('ready-to-show', () => {
     if (!process.argv.includes('--hidden')) win?.show();
+    closeLaunchWindow();
   });
   win.loadFile(path.join(__dirname, 'index.html'));
 
@@ -321,6 +322,8 @@ function installIpc() {
     }
     tray?.setToolTip(inCall ? str().inVoice : 'TolkTak');
   });
+  handle('update:install', installUpdate);
+  handle('update:server', serverChanged);
   handle('app:attention', () => {
     if (win && !win.isFocused()) win.flashFrame(true);
   });
@@ -371,7 +374,7 @@ app.on('second-instance', () => {
   }
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Packaged builds take the dock icon from the bundle.
   if (process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, 'assets', 'icon-512.png'));
   settings = readSettings();
@@ -381,6 +384,7 @@ app.whenReady().then(() => {
   installPermissions();
   installDisplayMediaHandler();
   installIpc();
+  await checkBeforeLaunch(settings.server ?? '', process.argv.includes('--hidden'));
   createWindow();
   createTray();
   registerShortcuts();

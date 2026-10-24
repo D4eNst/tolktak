@@ -18,6 +18,7 @@ import {
   messagePreview,
   online,
   openDM,
+  serverRestarting,
   session,
   setMuted,
   settingsOpen,
@@ -707,7 +708,9 @@ export function Shell() {
         <Dock />
       </div>
       <main class="main island">
-        {connection.value === 'offline' && <div class="banner">{t().shell.offlineBanner}</div>}
+        {connection.value === 'offline' && (
+          <div class="banner">{serverRestarting.value === null ? t().shell.offlineBanner : t().shell.restartingBanner(serverRestarting.value)}</div>
+        )}
         {v.kind === 'home' && (v.channelId ? <DMMain channelId={v.channelId} /> : <Empty />)}
         {v.kind === 'group' && g && <GroupMain g={g} stage={v.stage} channelId={v.channelId} />}
         {v.kind === 'group' && !g && <Empty />}

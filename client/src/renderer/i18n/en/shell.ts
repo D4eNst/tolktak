@@ -115,6 +115,7 @@ export default {
     searchHint: 'to search.',
   },
   offlineBanner: 'No connection to the server. Reconnecting…',
+  restartingBanner: (v: string) => `The server is updating to ${v}. Reconnecting as soon as it is back…`,
   stage: {
     you: '(you)',
     poorConnection: 'Poor connection',

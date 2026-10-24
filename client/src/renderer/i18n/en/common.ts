@@ -8,7 +8,9 @@ export default {
   copyFailed: 'Could not copy',
   update: {
     ready: (v: string) => `TolkTak ${v} is ready to install`,
+    available: (v: string) => `TolkTak ${v} is available`,
     restart: 'Restart now',
+    download: 'Download',
     later: 'Later',
   },
   time: {

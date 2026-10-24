@@ -10,6 +10,7 @@
     "noUnusedLocals": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "types": ["node"]
   },
   "include": ["src", "e2e"]

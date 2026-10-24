@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { bridge, isDesktop, platform, type AppInfo, type DesktopSettings, type Hotkeys, type MediaAccess, type MediaKind } from '../bridge';
 import { accelFromEvent, accelFromMouse, accelLabel, hotkeys, hotkeysAreGlobal, setHotkey } from '../keys';
-import { api, errorText, logout, me, notificationsOn, session, setNotifications, settingsOpen, type SettingsTab, toast } from '../state';
+import { api, errorText, logout, me, notificationsOn, serverUpdate, session, setNotifications, settingsOpen, type SettingsTab, toast } from '../state';
 import type { ChainStats, Denoise, VoiceChain } from '../audio/chain';
 import { call, micOn, toggleMic, chainSettings, createVoiceChain, micConstraints, micGain, micLevel, playTone, prefs, restartCamera, restartMic, setPrefs, switchDevices, applyGate, cameraOn } from '../voice';
 import { Avatar, confirmDialog, Icon, Modal, type Option, Select, Slider, Toggle } from './common';
 import { pickImage } from './GroupSettings';
-import { LOCALES, locale, setLocale, t, type Locale } from '../i18n';
+import { intlLocale, LOCALES, locale, setLocale, t, type Locale } from '../i18n';
 
 function useDevices(kind: MediaDeviceKind) {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -382,6 +382,77 @@ function ProfileTab() {
   );
 }
 
+function ServerTab() {
+  const [busy, setBusy] = useState(false);
+  const tx = t().settings.server;
+  useEffect(() => {
+    api()
+      .serverUpdate()
+      .then((u) => (serverUpdate.value = u))
+      .catch((e) => toast(errorText(e), 'error'));
+  }, []);
+  const u = serverUpdate.value;
+  if (!u) return null;
+  const updateNow = async () => {
+    setBusy(true);
+    try {
+      serverUpdate.value = await api().updateServerNow();
+    } catch (e) {
+      toast(errorText(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const a = u.available;
+  const applyBy = u.apply_by ? new Date(u.apply_by).toLocaleString(intlLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  let status = tx.upToDate;
+  let action = '';
+  if (!u.enabled) {
+    status = u.mode === 'off' ? tx.off : tx.devBuild;
+  } else if (a && u.state === 'restarting') {
+    status = tx.restarting(a.version);
+  } else if (a && u.state === 'pulling') {
+    status = tx.pulling(a.version);
+  } else if (a && !u.agent) {
+    status = tx.noAgent(a.version);
+  } else if (a && u.state === 'waiting') {
+    status = tx.waiting(a.version, applyBy);
+    action = tx.updateNow;
+  } else if (a && u.state === 'failed') {
+    status = tx.failed(tx.reasons[u.error] ?? u.error);
+    action = tx.retry;
+  } else if (a) {
+    status = tx.available(a.version);
+    action = tx.updateNow;
+  }
+  return (
+    <>
+      <div class="about-card">
+        <span class="logo-mark big" />
+        <div>
+          <b>{tx.version(u.version)}</b>
+          <div class="muted small">{tx.modes[u.mode]}</div>
+        </div>
+      </div>
+      <h3 class="section-title">{tx.updates}</h3>
+      <p>{status}</p>
+      <div class="row">
+        {action && (
+          <button class="primary" disabled={busy} onClick={updateNow}>
+            {action}
+          </button>
+        )}
+        {a && (
+          <button class="link" onClick={() => bridge.openExternal(`https://github.com/D4eNst/tolktak/releases/tag/v${a.version}`)}>
+            {tx.notes}
+          </button>
+        )}
+      </div>
+      <p class="hint">{tx.modeHint}</p>
+    </>
+  );
+}
+
 const TABS: { id: SettingsTab; icon: string }[] = [
   { id: 'profile', icon: 'user' },
   { id: 'voice', icon: 'mic' },
@@ -389,6 +460,7 @@ const TABS: { id: SettingsTab; icon: string }[] = [
   { id: 'keys', icon: 'keyboard' },
   { id: 'watch', icon: 'monitorPlay' },
   { id: 'app', icon: 'settings' },
+  { id: 'server', icon: 'shield' },
 ];
 
 export function SettingsDialog() {
@@ -422,7 +494,7 @@ export function SettingsDialog() {
     <Modal title={tx.title} onClose={close} wide class="settings-modal">
       <div class="settings">
         <nav class="settings-nav">
-          {TABS.map((item) => (
+          {TABS.filter((item) => item.id !== 'server' || me.value?.is_admin).map((item) => (
             <button key={item.id} class={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>
               <Icon name={item.icon} size={16} /> {tx.tabs[item.id]}
             </button>
@@ -430,6 +502,7 @@ export function SettingsDialog() {
         </nav>
         <div class="settings-body" key={tab}>
           {tab === 'profile' && <ProfileTab />}
+          {tab === 'server' && <ServerTab />}
           {tab === 'voice' && (
             <>
               <AccessNotice kind="microphone" />
