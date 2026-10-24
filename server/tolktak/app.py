@@ -120,6 +120,11 @@ def create_app(cfg: Config, server: Server | None = None, init_db: bool = True) 
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz():
+        try:
+            await db.rows("SELECT 1")
+        except Exception as e:
+            log.error("health check: database: %r", e)
+            return PlainTextResponse("database unavailable\n", status_code=503)
         return PlainTextResponse("ok")
 
     @app.exception_handler(ApiError)

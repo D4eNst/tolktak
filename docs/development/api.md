@@ -54,7 +54,7 @@ For automation, create a separate account for the script, so its token can be re
 | `POST /calls/{channel}/ring`, `/decline`, `/cancel` | Direct-message calls. |
 | `GET`, `POST /admin/invites`, `DELETE /admin/invites/{code}` | Invites. Administrator only. |
 
-Paths in the table are relative to `/api/v1`. `GET /healthz` (outside `/api/v1`) returns `ok` for health checks.
+Paths in the table are relative to `/api/v1`. `GET /healthz` (outside `/api/v1`) returns `ok` for health checks, or 503 when the database is unavailable.
 
 ## Events
 

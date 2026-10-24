@@ -60,7 +60,7 @@ Authorization: Bearer <token>
 | `POST /calls/{channel}/ring`, `/decline`, `/cancel` | Личные звонки |
 | `GET`, `POST /admin/invites`, `DELETE /admin/invites/{code}` | Приглашения, только администратор |
 
-`GET /healthz` находится вне `/api/v1`, возвращает `ok`.
+`GET /healthz` находится вне `/api/v1`, возвращает `ok`, а при недоступной базе — 503.
 
 ## WebSocket
 
