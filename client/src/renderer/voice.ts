@@ -19,6 +19,7 @@ import { VoiceChain, type ChainSettings, type ChainStats, type Denoise } from '.
 import { bridge, platform, type AudioMode } from './bridge';
 import { t } from './i18n';
 import { api, appActive, callEvents, errorText, me, sendRealtime, toast, userName, windowHidden } from './state';
+import { STREAM_REACTIONS } from './ui/emoji';
 
 export type Prefs = {
   inputDevice: string;
@@ -403,7 +404,7 @@ function wire(r: Room) {
       if (topic !== 'react' || !p) return;
       try {
         const msg = JSON.parse(new TextDecoder().decode(payload));
-        if (msg.t === 'react' && typeof msg.e === 'string') showFloater(msg.e.slice(0, 16), Number(p.identity));
+        if (msg.t === 'react' && STREAM_REACTIONS.includes(msg.e)) showFloater(msg.e, Number(p.identity));
       } catch {
         /* malformed */
       }
