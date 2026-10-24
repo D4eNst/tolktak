@@ -1,15 +1,6 @@
-import base64
-import hashlib
-import hmac
 import json
-import time
 
-from conftest import TEST_SECRET, err_code
-
-
-def decode_jwt(tok: str) -> dict:
-    part = tok.split(".")[1]
-    return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+from conftest import TEST_SECRET, decode_jwt, err_code, post_webhook
 
 
 def test_registration_modes(make_env):
@@ -113,24 +104,6 @@ def test_groups_rooms_and_voice_access(make_env):
     assert e.do("DELETE", f"/api/v1/groups/{gid}/members/{a_id}", a)[0] == 204
     _, gs = e.do("GET", "/api/v1/groups", b)
     assert gs["groups"][0]["owner_id"] == b_id, "ownership should pass to bob"
-
-
-def post_webhook(e, body: bytes, secret: str) -> int:
-    now = int(time.time())
-    claims = {
-        "iss": "devkey",
-        "nbf": now - 5,
-        "exp": now + 60,
-        "sha256": base64.b64encode(hashlib.sha256(body).digest()).decode(),
-    }
-
-    def enc(b: bytes) -> str:
-        return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
-
-    unsigned = enc(b'{"alg":"HS256","typ":"JWT"}') + "." + enc(json.dumps(claims).encode())
-    sig = enc(hmac.new(secret.encode(), unsigned.encode(), hashlib.sha256).digest())
-    r = e.c.post("/api/v1/livekit/webhook", content=body, headers={"Authorization": unsigned + "." + sig})
-    return r.status_code
 
 
 def test_websocket_events_and_webhook(make_env):

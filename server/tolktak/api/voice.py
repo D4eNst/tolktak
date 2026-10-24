@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from ..errors import ApiError
 from ..livekit import WebhookError
 from ..realtime import VoiceMember, event
-from ..server import Server, current_user, dm_room_name, group_room_name, parse_room_name
+from ..server import Server, background, current_user, dm_room_name, group_room_name, parse_room_name
 from ..store import chat, groups, now
 from .common import Body, json_response, no_content, path_id, read_json, server
 
@@ -18,7 +18,8 @@ log = logging.getLogger("tolktak")
 
 User = Annotated[dict, Depends(current_user)]
 
-TOKEN_TTL = 12 * 60 * 60
+# Only for connecting: LiveKit refreshes the token of a connected participant.
+TOKEN_TTL = 10 * 60
 
 
 class JoinReq(Body):
@@ -132,7 +133,11 @@ async def livekit_webhook(request: Request):
     uid = _identity(ev.get("participant"))
     match ev.get("event"):
         case "participant_joined" if uid > 0:
-            await s.hub.voice_join(room, uid)
+            if uid in await s.room_members(room):
+                await s.hub.voice_join(room, uid)
+            else:
+                log.info("removing non-member user=%d from room=%s", uid, room)
+                background(remove_from_sfu(s, room, uid))
         case "participant_left" | "participant_connection_aborted" if uid > 0:
             await s.hub.voice_leave(room, uid)
             await maybe_end_call(s, room)
@@ -171,10 +176,15 @@ async def reconcile_once(s: Server) -> None:
         except Exception as e:
             log.debug("reconcile: list participants room=%s: %s", name, e)
             continue
+        allowed = set(await s.room_members(name))
         members = []
         for p in parts:
             uid = _identity(p)
             if uid <= 0:
+                continue
+            if uid not in allowed:
+                log.info("removing non-member user=%d from room=%s", uid, name)
+                background(remove_from_sfu(s, name, uid))
                 continue
             m = VoiceMember(user_id=uid, joined_at=now())
             for t in p.get("tracks") or []:

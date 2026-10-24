@@ -69,7 +69,7 @@ The server is designed to be run by people who trust its operator. The operator 
 
 **Rate limits.** The server applies per-key token-bucket limits to registration and login (per client address and, for login, also per account), password changes, sending messages, reactions and uploads. Behind a reverse proxy, `TOLKTAK_TRUST_PROXY=1` makes it use the last address in `X-Forwarded-For`, the one the proxy adds, as the client address.
 
-**Access control.** Messages, channels, rooms and voice tokens are only available to members of the group or direct-message channel. LiveKit tokens are scoped to one room. LiveKit webhooks are accepted only with a valid signature from the configured API key and a matching body hash.
+**Access control.** Messages, channels, rooms and voice tokens are only available to members of the group or direct-message channel. LiveKit tokens are scoped to one room and are valid for ten minutes; the server removes anyone who joins a room of a group they are no longer in. LiveKit webhooks are accepted only with a valid signature from the configured API key and a matching body hash.
 
 **Uploaded files.** Uploads are limited by `TOLKTAK_MAX_UPLOAD_MB` and stored under a random 128-bit identifier, not under their original name. The content type is detected from the file's contents rather than taken from the client. Only common image, audio and video types are served inline; everything else is served as a download with `application/octet-stream`. Every file response carries `Content-Security-Policy: sandbox` and `X-Content-Type-Options: nosniff`, so an uploaded file can never run as a page of the server's origin. File downloads do not require a session: anyone who has a file's URL can fetch it.
 
