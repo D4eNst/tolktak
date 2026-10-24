@@ -5,7 +5,9 @@ client/test-results/
 client/e2e-results.json
 client/.perf/
 /perf/results/
-deploy/.env
+.env
+*.pem
+*.key
 deploy/livekit.yaml
 *.db
 *.db-wal
