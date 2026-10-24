@@ -1,5 +1,6 @@
 """Reads are not authenticated: <img> and <audio> cannot send the token, the random id is the access."""
 
+import asyncio
 import contextlib
 import os
 import posixpath
@@ -13,7 +14,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from ..errors import ApiError, NotFound
 from ..server import Server, current_user
 from ..sniff import SNIFF_LEN, detect_content_type, image_size, type_by_extension
-from ..store import files
+from ..store import files, now
 from .common import json_response, query_int, server
 
 router = APIRouter(prefix="/api/v1")
@@ -41,11 +42,23 @@ async def upload(request: Request, user: User):
     s = server(request)
     me = user["id"]
     s.limit(f"upload:{me}", 20, 60, "Too many uploads, slow down")
+    # One upload at a time per user, so parallel uploads cannot pass the quota together.
+    async with s.upload_locks.setdefault(me, asyncio.Lock()):
+        return await receive_file(request, s, me)
+
+
+async def receive_file(request: Request, s: Server, me: int):
     limit = s.cfg.max_upload_bytes
     too_large = ApiError(413, "too_large", f"File exceeds {limit >> 20} MB")
+    quota = s.cfg.user_quota_bytes
+    room = quota - await files.used_bytes(me) if quota else float("inf")
+    full = ApiError(507, "quota_exceeded", "Your file storage on this server is full")
     with contextlib.suppress(ValueError):
-        if int(request.headers.get("content-length", "0")) > limit:
+        declared = int(request.headers.get("content-length", "0"))
+        if declared > limit:
             raise too_large
+        if declared > room:
+            raise full
     name = clean_name(request.query_params.get("name", ""))
     os.makedirs(s.cfg.files_dir, mode=0o750, exist_ok=True)
     fid = files.new_file_id()
@@ -62,6 +75,8 @@ async def upload(request: Request, user: User):
                 size += len(chunk)
                 if size > limit:
                     raise too_large
+                if size > room:
+                    raise full
                 if len(head) < SNIFF_LEN:
                     head += chunk[: SNIFF_LEN - len(head)]
                 f.write(chunk)
@@ -95,6 +110,13 @@ async def upload(request: Request, user: User):
             with contextlib.suppress(OSError):
                 os.remove(path)
     return json_response({"file": files.file_dict(meta)}, 201)
+
+
+# Uploads that were never sent and replaced pictures count against the quota until removed.
+async def remove_old_unused_files(s: Server) -> None:
+    fids = await files.unused_before(now() - 24 * 60 * 60 * 1000)
+    for i in range(0, len(fids), 500):
+        await remove_unused_files(s, fids[i : i + 500])
 
 
 async def remove_unused_files(s: Server, fids: list[str]) -> None:

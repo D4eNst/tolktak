@@ -24,6 +24,8 @@ class Config:
     # SQLite in the data directory unless a postgres:// URL is given.
     database_url: str = ""
     max_upload_bytes: int = 50 << 20
+    # Total size of the files one user may keep; 0 for no limit.
+    user_quota_bytes: int = 2048 << 20
     listen_host: str = "0.0.0.0"
     listen_port: int = 8080
     debug: bool = False
@@ -61,6 +63,12 @@ def from_env() -> Config:
         max_mb = 0
     if max_mb < 1:
         raise ConfigError("TOLKTAK_MAX_UPLOAD_MB must be a positive number")
+    try:
+        quota_mb = int(_env("TOLKTAK_USER_QUOTA_MB", "2048"))
+    except ValueError:
+        quota_mb = -1
+    if quota_mb < 0:
+        raise ConfigError("TOLKTAK_USER_QUOTA_MB must be a number of megabytes, 0 for no limit")
     db = _env("TOLKTAK_DATABASE_URL")
     if db and not db.startswith(("sqlite://", "postgres://", "postgresql://")):
         raise ConfigError("TOLKTAK_DATABASE_URL must start with postgres://, postgresql:// or sqlite://")
@@ -77,6 +85,7 @@ def from_env() -> Config:
         data_dir=Path(_env("TOLKTAK_DATA_DIR", "./data")),
         database_url=db,
         max_upload_bytes=max_mb << 20,
+        user_quota_bytes=quota_mb << 20,
         listen_host=host,
         listen_port=port,
         debug=_env("TOLKTAK_DEBUG") == "1",

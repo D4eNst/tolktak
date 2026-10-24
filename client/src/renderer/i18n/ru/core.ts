@@ -68,6 +68,7 @@ const ru: typeof en = {
     too_many_reactions: 'Слишком много разных реакций',
     pin_forbidden: 'Закреплять могут модераторы группы',
     too_large: 'Файл слишком большой',
+    quota_exceeded: 'Место для ваших файлов на сервере закончилось',
     empty: 'Пустой файл',
     empty_file: 'Пустой файл',
     group_not_found: 'Группа не найдена',
