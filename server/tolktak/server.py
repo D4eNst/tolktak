@@ -51,7 +51,8 @@ class Server:
         self.hub = Hub(self.room_audience)
         self.rl = RateLimiter()
 
-    async def room_audience(self, room: str) -> list[int]:
+    async def room_members(self, room: str) -> list[int]:
+        """Raises on database errors, so a failed lookup never removes anyone from a room."""
         parsed = parse_room_name(room)
         if parsed is None:
             return []
@@ -62,6 +63,10 @@ class Server:
             return (await groups.group_by_id(a))["members"]
         except NotFound:
             return []
+
+    async def room_audience(self, room: str) -> list[int]:
+        try:
+            return await self.room_members(room)
         except Exception:
             log.exception("room audience room=%s", room)
             return []

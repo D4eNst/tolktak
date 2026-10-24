@@ -1,5 +1,10 @@
 import asyncio
+import base64
+import hashlib
+import hmac
+import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -103,3 +108,26 @@ def make_env(tmp_path: Path, database_url: str):
 
 def err_code(body: dict) -> str:
     return body.get("error", {}).get("code", "")
+
+
+def decode_jwt(tok: str) -> dict:
+    part = tok.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+
+
+def post_webhook(e: Env, body: bytes, secret: str = TEST_SECRET) -> int:
+    now = int(time.time())
+    claims = {
+        "iss": "devkey",
+        "nbf": now - 5,
+        "exp": now + 60,
+        "sha256": base64.b64encode(hashlib.sha256(body).digest()).decode(),
+    }
+
+    def enc(b: bytes) -> str:
+        return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+    unsigned = enc(b'{"alg":"HS256","typ":"JWT"}') + "." + enc(json.dumps(claims).encode())
+    sig = enc(hmac.new(secret.encode(), unsigned.encode(), hashlib.sha256).digest())
+    r = e.c.post("/api/v1/livekit/webhook", content=body, headers={"Authorization": unsigned + "." + sig})
+    return r.status_code
