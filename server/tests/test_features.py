@@ -100,3 +100,16 @@ def test_search_ignores_case_beyond_ascii(make_env):
     e.do("POST", path, a, {"text": "Привет, Мир", "nonce": "n1"})
     for q in ("Привет", "привет", "ПРИВЕТ", "мир"):
         assert len(e.do("GET", f"{path}?q={q}", a)[1]["messages"]) == 1, q
+
+
+def test_wav_and_ogg_play_inline(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    for name, data, mime in (
+        ("voice.wav", b"RIFF\x24\x00\x00\x00WAVEfmt " + bytes(32), "audio/wav"),
+        ("voice.ogg", b"OggS\x00\x02" + bytes(32), "audio/ogg"),
+    ):
+        _, body = e.upload(a, name, data)
+        assert body["file"]["mime"] == mime
+        r = e.c.get(f"/api/v1/files/{body['file']['id']}")
+        assert r.headers["content-type"] == mime and r.headers["content-disposition"].startswith("inline")
