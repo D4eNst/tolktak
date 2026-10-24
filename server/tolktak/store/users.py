@@ -3,6 +3,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+from concurrent.futures import ThreadPoolExecutor
 
 from argon2.low_level import Type, hash_secret_raw
 from tortoise.exceptions import IntegrityError
@@ -57,13 +58,17 @@ def _check_password(encoded: str, password: str) -> bool:
     return hmac.compare_digest(got, want)
 
 
-# Hashing takes about 50 ms of CPU and 64 MB: off the event loop.
+# Hashing takes about 50 ms of CPU and 64 MB: off the event loop, two at a time,
+# so a burst of logins waits in line instead of taking all memory.
+_hashing = ThreadPoolExecutor(max_workers=2, thread_name_prefix="argon2")
+
+
 async def hash_password(password: str) -> str:
-    return await asyncio.to_thread(_hash_password, password)
+    return await asyncio.get_running_loop().run_in_executor(_hashing, _hash_password, password)
 
 
 async def check_password(encoded: str, password: str) -> bool:
-    return await asyncio.to_thread(_check_password, encoded, password)
+    return await asyncio.get_running_loop().run_in_executor(_hashing, _check_password, encoded, password)
 
 
 _USER_COLUMNS = "id, username, display_name, color, is_admin, created_at, avatar, about, status"
