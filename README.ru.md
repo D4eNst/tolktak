@@ -33,7 +33,7 @@ docker run --network host d4enst/tolktak
 
 Сервер — Python и FastAPI, приложение — Electron и Preact. За голос, видео и трансляции отвечает LiveKit.
 
-[Архитектура](docs/ru/development/architecture.md) · [Сборка и тестирование](docs/ru/development/building.md) · [Сайт проекта](website/README.md)
+Документация для разработчиков написана на английском: [архитектура](docs/development/architecture.md) · [сборка и тестирование](docs/development/building.md) · [сайт проекта](website/README.md)
 
 Правила участия — в [CONTRIBUTING.md](CONTRIBUTING.md) и [кодексе поведения](CODE_OF_CONDUCT.md).
 
@@ -41,7 +41,7 @@ docker run --network host d4enst/tolktak
 
 Сквозного шифрования пока нет. Владелец сервера имеет доступ к переписке и файлам. Файл доступен любому, у кого есть его ссылка.
 
-[Модель безопасности](docs/ru/development/architecture.md) · [Сообщение об уязвимости](SECURITY.md)
+[Модель безопасности](docs/development/architecture.md#security-model) (на английском) · [Сообщение об уязвимости](SECURITY.md)
 
 ## Лицензия
 
