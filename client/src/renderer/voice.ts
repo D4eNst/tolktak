@@ -26,8 +26,6 @@ export type Prefs = {
   outputDevice: string;
   cameraDevice: string;
   echoCancellation: boolean;
-  noiseSuppression: boolean; // legacy, replaced by `denoise`
-  autoGainControl: boolean; // legacy, replaced by `agc`
   denoise: Denoise;
   agc: boolean;
   inputGain: number; // dB, manual gain when the leveller is off
@@ -58,8 +56,6 @@ const defaultPrefs: Prefs = {
   outputDevice: 'default',
   cameraDevice: '',
   echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
   denoise: 'medium',
   agc: true,
   inputGain: 0,
@@ -180,15 +176,11 @@ let screenTracks: { video?: LocalVideoTrack; audio?: LocalAudioTrack } = {};
     return room;
   },
   stats: () => collectStats(),
-  lk: { LocalVideoTrack, LocalAudioTrack, Track },
   share: (o: ShareOptions) => startShare(o),
   stopShare: () => stopShare(),
-  prefs: () => prefs.value,
   setPrefs: (p: Partial<Prefs>) => setPrefs(p),
   restartMic: () => restartMic(),
   toggleDeafen: () => toggleDeafen(),
-  speaking: () => [...speaking.value],
-  levels: () => (room ? [...room.remoteParticipants.values()].map((p) => [p.identity, Math.round(remoteLevelDb(p))]) : []),
 };
 
 export async function joinVoice(target: CallTarget, label: string, opts: { ringing?: boolean } = {}) {
