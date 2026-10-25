@@ -65,14 +65,11 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - name: Check compose.yaml
+      - name: Check install.sh and compose.yaml
         working-directory: deploy
         run: |
-          cp example.env .env
-          for v in POSTGRES_PASSWORD LIVEKIT_API_SECRET GARAGE_RPC_SECRET GARAGE_ACCESS_KEY GARAGE_SECRET_KEY; do
-            echo "$v=test" >> .env
-          done
-          docker compose config -q
+          printf '1\nchat.example.com\n1\nn\n1\nServer #1\nn\n' | sh install.sh
+          docker compose config --format json | grep -qF '"TOLKTAK_SERVER_NAME": "Server #1"'
       - run: docker build --target server server
       - run: docker build server
 
