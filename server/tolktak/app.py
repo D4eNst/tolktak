@@ -179,6 +179,10 @@ async def _prune_loop(srv: Server) -> None:
     while True:
         await asyncio.sleep(600)
         srv.rl.prune()
+        try:
+            await users.delete_idle_sessions()
+        except Exception:
+            log.exception("delete idle sessions")
 
 
 async def _remove_unused_files_loop(srv: Server) -> None:
