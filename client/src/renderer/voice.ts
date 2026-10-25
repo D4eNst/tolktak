@@ -260,7 +260,7 @@ async function connect(url: string, token: string, isRejoin: boolean) {
 export function micConstraints() {
   const p = prefs.value;
   return {
-    deviceId: p.inputDevice && p.inputDevice !== 'default' ? { exact: p.inputDevice } : undefined,
+    deviceId: p.inputDevice && p.inputDevice !== 'default' ? { ideal: p.inputDevice } : undefined,
     echoCancellation: p.echoCancellation,
     // The browser's filters are only a fallback: its AGC makes voices pump.
     noiseSuppression: chainBroken && p.denoise !== 'off',
