@@ -830,40 +830,27 @@ export async function restartMic() {
   await applyGate();
 }
 
+// LiveKit ramps each volume change through the web audio mix.
 let duckFactor = 1;
-let duckTarget = 1;
-let duckTimer: number | undefined;
 let releaseTimer: number | undefined;
 
 function setDucked(talking: boolean) {
   speakingRemote.value = talking;
   if (!prefs.value.ducking) {
-    duckTarget = 1;
+    duckFactor = 1;
   } else if (talking) {
     window.clearTimeout(releaseTimer);
-    duckTarget = prefs.value.duckLevel;
+    duckFactor = prefs.value.duckLevel;
   } else {
     // Pauses between words must not pump the volume.
     window.clearTimeout(releaseTimer);
     releaseTimer = window.setTimeout(() => {
-      duckTarget = 1;
-      rampDuck();
+      duckFactor = 1;
+      applyVolumes();
     }, 700);
     return;
   }
-  rampDuck();
-}
-
-function rampDuck() {
-  window.clearInterval(duckTimer);
-  duckTimer = window.setInterval(() => {
-    const step = 0.08;
-    if (Math.abs(duckFactor - duckTarget) <= step) {
-      duckFactor = duckTarget;
-      window.clearInterval(duckTimer);
-    } else duckFactor += duckFactor < duckTarget ? step : -step;
-    applyVolumes();
-  }, 25);
+  applyVolumes();
 }
 
 function audioSink(): HTMLElement {
