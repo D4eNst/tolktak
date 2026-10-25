@@ -5,8 +5,9 @@ import { bridge } from '../bridge';
 import { t } from '../i18n';
 import { me, users } from '../state';
 
+// A URL may hold one level of balanced parentheses, as in …/wiki/Mercury_(planet).
 const INLINE =
-  /(`[^`\n]+`)|(\|\|[\s\S]+?\|\|)|(\*\*[\s\S]+?\*\*)|(__[\s\S]+?__)|(~~[\s\S]+?~~)|(\*[^*\s](?:[^*]*[^*\s])?\*)|(\b_[^_\s](?:[^_]*[^_\s])?_\b)|(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))|(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])|(@[a-z0-9_.-]{2,32})/gi;
+  /(`[^`\n]+`)|(\|\|[\s\S]+?\|\|)|(\*\*[\s\S]+?\*\*)|(__[\s\S]+?__)|(~~[\s\S]+?~~)|(\*[^*\s](?:[^*]*[^*\s])?\*)|(\b_[^_\s](?:[^_]*[^_\s])?_\b)|(\[[^\]\n]+\]\(https?:\/\/(?:[^\s()]|\([^\s()]*\))+\))|(https?:\/\/(?:[^\s<>"'()]|\([^\s<>"'()]*\))*(?:[^\s<>"'.,;:!?()\]]|\([^\s<>"'()]*\)))|(@[a-z0-9_.-]{2,32})/gi;
 
 function Spoiler({ children }: { children: ComponentChildren }) {
   const [open, setOpen] = useState(false);
@@ -93,11 +94,11 @@ function lines(text: string, key: string): ComponentChildren[] {
       continue;
     }
     if (/^\s*([-*•]|\d+[.)])\s+/.test(l)) {
-      const ordered = /^\s*\d/.test(l);
+      const ordered = /^\s*(\d+)/.exec(l);
       const items: string[] = [];
       while (i < ls.length && /^\s*([-*•]|\d+[.)])\s+/.test(ls[i])) items.push(ls[i++].replace(/^\s*([-*•]|\d+[.)])\s+/, ''));
       const lis = items.map((it, j) => <li key={j}>{inline(it, key + 'l' + i + '.' + j)}</li>);
-      out.push(ordered ? <ol key={key + i}>{lis}</ol> : <ul key={key + i}>{lis}</ul>);
+      out.push(ordered ? <ol key={key + i} start={Number(ordered[1])}>{lis}</ol> : <ul key={key + i}>{lis}</ul>);
       continue;
     }
     out.push(
