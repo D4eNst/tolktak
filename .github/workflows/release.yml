@@ -70,6 +70,16 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+    strategy:
+      matrix:
+        include:
+          - target: server
+            name: tolktak-server
+          - target: full
+            name: tolktak
+    # A fork without Docker Hub secrets publishes to GHCR only; in D4eNst/tolktak a missing secret fails the login.
+    env:
+      DOCKERHUB: ${{ github.repository == 'D4eNst/tolktak' || secrets.DOCKERHUB_USERNAME != '' }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -80,13 +90,20 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        if: env.DOCKERHUB == 'true'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - id: image
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/tolktak-server" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
       # Pre-releases get only their own tag; latest follows stable releases.
       - id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
-          images: ${{ steps.image.outputs.name }}
+          images: |
+            ${{ steps.image.outputs.name }}
+            name=docker.io/d4enst/${{ matrix.name }},enable=${{ env.DOCKERHUB }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -94,6 +111,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: server
+          target: ${{ matrix.target }}
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: VERSION=${{ steps.meta.outputs.version }}
@@ -105,3 +123,18 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
           create-storage-record: false
+
+  # The install guide downloads these from the latest release.
+  deploy-files:
+    needs: desktop
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - run: gh release upload "$GITHUB_REF_NAME" deploy/compose.yaml deploy/example.env --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
