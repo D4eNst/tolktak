@@ -23,7 +23,11 @@
 
 TolkTak можно разместить на своём оборудовании или арендованном сервере.
 
-[Требования](docs/ru/install/requirements.md) · [Установка через Docker](docs/ru/install/docker.md) · [Установка из исходников](docs/ru/install/source.md)
+```sh
+docker run --network host d4enst/tolktak
+```
+
+[Требования](docs/ru/install/requirements.md) · [Установка через Docker](docs/ru/install/docker.md) · [Установка через Docker Compose](docs/ru/install/compose.md) · [Установка из исходников](docs/ru/install/source.md)
 
 ## Разработка
 

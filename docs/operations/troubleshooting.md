@@ -1,10 +1,12 @@
 # Troubleshooting
 
-Start with the logs: `docker compose logs --tail 100 tolktak livekit`.
+Start with the logs: `docker logs --tail 100 tolktak` for a [`docker run`](../install/docker.md) server, `docker compose logs --tail 100 tolktak livekit` in the [Compose setup](../install/compose.md).
 
 ## The server does not start
 
-The log names the problem: a missing `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`, a secret shorter than 32 characters, a missing `LIVEKIT_PUBLIC_URL` or an unknown `TOLKTAK_REGISTRATION` value. "address already in use" means another service has the port; pick another as described in [Firewall and ports](../guides/firewall.md#changing-the-ports).
+The log names the problem: a missing `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`, a secret shorter than 32 characters, an S3 bucket without keys or an unknown `TOLKTAK_REGISTRATION` value. In the Compose setup, `docker compose up` itself names a missing secret in `.env`. "address already in use" means another service has the port; pick another as described in [Firewall and ports](../guides/firewall.md#changing-the-ports).
+
+`livekit-server exited` means the embedded LiveKit stopped, and the server stopped with it. The lines before it say why, most often a port that is already taken.
 
 ## The app cannot connect to the server
 
@@ -14,17 +16,19 @@ The log names the problem: a missing `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`, 
 
 ## Chat works, voice does not
 
-This is almost always the media path.
+This is almost always the media path. `https://<server>/api/v1/server` shows `livekit_url`, the address the apps use for LiveKit.
 
-- **Connection to LiveKit fails right away.** Check `LIVEKIT_PUBLIC_URL`: it must be reachable from the user's device, with `wss://` behind HTTPS and `ws://` without a certificate. Open `https://lk.example.com` in a browser; LiveKit answers "OK".
-- **Joins, but nobody hears anybody, or it drops after about 15 seconds.** UDP ports are blocked. Open them in both the server's firewall and your provider's firewall; see [Firewall and ports](../guides/firewall.md).
-- **The LiveKit name is proxied by a CDN.** Media cannot go through it. Turn the proxy off for that name; see [Domains and addresses](../guides/domains.md).
-- **Works for some users only.** Users on strict networks need port 7881/TCP or TURN (3478/UDP and the relay range). On hosts with several interfaces, set `rtc.interfaces` in `livekit.yaml`.
-- **The room list shows people who already left.** The LiveKit webhook does not reach the server. Check `webhook.urls` in `livekit.yaml`; the server also corrects the list every 20 seconds.
+- **Connection to LiveKit fails right away.** `livekit_url` must be reachable from the user's device. Behind HTTPS it is `wss://<domain>`, and the reverse proxy must send `/rtc` to LiveKit. If it shows `ws://...:7880` behind a proxy, set `TOLKTAK_TRUST_PROXY=1` and make the proxy send `X-Forwarded-Proto`. Without a certificate, port 7880/TCP must be open.
+- **Joins, but nobody hears anybody, or it drops after about 15 seconds.** Port 7882/UDP is blocked, or LiveKit gives the apps an address they cannot reach. Open the port in both the server's firewall and your provider's firewall; see [Firewall and ports](../guides/firewall.md). On a local network, set `NODE_IP` to the server's local address; in the Compose setup, set `LIVEKIT_USE_EXTERNAL_IP=false` and `LIVEKIT_NODE_IP` instead.
+- **The domain is proxied by a CDN.** Media cannot go through it. Turn the proxy off for that name; see [Domains and addresses](../guides/domains.md).
+- **Works for some users only.** Users on strict networks need port 7881/TCP. On hosts with several interfaces, limit `rtc.interfaces` in LiveKit's configuration; see [Configuration](configuration.md#livekit).
+- **The room list shows people who already left.** The LiveKit webhook does not reach the server. Check `webhook.urls` in LiveKit's configuration; the server also corrects the list every 20 seconds.
 
 ## Uploads fail
 
 "File is too large" with HTTP 413 comes either from the server (`TOLKTAK_MAX_UPLOAD_MB`) or from the reverse proxy (`client_max_body_size` in nginx). The proxy's limit must be higher than the server's.
+
+With S3 storage, an upload that fails with a server error usually means the bucket is unreachable or the key cannot write to it; the server's log has the S3 error. See [S3 storage](../guides/s3.md).
 
 ## The app keeps reconnecting
 

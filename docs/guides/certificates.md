@@ -1,13 +1,22 @@
 # HTTPS certificates
 
-HTTPS protects passwords, messages and files in transit between a device and the server. In the TolkTak setup, certificates are installed on the reverse proxy.
+HTTPS protects passwords, messages and files in transit between a device and the server. Certificates are installed on the reverse proxy in front of TolkTak.
 
-## Trusted certificate
+## Caddy in the Compose setup
 
-An internet server needs a trusted certificate for each of the [two host names](domains.md). One certificate can also cover both names.
+The [Compose setup](../install/compose.md) includes Caddy, which obtains a free certificate from [Let's Encrypt](https://letsencrypt.org/) for `TOLKTAK_DOMAIN` and renews it [automatically](https://caddyserver.com/docs/automatic-https). It needs:
+
+- the domain's DNS record pointing to the server;
+- ports 80/TCP and 443/TCP reachable from the internet.
+
+The certificates are kept in the `caddy-data` volume. If issuance fails, `docker compose logs caddy` shows why; the usual causes are a DNS record that does not point to the server yet and a closed port 80.
+
+## Your own reverse proxy
+
+An internet server needs a trusted certificate for its [domain name](domains.md).
 
 - **nginx:** obtain and renew certificates through an ACME client such as Certbot. [Let's Encrypt](https://letsencrypt.org/getting-started/) issues free certificates.
-- **Caddy:** [automatic issuance and renewal](https://caddyserver.com/docs/automatic-https) for domains in its configuration.
+- **Caddy** that you run yourself: certificates are automatic for domains in its configuration.
 
 When configuring an ACME client, domain validation methods include:
 
@@ -26,12 +35,6 @@ The certificate must list the server name or IP in the Subject Alternative Name 
 
 ## No certificate
 
-HTTP mode is available for local networks:
-
-```sh
-./init.sh --http 192.168.1.20
-```
-
-Use your machine's address here. Passwords, messages and files are sent over unencrypted HTTP. Voice and video between the app and LiveKit are protected by DTLS-SRTP; TolkTak does not implement end-to-end encryption yet.
+A [server started with `docker run`](../install/docker.md) works over plain HTTP, which is fine for a local network. Passwords, messages and files are then sent unencrypted. Voice and video between the app and LiveKit are always protected by DTLS-SRTP; TolkTak does not implement end-to-end encryption yet.
 
 Continue with [Reverse proxy](reverse-proxy.md) for HTTPS routing.

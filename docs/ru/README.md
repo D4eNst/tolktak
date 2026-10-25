@@ -10,12 +10,14 @@
 TolkTak можно разместить на своём оборудовании или арендованном сервере.
 
 - [Требования](install/requirements.md)
-- [Установка через Docker](install/docker.md)
+- [Установка через Docker](install/docker.md) — одна команда `docker run`.
+- [Установка через Docker Compose](install/compose.md) — свой домен с HTTPS, PostgreSQL и S3.
 - [Установка из исходников](install/source.md)
 
 ## Настройка и обслуживание
 
 - [Параметры сервера](operations/configuration.md) — переменные окружения и настройки LiveKit.
+- [PostgreSQL](guides/postgres.md) и [хранилище S3](guides/s3.md) — база и загруженные файлы.
 - [Администрирование](operations/administration.md) — регистрация, приглашения и доступы.
 - [Обновления и резервные копии](operations/maintenance.md) — сохранение и восстановление данных.
 - [Решение проблем](operations/troubleshooting.md) — подключение, звук и журналы сервисов.

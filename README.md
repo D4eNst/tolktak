@@ -23,7 +23,11 @@ The project is in early development.
 
 TolkTak can run on your own hardware or a rented server.
 
-[Requirements](docs/install/requirements.md) · [Install with Docker](docs/install/docker.md) · [Install from source](docs/install/source.md)
+```sh
+docker run --network host d4enst/tolktak
+```
+
+[Requirements](docs/install/requirements.md) · [Install with Docker](docs/install/docker.md) · [Install with Docker Compose](docs/install/compose.md) · [Install from source](docs/install/source.md)
 
 ## Development
 

@@ -10,12 +10,14 @@
 TolkTak can run on your own hardware or a rented server.
 
 - [Requirements](install/requirements.md)
-- [Install with Docker](install/docker.md)
+- [Install with Docker](install/docker.md) — one `docker run` command.
+- [Install with Docker Compose](install/compose.md) — your own domain with HTTPS, PostgreSQL and S3.
 - [Install from source](install/source.md)
 
 ## Configuration and maintenance
 
 - [Configuration](operations/configuration.md) — environment variables and LiveKit settings.
+- [PostgreSQL](guides/postgres.md) and [S3 storage](guides/s3.md) — the database and uploaded files.
 - [Administration](operations/administration.md) — registration, invites and access.
 - [Upgrades and backups](operations/maintenance.md) — saving and restoring data.
 - [Troubleshooting](operations/troubleshooting.md) — connections, audio and service logs.

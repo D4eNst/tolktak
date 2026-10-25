@@ -2,61 +2,65 @@
 
 Перед обновлением сохраните базу, загрузки и конфигурацию. Миграции выполняются автоматически при запуске новой версии; возврат к старой версии может потребовать восстановления из копии.
 
-## Обновление через Docker
+## Обновление
 
-Прочитайте [описание релиза](https://tolktak.d4enst.ru/releases/). Если используете `TOLKTAK_VERSION=latest`:
+Прочитайте [описание релиза](https://tolktak.d4enst.ru/releases/).
+
+**`docker run`.** Скачайте образ и запустите новый контейнер с теми же параметрами, как в [установке через Docker](../install/docker.md#5-обновление):
 
 ```sh
-cd tolktak/deploy
-git pull
+docker pull d4enst/tolktak
+docker rm -f tolktak
+docker run -d --name tolktak --restart unless-stopped --network host -v tolktak-data:/data d4enst/tolktak
+```
+
+**Установка через Compose.** Из каталога с `compose.yaml`:
+
+```sh
+curl -fsSLO https://github.com/D4eNst/tolktak/releases/latest/download/compose.yaml
 docker compose pull
 docker compose up -d
 docker compose ps
 ```
 
-При закреплённой версии сначала измените `TOLKTAK_VERSION` в `.env`. При сборке из исходников используйте `docker compose up -d --build`. Порядок обновления systemd-установки описан в [отдельной инструкции](../install/source.md).
+Новый `compose.yaml` приносит проверенные версии LiveKit и других сервисов и заменяет старый; ваши настройки остаются в `.env` и `compose.override.yaml`. При закреплённой версии сначала измените `TOLKTAK_VERSION` в `.env`.
 
-Версия LiveKit закреплена в Compose и обновляется вместе с проверенным релизом TolkTak. Приложение обновляется автоматически на поддерживаемых платформах; на macOS новую сборку пока нужно установить вручную.
+**Установка из исходников:** порядок описан в [отдельной инструкции](../install/source.md#5-обновление).
 
-## Что сохранять
+Приложение обновляется автоматически на поддерживаемых платформах; на macOS новую сборку пока нужно установить вручную.
 
-- Базу `tolktak.db`, если используется SQLite.
-- Каталог `files/` с загрузками.
-- `deploy/.env` и `deploy/livekit.yaml` с ключами и настройками.
-- При PostgreSQL — дамп базы вместо SQLite-файла. См. [PostgreSQL](../guides/postgres.md).
+## Резервные копии
 
-Храните копии отдельно от самого сервера. Конфигурация содержит секреты, поэтому доступ к ней должен быть ограничен.
+| Вариант | Что сохранять |
+|---|---|
+| `docker run` | Том `tolktak-data`: база SQLite `tolktak.db`, каталог `files/` и ключи LiveKit |
+| Compose | `.env`; [дамп базы](../guides/postgres.md#резервная-копия) с PostgreSQL; файлы в томах `tolktak_garage-data` и `tolktak_garage-meta`; том `tolktak_data`, если база в SQLite или файлы хранятся на диске |
+| Установка из исходников | `/var/lib/tolktak` и `/etc/tolktak/.env` |
 
-## Копия SQLite с остановкой сервера
+Храните копии отдельно от самого сервера. `.env` содержит секреты, поэтому доступ к нему должен быть ограничен. Список томов показывает `docker volume ls`.
 
-Сначала узнайте имя тома:
-
-```sh
-docker volume ls
-```
-
-Обычно оно имеет вид `<каталог>_tolktak-data`. В примере ниже используется `deploy_tolktak-data`; замените его, если у вас другое имя.
+Самая простая согласованная копия тома делается с короткой остановкой сервера. Для `docker run`:
 
 ```sh
-cd tolktak/deploy
-docker compose stop tolktak
-docker run --rm -v deploy_tolktak-data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/tolktak-data.tar.gz -C /data .
-docker compose start tolktak
+docker stop tolktak
+docker run --rm -v tolktak-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/tolktak-data-$(date +%F).tar.gz -C /data .
+docker start tolktak
 ```
 
-Сохраните `.env` и `livekit.yaml` отдельно. Если архивирование завершилось ошибкой, запустите TolkTak обратно и устраните причину: не продолжайте обновление без рабочей копии.
+В установке через Compose остановите сервисы командой `docker compose stop tolktak garage`, так же заархивируйте тома `tolktak_garage-data` и `tolktak_garage-meta` и выполните `docker compose start`. Если архивирование завершилось ошибкой, запустите сервер обратно и устраните причину: не продолжайте обновление без рабочей копии.
 
-Для копии без остановки используйте SQLite online backup (`sqlite3 tolktak.db ".backup backup.db"`) и скопируйте `files/`. Обычное копирование только файла работающей SQLite-базы может пропустить данные из WAL.
+Для копии SQLite без остановки используйте online backup (`sqlite3 tolktak.db ".backup backup.db"`) и скопируйте `files/`. Обычное копирование только файла работающей SQLite-базы может пропустить данные из WAL.
 
 ## Восстановление
 
-Остановите TolkTak. Распакуйте архив в пустой том или каталог данных, восстановите конфигурацию и запустите сервер. При PostgreSQL сначала загрузите дамп. Проверьте восстановление на отдельном окружении до того, как копия понадобится для реального сбоя.
+Остановите сервер. Распакуйте архивы в пустые тома, восстановите `.env`, а при PostgreSQL загрузите дамп. Затем запустите сервер. Проверьте восстановление на отдельном окружении до того, как копия понадобится для реального сбоя.
 
 ## Журналы и состояние
 
 ```sh
-docker compose logs --tail 100 tolktak livekit
+docker logs -f tolktak                       # docker run
+docker compose logs -f tolktak livekit       # Compose
 curl http://127.0.0.1:8080/healthz
 ```
 
@@ -64,6 +68,25 @@ curl http://127.0.0.1:8080/healthz
 
 ## Переезд и сертификаты
 
-На новой машине восстановите конфигурацию, базу и загрузки, затем переключите DNS. Сессии хранятся в базе: при прежнем адресе участники останутся авторизованы.
+На новой машине восстановите `.env`, базу и тома, затем переключите DNS. Сессии хранятся в базе: при прежнем адресе участники останутся авторизованы.
 
-За продление сертификатов отвечает ACME-клиент или прокси. После продления может требоваться перезагрузка прокси; см. [HTTPS](../guides/certificates.md).
+В установке через Compose сертификаты продлевает Caddy. В остальных случаях за продление отвечает ACME-клиент или прокси; после продления может требоваться перезагрузка прокси, см. [HTTPS](../guides/certificates.md).
+
+## Переход с развёртывания 0.1
+
+TolkTak 0.1 устанавливался из git-клона: `deploy/init.sh`, `deploy/docker-compose.yml`, `.env`, `livekit.yaml` и отдельный домен для LiveKit. Этой схемы больше нет; данные переносятся в [установку через Compose](../install/compose.md) теми же командами, что и с `docker run`.
+
+1. Сохраните старый `deploy/.env` и том `deploy_tolktak-data`, как описано выше.
+2. Подготовьте новый каталог установщиком по шагам 1–3 [установки через Docker Compose](../install/compose.md#1-домен) с прежним доменом TolkTak. На предложение запустить сервер ответьте `n`. Домен LiveKit больше не нужен: LiveKit доступен через `/rtc` на том же домене.
+3. Остановите старые сервисы: `docker compose -p deploy down`. Команда работает из любого каталога, даже если `git pull` уже удалил старый `docker-compose.yml`. Том при этом сохранится.
+4. Перенесите данные, как в разделе [«Переезд с docker run»](../install/compose.md#переезд-с-docker-run), указав `deploy_tolktak-data` вместо `tolktak-data`.
+5. Откройте порты 7881/TCP и 7882/UDP. Старые диапазоны 50000–60000/UDP, 3478/UDP и 30000–40000/UDP можно закрыть: все звонки теперь идут через порт 7882, а TURN выключен.
+
+У сервера будут новые ключи LiveKit; новый адрес LiveKit приложение получает от сервера, менять в нём ничего не нужно. Если вместо Caddy остаётся свой nginx, замените его конфигурацию на [пример с одним доменом](../guides/reverse-proxy.md#nginx) и уберите `caddy` из `COMPOSE_PROFILES`.
+
+Чтобы оставить SQLite и файлы на диске, выберите в установщике SQLite и диск сервера и до первого запуска скопируйте содержимое старого тома в `tolktak_data`:
+
+```sh
+docker volume create tolktak_data
+docker run --rm -v deploy_tolktak-data:/from -v tolktak_data:/to alpine cp -a /from/. /to/
+```
