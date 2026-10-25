@@ -7,12 +7,18 @@
 Нужны Python 3.14 и [uv](https://docs.astral.sh/uv/). Установите uv по его официальной инструкции, затем:
 
 ```sh
-sudo git clone https://github.com/D4eNst/tolktak.git /opt/tolktak
+sudo git clone --branch v0.2.0 https://github.com/D4eNst/tolktak.git /opt/tolktak
 cd /opt/tolktak/server
 sudo UV_PYTHON_INSTALL_DIR=/opt/tolktak/python "$(command -v uv)" sync --no-dev
 ```
 
-uv создаст `server/.venv`. Если Python скачивается автоматически, `UV_PYTHON_INSTALL_DIR` оставит его в каталоге, доступном служебному пользователю. SQLite используется по умолчанию; [PostgreSQL](../guides/postgres.md) подключается отдельно.
+`v0.2.0` — тег релиза; возьмите самый новый из [списка релизов](https://github.com/D4eNst/tolktak/releases). uv создаст `server/.venv`. Если Python скачивается автоматически, `UV_PYTHON_INSTALL_DIR` оставит его в каталоге, доступном служебному пользователю. SQLite используется по умолчанию; [PostgreSQL](../guides/postgres.md) подключается отдельно.
+
+Установка из исходников сообщает версию `0.1.0-dev`. Чтобы показывать настоящую, перед запуском запишите её в `tolktak/_version.py`:
+
+```sh
+echo "__version__ = \"$(git describe --tags --always | sed 's/^v//')\"" | sudo tee tolktak/_version.py
+```
 
 ## 2. Установите LiveKit
 
@@ -77,9 +83,11 @@ journalctl -u tolktak -f
 
 ```sh
 cd /opt/tolktak/server
-sudo git pull
+sudo git checkout tolktak/_version.py      # если записывали в него версию
+sudo git fetch --tags
+sudo git checkout v0.2.1                   # тег нового релиза
 sudo UV_PYTHON_INSTALL_DIR=/opt/tolktak/python "$(command -v uv)" sync --no-dev
 sudo systemctl restart tolktak
 ```
 
-Миграции базы выполняются при старте. Версия сборки из исходников по умолчанию отображается как `0.1.0-dev`; релизная сборка записывает номер в `tolktak/_version.py`.
+Если вы записываете версию в `tolktak/_version.py`, сделайте это снова перед перезапуском. Миграции базы выполняются при старте.
