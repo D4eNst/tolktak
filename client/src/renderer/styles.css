@@ -2041,6 +2041,7 @@ code {
 .composer textarea {
   flex: 1;
   resize: none;
+  field-sizing: content;
   max-height: 240px;
   min-height: 34px;
   padding: 7px 4px;
