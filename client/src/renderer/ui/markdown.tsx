@@ -88,7 +88,7 @@ function lines(text: string, key: string): ComponentChildren[] {
     const l = ls[i];
     if (/^>\s?/.test(l)) {
       const q: string[] = [];
-      while (i < ls.length && /^>\s?/.test(ls[i])) q.push(ls[i++].replace(/^>\s?/, ''));
+      while (i < ls.length && /^>\s?/.test(ls[i])) q.push(ls[i++].replace(/^(?:>\s?)+/, ''));
       out.push(<blockquote key={key + i}>{lines(q.join('\n'), key + 'q' + i)}</blockquote>);
       continue;
     }

@@ -43,6 +43,7 @@ const ru: typeof en = {
     deleteConfirm: 'Удалить сообщение?',
     deleteConfirmText: 'Сообщение будет удалено для всех участников чата.',
     deleted: 'Сообщение удалено',
+    unreadable: 'Не удалось показать это сообщение',
     replyDeleted: 'сообщение удалено',
     attachment: 'Вложение',
     edited: ' (изм.)',

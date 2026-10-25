@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import type { ComponentChildren } from 'preact';
+import { Component, type ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { FileMeta, Message } from '../api';
 import { bridge } from '../bridge';
@@ -447,6 +447,21 @@ function MessageRow({ m, grouped, canPin, canDelete, onReply, onQuote, editing, 
       {picker && <EmojiPicker x={picker.x} y={picker.y} onClose={() => setPicker(null)} onPick={(e) => (setPicker(null), react(m, e))} />}
     </div>
   );
+}
+
+class RowBoundary extends Component<{ children: ComponentChildren }, { failed?: boolean }> {
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div class="msg">
+        <div />
+        <div class="msg-text deleted">{t().chat.message.unreadable}</div>
+      </div>
+    );
+  }
 }
 
 type Upload = { key: number; name: string; size: number; preview?: string; progress: number; file?: FileMeta; error?: string; abort: AbortController };
@@ -1103,7 +1118,9 @@ export function ChatView({
                     </div>
                   )}
                   {prev && prev.id <= unreadMarker && m.id > unreadMarker && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
-                  <MessageRow m={m} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} onReply={onReply} onQuote={onQuote} editing={editing === m.id} setEditing={setEditing} />
+                  <RowBoundary>
+                    <MessageRow m={m} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} onReply={onReply} onQuote={onQuote} editing={editing === m.id} setEditing={setEditing} />
+                  </RowBoundary>
                 </div>
               );
             })}
