@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import sqlite3
 
@@ -6,7 +7,7 @@ import pytest
 from conftest import PG_URL, _reset_postgres, make_config
 from fastapi.testclient import TestClient
 
-from tolktak import db
+from tolktak import db, sqlite_backend
 from tolktak.app import create_app
 from tolktak.copydb import copy
 from tolktak.store import users
@@ -80,6 +81,32 @@ def test_refuses_newer_schema(tmp_path):
     con.close()
     with pytest.raises(Exception, match="newer"):
         asyncio.run(_init_close(f"sqlite://{path}", tmp_path))
+
+
+def test_checkpoint_loop_outlives_unexpected_errors(tmp_path, monkeypatch):
+    calls = []
+
+    def checkpoint(path):
+        calls.append(path)
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(sqlite_backend, "_checkpoint", checkpoint)
+
+    async def run():
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(sqlite_backend.checkpoint_loop(tmp_path / "x.db", 0), 0.1)
+
+    asyncio.run(run())
+    assert len(calls) > 1
+
+
+def test_shutdown_outlives_a_failed_background_task(tmp_path, monkeypatch):
+    async def checkpoint_loop(_):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(sqlite_backend, "checkpoint_loop", checkpoint_loop)
+    with TestClient(create_app(make_config(tmp_path))) as c:
+        assert c.get("/healthz").text == "ok"
 
 
 async def _init_close(url, data_dir):
