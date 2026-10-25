@@ -16,6 +16,7 @@ ORDER = {
     "invites": "code",
     "channel_members": "channel_id, user_id",
     "group_members": "group_id, user_id",
+    "message_files": "message_id, position",
     "files": "id",
     "reactions": "message_id, emoji, user_id",
     "text_channels": "channel_id",

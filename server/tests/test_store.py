@@ -72,6 +72,48 @@ def test_opens_database_from_earlier_version(tmp_path):
         assert {"messages_channel", "text_channels_group"} <= indexes
 
 
+async def _schema_4_database(cfg, files: list[str], attachments: str) -> None:
+    await db.init(cfg.database_url, cfg.data_dir)
+    try:
+        for q, values in (
+            (
+                "INSERT INTO users (username, display_name, password_hash, color, created_at) "
+                "VALUES ('alice', 'Alice', ?, '#e5484d', 1)",
+                [GO_HASH],
+            ),
+            ("INSERT INTO channels (kind, created_at) VALUES ('group', 1)", []),
+            ("INSERT INTO channel_members (channel_id, user_id) VALUES (1, 1)", []),
+            (
+                "INSERT INTO files (id, uploader_id, name, mime, size, created_at) "
+                "VALUES (?, 1, 'a.png', 'image/png', 1, 1), (?, 1, 'b.png', 'image/png', 1, 1)",
+                files,
+            ),
+            (
+                "INSERT INTO messages (channel_id, author_id, nonce, text, created_at, deleted, attachments) "
+                "VALUES (1, 1, 'n1', '', 1, 0, ?), (1, 1, 'n2', 'text', 2, 0, ''), (1, 1, 'n3', '', 3, 1, ?)",
+                [attachments, attachments],
+            ),
+        ):
+            await db.execute(q, values)
+    finally:
+        await db.close()
+
+
+def test_attachments_move_to_their_own_table(tmp_path, database_url, make_env, monkeypatch):
+    first, second = "a" * 32, "b" * 32
+    with monkeypatch.context() as m:
+        m.setattr(db, "SQLITE", db.SQLITE[:4])
+        m.setattr(db, "POSTGRES", db.POSTGRES[:4])
+        asyncio.run(_schema_4_database(make_config(tmp_path, database_url), [first, second], f"{second},{first}"))
+    e = make_env()
+    tok = e.do("POST", "/api/v1/auth/login", body={"username": "alice", "password": "password1"})[1]["token"]
+    _, body = e.do("GET", "/api/v1/channels/1/messages", tok)
+    assert [[f["id"] for f in m["attachments"]] for m in body["messages"]] == [[second, first], [], []]
+    assert "attachments" not in e.c.portal.call(db.rows, "SELECT * FROM messages")[0]
+    _, body = e.do("POST", "/api/v1/channels/1/messages", tok, {"nonce": "n4", "attachments": [second, first]})
+    assert [f["id"] for f in body["message"]["attachments"]] == [second, first]
+
+
 def test_refuses_newer_schema(tmp_path):
     path = tmp_path / "tolktak.db"
     con = sqlite3.connect(path)

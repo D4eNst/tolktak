@@ -107,12 +107,20 @@ class Message(Model):
     edited_at = fields.BigIntField(null=True)
     deleted = fields.IntField(default=0)
     reply_to = fields.BigIntField(null=True)
-    # Comma-separated file ids.
-    attachments = fields.TextField(default="")
     pinned_at = fields.BigIntField(null=True)
 
     class Meta:
         table = "messages"
+
+
+class MessageFile(Model):
+    # Primary key is (message_id, position).
+    message_id = fields.BigIntField(primary_key=True, generated=False)
+    file_id = fields.TextField()
+    position = fields.IntField()
+
+    class Meta:
+        table = "message_files"
 
 
 class File(Model):
