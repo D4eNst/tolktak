@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { signal } from '@preact/signals';
+import { computed, signal } from '@preact/signals';
 import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { intlLocale, t } from '../i18n';
@@ -468,13 +468,24 @@ function isYesterday(d: Date, now: Date) {
   return d.toDateString() === y.toDateString();
 }
 
+// Building a formatter costs far more than formatting, and every message shows a time.
+export const dateFormats = computed(() => {
+  const l = intlLocale();
+  return {
+    time: new Intl.DateTimeFormat(l, { hour: '2-digit', minute: '2-digit' }),
+    dayMonth: new Intl.DateTimeFormat(l, { day: 'numeric', month: 'short' }),
+    day: new Intl.DateTimeFormat(l, { day: 'numeric', month: 'long' }),
+    dayYear: new Intl.DateTimeFormat(l, { day: 'numeric', month: 'long', year: 'numeric' }),
+  };
+});
+
 export function timeLabel(ms: number) {
   const d = new Date(ms);
   const now = new Date();
-  const hm = d.toLocaleTimeString(intlLocale(), { hour: '2-digit', minute: '2-digit' });
+  const hm = dateFormats.value.time.format(d);
   if (d.toDateString() === now.toDateString()) return hm;
   if (isYesterday(d, now)) return t().common.time.yesterdayAt(hm);
-  return d.toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short' }) + ' ' + hm;
+  return dateFormats.value.dayMonth.format(d) + ' ' + hm;
 }
 
 export function dayLabel(ms: number) {
@@ -482,7 +493,7 @@ export function dayLabel(ms: number) {
   const now = new Date();
   if (d.toDateString() === now.toDateString()) return t().common.time.today;
   if (isYesterday(d, now)) return t().common.time.yesterday;
-  return d.toLocaleDateString(intlLocale(), { day: 'numeric', month: 'long', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+  return (d.getFullYear() === now.getFullYear() ? dateFormats.value.day : dateFormats.value.dayYear).format(d);
 }
 
 export function sizeLabel(n: number) {
