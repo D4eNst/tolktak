@@ -945,7 +945,10 @@ export async function startShare(opts: ShareOptions) {
   rawCapture = raw;
   let v = raw;
   if (platform === 'win32' && opts.sourceId.startsWith('window:')) {
-    v = redrawFrames(raw);
+    const redrawn = redrawFrames(raw);
+    // The layers are sized from the window's first frame: the capture starts out at the screen's size.
+    await Promise.race([redrawn.firstFrame, new Promise((res) => setTimeout(res, 1000))]);
+    v = redrawn.track;
     v.contentHint = raw.contentHint;
   } else {
     await alignFrameSize(raw, fps);
@@ -1007,7 +1010,7 @@ function stopRawCapture() {
   rawCapture = null;
 }
 
-function redrawFrames(raw: MediaStreamTrack): MediaStreamTrack {
+function redrawFrames(raw: MediaStreamTrack): { track: MediaStreamTrack; firstFrame: Promise<void> } {
   const W = globalThis as unknown as {
     MediaStreamTrackProcessor: new (o: { track: MediaStreamTrack }) => { readable: ReadableStream<VideoFrame> };
     MediaStreamTrackGenerator: new (o: { kind: 'video' }) => MediaStreamTrack & { writable: WritableStream<VideoFrame> };
@@ -1022,6 +1025,8 @@ function redrawFrames(raw: MediaStreamTrack): MediaStreamTrack {
   captureSize = { width: canvas.width, height: canvas.height };
   const ctx = canvas.getContext('2d', { alpha: false })!;
   let drawn = false;
+  let firstDrawn = () => {};
+  const firstFrame = new Promise<void>((res) => (firstDrawn = res));
   let lastWrite = 0;
   let writing = Promise.resolve();
   let ended = false;
@@ -1035,6 +1040,7 @@ function redrawFrames(raw: MediaStreamTrack): MediaStreamTrack {
     }
     ctx.drawImage(src, 0, 0, w, h, 0, 0, w, h);
     drawn = true;
+    firstDrawn();
   };
   // Repeated frames need monotonic timestamps.
   const emit = () => {
@@ -1077,7 +1083,7 @@ function redrawFrames(raw: MediaStreamTrack): MediaStreamTrack {
     writer.close().catch(() => {});
     out.stop();
   })();
-  return out;
+  return { track: out, firstFrame };
 }
 
 async function describeAudio(mode: AudioMode, got: boolean): Promise<string> {
