@@ -40,6 +40,7 @@ export default {
     deleteConfirm: 'Delete message?',
     deleteConfirmText: 'It will be removed for everyone in this chat.',
     deleted: 'Message deleted',
+    unreadable: 'This message cannot be displayed',
     replyDeleted: 'message deleted',
     attachment: 'Attachment',
     edited: ' (edited)',
