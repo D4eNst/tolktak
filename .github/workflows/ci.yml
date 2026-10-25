@@ -72,6 +72,12 @@ jobs:
           docker compose config --format json | grep -qF '"TOLKTAK_SERVER_NAME": "Server #1"'
       - run: docker build --target server server
       - run: docker build server
+      - name: Start the Compose stack
+        working-directory: deploy
+        run: |
+          docker build --target server -t d4enst/tolktak-server:ci ../server
+          TOLKTAK_VERSION=ci COMPOSE_PROFILES=livekit,postgres,garage docker compose up -d --wait
+          curl -fsS --retry 15 --retry-delay 2 --retry-all-errors http://127.0.0.1:8080/healthz
 
   client:
     runs-on: ubuntu-latest
