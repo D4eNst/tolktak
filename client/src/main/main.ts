@@ -27,7 +27,7 @@ import { audioPidForWindow, exeForPid, hwndFromSourceId, processLoopbackSupporte
 if (process.env.TOLKTAK_USER_DATA) app.setPath('userData', path.resolve(process.env.TOLKTAK_USER_DATA));
 
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
+  app.exit();
 }
 
 app.setAppUserModelId('org.tolktak.client');
