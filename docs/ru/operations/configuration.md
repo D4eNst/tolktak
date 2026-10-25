@@ -50,7 +50,7 @@
 |---|---|---|
 | `TOLKTAK_DOMAIN` | Обязательна | Доменное имя сервера. На него Caddy получает сертификат |
 | `TOLKTAK_VERSION` | `latest` | Тег образа `d4enst/tolktak-server`. Укажите версию, например `0.2.0`, чтобы обновляться вручную |
-| `COMPOSE_PROFILES` | `livekit,postgres,garage,caddy` | Встроенные сервисы, которые запускаются. Уберите сервис, чтобы использовать свой; см. [установку через Docker Compose](../install/compose.md#своя-база-хранилище-или-прокси) |
+| `COMPOSE_PROFILES` | `livekit,postgres,garage,caddy,updater` | Встроенные сервисы, которые запускаются. Уберите сервис, чтобы использовать свой, см. [установку через Docker Compose](../install/compose.md#своя-база-хранилище-или-прокси), или `updater`, чтобы обновлять вручную |
 | `TOLKTAK_PORT`, `LIVEKIT_PORT` | `8080`, `7880` | Порты на `127.0.0.1` для своего обратного прокси |
 | `LIVEKIT_TCP_PORT`, `LIVEKIT_UDP_PORT` | `7881`, `7882` | Порты звонков сервиса `livekit` |
 | `LIVEKIT_USE_EXTERNAL_IP`, `LIVEKIT_NODE_IP` | `true`, пусто | LiveKit определяет публичный адрес через STUN. В локальной сети задайте `LIVEKIT_USE_EXTERNAL_IP=false` и локальный адрес сервера в `LIVEKIT_NODE_IP` |

@@ -36,6 +36,7 @@ curl -fsSLO https://github.com/D4eNst/tolktak/releases/latest/download/install.s
 | Как подключаться к серверу | Домен с сертификатом от Caddy; домен за своим обратным прокси; IP-адрес по обычному HTTP |
 | База | PostgreSQL в этой установке, с паролем, созданным автоматически; свой PostgreSQL; SQLite |
 | Загруженные файлы | Garage в этой установке; свой бакет S3; диск сервера |
+| Обновления сервера | Вручную, автоматически или выключены (`TOLKTAK_UPDATES`) |
 | Название сервера | `TolkTak` |
 
 Enter принимает значение в скобках. Данные своего PostgreSQL или S3 можно ввести сразу или позже в `.env`. Установщик записывает `.env` с созданными секретами и доступом только для владельца, печатает порты, которые нужно открыть, и предлагает запустить сервер. За пределами каталога он ничего не меняет и останавливается, если `.env` уже есть. `install.sh` можно прочитать до запуска.
@@ -98,7 +99,7 @@ docker compose logs -f tolktak livekit caddy
 `COMPOSE_PROFILES` в `.env` перечисляет встроенные сервисы, которые запускает Compose:
 
 ```sh
-COMPOSE_PROFILES=livekit,postgres,garage,caddy
+COMPOSE_PROFILES=livekit,postgres,garage,caddy,updater
 ```
 
 Чтобы использовать свой сервис, уберите встроенный из списка, задайте замену в том же `.env` и выполните `docker compose up -d`. Уже запущенный встроенный сервис при этом продолжит работать; удалите его командой `docker compose rm -sf garage` (или `livekit`, `postgres`, `caddy`). Его том сохранится.
@@ -127,7 +128,9 @@ docker compose up -d
 
 ## Обновление
 
-Сначала прочитайте [описание релиза](https://github.com/D4eNst/tolktak/releases) и сделайте [резервную копию](../operations/maintenance.md#резервные-копии): новая версия при запуске обновляет базу.
+Сервис `updater`, который установщик включает, если не выбрать «выключены», ставит новые релизы согласно `TOLKTAK_UPDATES` в `.env`: при `manual`, по умолчанию, обновление запускает администратор в «Настройки → Сервер»; при `auto` сервер ставит его сам, когда в голосе никого нет. См. [«Обновления и резервные копии»](../operations/maintenance.md#обновление). Сервису нужен Docker-сокет, и он заменяет только образ сервера, записывая установленный релиз в `TOLKTAK_VERSION` в `.env`. `compose.yaml` он не заменяет, а там закреплены версии LiveKit, PostgreSQL, Garage, Caddy и самого `updater`, поэтому время от времени обновляйтесь вручную, как описано ниже. Compose он запускает внутри своего контейнера, поэтому пути на хосте в `compose.override.yaml` указывайте абсолютные. Чтобы обновлять только вручную, уберите `updater` из `COMPOSE_PROFILES` и выполните `docker compose rm -sf updater`.
+
+Вручную сначала прочитайте [описание релиза](https://github.com/D4eNst/tolktak/releases) и сделайте [резервную копию](../operations/maintenance.md#резервные-копии): новая версия при запуске обновляет базу.
 
 ```sh
 curl -fsSLO https://github.com/D4eNst/tolktak/releases/latest/download/compose.yaml
