@@ -284,6 +284,7 @@ export async function leaveVoice() {
   bridge.setInCall(false);
   if (r) await r.disconnect();
   audioSink().replaceChildren();
+  lastBytes.clear();
   if (c) {
     playTone('leave');
     session.value?.api.leaveVoice(c.room).catch(() => {});
