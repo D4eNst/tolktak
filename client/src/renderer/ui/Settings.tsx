@@ -658,9 +658,11 @@ export function SettingsDialog() {
                   <Toggle checked={desk.minimizeToTray} onChange={(on) => setDesktop({ minimizeToTray: on })} hint={tx.app.trayHint}>
                     {tx.app.tray}
                   </Toggle>
-                  <Toggle checked={desk.openAtLogin} onChange={(on) => setDesktop({ openAtLogin: on })} hint={tx.app.openAtLoginHint}>
-                    {tx.app.openAtLogin(platform === 'darwin' ? 'macOS' : 'Windows')}
-                  </Toggle>
+                  {platform !== 'other' && (
+                    <Toggle checked={desk.openAtLogin} onChange={(on) => setDesktop({ openAtLogin: on })} hint={tx.app.openAtLoginHint}>
+                      {tx.app.openAtLogin(platform === 'darwin' ? 'macOS' : 'Windows')}
+                    </Toggle>
+                  )}
                   {platform === 'win32' && info && info.windowsBuild > 0 && info.windowsBuild < 22000 && (
                     <Toggle
                       checked={desk.allowWin10Loopback}
