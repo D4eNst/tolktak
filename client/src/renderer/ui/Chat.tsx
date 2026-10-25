@@ -1,9 +1,10 @@
 import { signal } from '@preact/signals';
 import { Component, type ComponentChildren } from 'preact';
+import { memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { FileMeta, Message } from '../api';
 import { bridge } from '../bridge';
-import { intlLocale, t } from '../i18n';
+import { t } from '../i18n';
 import {
   api,
   channels,
@@ -29,7 +30,7 @@ import {
   userName,
   users,
 } from '../state';
-import { Avatar, confirmDialog, dayLabel, Icon, type MenuItem, openMenu, Popover, sizeLabel, timeLabel } from './common';
+import { Avatar, confirmDialog, dateFormats, dayLabel, Icon, type MenuItem, openMenu, Popover, sizeLabel, timeLabel } from './common';
 import { EMOJI_GROUPS, emojiGroupName, findSticker, QUICK_REACTIONS, recentEmoji, rememberEmoji, STICKER_PACKS, STICKER_RE, stickerPackName } from './emoji';
 import { isJumbo, Markdown } from './markdown';
 import { openProfile } from './Profile';
@@ -316,18 +317,27 @@ function jumpTo(id: number) {
   setTimeout(() => highlight.value === id && (highlight.value = 0), 1600);
 }
 
+function quote(m: Message) {
+  const quoted = m.text
+    .split('\n')
+    .map((l) => '> ' + l)
+    .join('\n');
+  const cur = drafts.value.get(m.channel_id) ?? '';
+  setDraft(m.channel_id, (cur ? cur + '\n' : '') + quoted + '\n');
+  setReply(m.channel_id, m);
+}
+
 type RowProps = {
   m: Message;
   grouped: boolean;
   canPin: boolean;
   canDelete: boolean;
-  onReply: (m: Message) => void;
-  onQuote: (m: Message) => void;
   editing: boolean;
   setEditing: (id: number) => void;
 };
 
-function MessageRow({ m, grouped, canPin, canDelete, onReply, onQuote, editing, setEditing }: RowProps) {
+// Memoised, so its props must keep their identity between renders of the chat.
+const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, editing, setEditing }: RowProps) {
   const mine = m.author_id === me.value?.id;
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const author = users.value.get(m.author_id);
@@ -355,8 +365,8 @@ function MessageRow({ m, grouped, canPin, canDelete, onReply, onQuote, editing, 
     const sel = window.getSelection()?.toString();
     const tm = t().chat.message;
     const items: MenuItem[] = [
-      { label: tm.reply, icon: 'reply', run: () => onReply(m) },
-      { label: tm.quote, icon: 'quote', run: () => onQuote(m) },
+      { label: tm.reply, icon: 'reply', run: () => setReply(m.channel_id, m) },
+      { label: tm.quote, icon: 'quote', run: () => quote(m) },
       { label: tm.reaction, icon: 'smilePlus', run: () => setPicker({ x: e.clientX, y: e.clientY }) },
       'sep',
       ...(m.text && !sticker ? [{ label: sel ? tm.copySelection : tm.copyText, icon: 'copy', run: () => copy(sel || m.text) } as MenuItem] : []),
@@ -373,7 +383,7 @@ function MessageRow({ m, grouped, canPin, canDelete, onReply, onQuote, editing, 
       class={'msg' + (grouped ? ' grouped' : '') + (mine ? ' mine' : '') + (editing ? ' editing' : '') + (highlight.value === m.id ? ' flash' : '') + (m.pinned_at ? ' pinned' : '')}
       data-id={m.id}
       onContextMenu={menu}
-      onDblClick={(e) => !m.deleted && !(e.target as HTMLElement).closest('a,button,.spoiler,img,audio,video') && onReply(m)}
+      onDblClick={(e) => !m.deleted && !(e.target as HTMLElement).closest('a,button,.spoiler,img,audio,video') && setReply(m.channel_id, m)}
     >
       {m.reply && (
         <button class="msg-reply" onClick={() => jumpTo(m.reply!.id)}>
@@ -385,7 +395,7 @@ function MessageRow({ m, grouped, canPin, canDelete, onReply, onQuote, editing, 
       )}
       <div class="msg-gutter">
         {grouped ? (
-          <span class="msg-time-hover">{new Date(m.created_at).toLocaleTimeString(intlLocale(), { hour: '2-digit', minute: '2-digit' })}</span>
+          <span class="msg-time-hover">{dateFormats.value.time.format(m.created_at)}</span>
         ) : (
           <button class="avatar-btn" onClick={profile} aria-label={t().chat.message.profileOf(userName(m.author_id))}>
             <Avatar id={m.author_id} size={38} />
@@ -431,7 +441,7 @@ function MessageRow({ m, grouped, canPin, canDelete, onReply, onQuote, editing, 
           <button onClick={(e) => setPicker({ x: e.clientX - 300, y: e.clientY + 16 })} title={t().chat.message.reaction} aria-label={t().chat.message.reaction}>
             <Icon name="smilePlus" size={18} />
           </button>
-          <button onClick={() => onReply(m)} title={t().chat.message.reply} aria-label={t().chat.message.reply}>
+          <button onClick={() => setReply(m.channel_id, m)} title={t().chat.message.reply} aria-label={t().chat.message.reply}>
             <Icon name="reply" size={18} />
           </button>
           {mine && !sticker && (
@@ -447,7 +457,7 @@ function MessageRow({ m, grouped, canPin, canDelete, onReply, onQuote, editing, 
       {picker && <EmojiPicker x={picker.x} y={picker.y} onClose={() => setPicker(null)} onPick={(e) => (setPicker(null), react(m, e))} />}
     </div>
   );
-}
+});
 
 class RowBoundary extends Component<{ children: ComponentChildren }, { failed?: boolean }> {
   static getDerivedStateFromError() {
@@ -966,6 +976,24 @@ function SearchPanel({ channelId, onClose }: { channelId: number; onClose: () =>
   );
 }
 
+function TypingLine({ channelId }: { channelId: number }) {
+  const typers = [...(typing.value.get(channelId)?.entries() ?? [])].filter(([, until]) => until > Date.now()).map(([id]) => userName(id));
+  return (
+    <div class="typing small">
+      {typers.length > 0 && (
+        <>
+          <span class="typing-dots">
+            <span />
+            <span />
+            <span />
+          </span>
+          {t().chat.view.typing(typers)}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function ChatView({
   channelId,
   title,
@@ -1053,22 +1081,11 @@ export function ChatView({
     }
   };
 
-  const onReply = (m: Message) => setReply(channelId, m);
-  const onQuote = (m: Message) => {
-    const quoted = m.text
-      .split('\n')
-      .map((l) => '> ' + l)
-      .join('\n');
-    const cur = drafts.value.get(channelId) ?? '';
-    setDraft(channelId, (cur ? cur + '\n' : '') + quoted + '\n');
-    setReply(channelId, m);
-  };
   const editLast = () => {
     const mine = [...items].reverse().find((m) => m.author_id === me.value?.id && !m.deleted && !STICKER_RE.test(m.text));
     if (mine) setEditing(mine.id);
   };
 
-  const typers = [...(typing.value.get(channelId)?.entries() ?? [])].filter(([, until]) => until > Date.now()).map(([id]) => userName(id));
   const channel = channels.value.get(channelId);
   const unreadBelow = !atBottom ? (channel?.unread ?? 0) : 0;
   const g = channel?.group_id ? groups.value.get(channel.group_id) : undefined;
@@ -1142,7 +1159,7 @@ export function ChatView({
                   )}
                   {prev && prev.id <= readMark && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
                   <RowBoundary>
-                    <MessageRow m={m} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} onReply={onReply} onQuote={onQuote} editing={editing === m.id} setEditing={setEditing} />
+                    <MessageRow m={m} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} editing={editing === m.id} setEditing={setEditing} />
                   </RowBoundary>
                 </div>
               );
@@ -1189,18 +1206,7 @@ export function ChatView({
               </button>
             )}
           </div>
-          <div class="typing small">
-            {typers.length > 0 && (
-              <>
-                <span class="typing-dots">
-                  <span />
-                  <span />
-                  <span />
-                </span>
-                {t().chat.view.typing(typers)}
-              </>
-            )}
-          </div>
+          <TypingLine channelId={channelId} />
           <Composer channelId={channelId} title={title} onEditLast={editLast} edit={items.find((m) => m.id === editing) ?? null} onEditEnd={() => setEditing(0)} />
         </div>
         {panel === 'pins' && <PinsPanel channelId={channelId} onClose={() => setPanel(null)} />}
