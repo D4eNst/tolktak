@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('tolktak', {
   setTitle: (t: string) => ipcRenderer.invoke('app:setTitle', t),
   setBadge: (count: number, dataUrl: string) => ipcRenderer.invoke('app:badge', count, dataUrl),
   copy: (text: string) => ipcRenderer.invoke('app:copy', text),
+  download: (url: string) => ipcRenderer.invoke('app:download', url),
   mediaAccess: (kind: string, ask: boolean) => ipcRenderer.invoke('media:access', kind, ask),
   openPrivacySettings: (kind: string) => ipcRenderer.invoke('media:openPrivacy', kind),
   onShortcut: listener<string>('shortcut'),

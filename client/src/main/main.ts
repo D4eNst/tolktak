@@ -334,6 +334,10 @@ function installIpc() {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
   });
   handle('app:setTitle', (title: string) => win?.setTitle(String(title).slice(0, 120)));
+  // The page is file://, so <a download> is ignored for files on the server.
+  handle('app:download', (url: string) => {
+    if (/^https?:\/\//i.test(url)) win?.webContents.downloadURL(url);
+  });
   handle('media:access', async (kind: 'microphone' | 'camera', ask: boolean) => {
     if (kind !== 'microphone' && kind !== 'camera') return 'denied';
     if (process.platform !== 'darwin' && process.platform !== 'win32') return 'granted';
