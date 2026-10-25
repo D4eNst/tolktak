@@ -97,7 +97,7 @@ Enter `localhost:8080` as the server address. Addresses on `localhost` and priva
 
 | Script | What it does |
 |---|---|
-| `npm run build` | Bundle main, preload and renderer into `dist/` with esbuild |
+| `npm run build` | Bundle main, the preloads, the renderer and the launch window into `dist/` with esbuild |
 | `npm run watch` | Rebuild on every change; run `npx electron .` in another terminal and restart it to pick up changes |
 | `npm start` | Build and launch the app |
 | `npm run typecheck` | Type-check the whole client with `tsc` |
@@ -117,6 +117,8 @@ Environment variables for the client:
 | `TOLKTAK_NO_UPDATES` | app | Disables the update check in a packaged build |
 
 Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) when a `v*` tag is pushed: it builds the installers for all three platforms, publishes them to GitHub Releases, pushes both images to Docker Hub (`d4enst/tolktak`, `d4enst/tolktak-server`) and GHCR (`ghcr.io/d4enst/...`), and attaches `deploy/install.sh`, `deploy/compose.yaml` and `deploy/example.env` to the release. Docker Hub needs the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. `latest` moves only on stable releases.
+
+Servers pick up a published release by themselves and apps follow their server (see [Maintenance](../operations/maintenance.md#upgrading)), so two things in a release matter besides the code. When a release changes the API in a way older apps cannot handle, raise `MIN_CLIENT_VERSION` in `server/tolktak/updates.py` to the oldest app version that still works: older apps then update before they connect. For an urgent security release, raise it to the release's own version and add `<!-- tolktak:urgent -->` to the release notes, so servers in `auto` mode install it at once instead of waiting until nobody is in voice.
 
 ## End-to-end tests
 

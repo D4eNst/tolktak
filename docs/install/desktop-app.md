@@ -42,6 +42,8 @@ Push to talk works outside the TolkTak window on Windows. On macOS and Linux, it
 
 ## Updates
 
-New versions are available on the [downloads page](https://tolktak.d4enst.ru/en/download/). In builds that support automatic updates, the app downloads the new version and offers to restart. Automatic updates are not available on macOS yet; new versions need to be installed manually.
+The app follows the version of its server. When it starts, a small window asks the server which version it runs, downloads that version and installs it without an installer window. If the server is unreachable, the app starts as it is. When the server updates while the app is open, the app downloads the new version in the background and offers to restart; if the server no longer supports the running version, the update installs right away.
+
+The Windows installer and the Linux AppImage update this way. On macOS, in the portable Windows zip and with the `.deb` package, the app offers a Download button instead; new versions are on the [downloads page](https://tolktak.d4enst.ru/en/download/).
 
 For sign-in, audio and screen-sharing issues, see [Troubleshooting](../operations/troubleshooting.md).
