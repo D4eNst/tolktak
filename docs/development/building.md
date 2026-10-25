@@ -48,42 +48,16 @@ docker build --target server -t tolktak-server server
 
 ## Running a local stack
 
-Chromium ignores loopback ICE candidates, so LiveKit must advertise a real network address of your machine, even when everything runs locally. Replace `192.168.1.20` below with your LAN address.
+The server starts LiveKit itself, with generated keys, as the `d4enst/tolktak` image does. It runs the `livekit-server` found on your `PATH`: download it from the [LiveKit releases](https://github.com/livekit/livekit/releases), or on macOS run `brew install livekit`.
 
-Create `livekit-dev.yaml` outside the repository:
-
-```yaml
-port: 7880
-bind_addresses: ["0.0.0.0"]
-rtc:
-  tcp_port: 7881
-  port_range_start: 50000
-  port_range_end: 50200
-  use_external_ip: false
-  node_ip: 192.168.1.20
-keys:
-  devkey: dev-secret-0123456789abcdefghijklmnop
-webhook:
-  api_key: devkey
-  urls: ["http://127.0.0.1:8080/api/v1/livekit/webhook"]
-```
-
-Start LiveKit and the server in two terminals:
-
-```sh
-livekit-server --config livekit-dev.yaml
-```
+Chromium ignores loopback ICE candidates, so LiveKit must advertise a real network address of your machine, even when everything runs locally. Replace `192.168.1.20` below with your LAN address:
 
 ```sh
 cd server
-TOLKTAK_REGISTRATION=open \
-LIVEKIT_API_KEY=devkey \
-LIVEKIT_API_SECRET=dev-secret-0123456789abcdefghijklmnop \
-LIVEKIT_PUBLIC_URL=ws://192.168.1.20:7880 \
-uv run tolktak-server
+TOLKTAK_EMBEDDED_LIVEKIT=1 TOLKTAK_REGISTRATION=open NODE_IP=192.168.1.20 uv run tolktak-server
 ```
 
-The server listens on `:8080` and keeps its data in `server/data/`. Open `http://localhost:8080` to register the first account. All server variables are listed in [Configuration](../operations/configuration.md).
+The server listens on `:8080` and keeps its data, including the LiveKit keys, in `server/data/`. Open `http://localhost:8080` to register the first account. All server variables are listed in [Configuration](../operations/configuration.md).
 
 ## Client
 
