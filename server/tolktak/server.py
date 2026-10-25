@@ -16,8 +16,8 @@ from .updates import Updater
 log = logging.getLogger("tolktak")
 
 # Voice rooms map to LiveKit rooms named "g<group>r<room>" or "dm<channel>".
-_GROUP_ROOM = re.compile(r"g([+-]?[0-9]+)r([+-]?[0-9]+)")
-_DM_ROOM = re.compile(r"dm([+-]?[0-9]+)")
+_GROUP_ROOM = re.compile(r"g([0-9]+)r([0-9]+)")
+_DM_ROOM = re.compile(r"dm([0-9]+)")
 
 
 def group_room_name(gid: int, rid: int) -> str:

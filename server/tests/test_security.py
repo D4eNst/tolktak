@@ -8,6 +8,7 @@ from conftest import decode_jwt, post_webhook
 from tolktak import db
 from tolktak.api import voice, ws
 from tolktak.api.files import remove_old_unused_files
+from tolktak.server import parse_room_name
 from tolktak.sniff import image_size
 from tolktak.store import users
 
@@ -192,6 +193,13 @@ def test_websocket_frames_are_rate_limited(make_env):
         while (ev := json.loads(receiver.receive_text()))["type"] != "voice.room":
             typing += ev["type"] == "typing"
     assert 20 <= typing <= 25, f"{typing} typing events reached the other user"
+
+
+def test_room_names_have_one_spelling():
+    assert parse_room_name("g1r2") == ("group", 1, 2)
+    assert parse_room_name("dm3") == ("dm", 3, 0)
+    for name in ("g+1r2", "g1r-2", "dm+3", "dm-3"):
+        assert parse_room_name(name) is None, name
 
 
 def test_only_dm_members_can_ring(make_env):
