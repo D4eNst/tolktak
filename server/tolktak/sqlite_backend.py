@@ -92,8 +92,8 @@ async def checkpoint_loop(path: Path, every: float = 5) -> None:
         await asyncio.sleep(every)
         try:
             await asyncio.to_thread(_checkpoint, str(path))
-        except sqlite3.Error as e:
-            log.warning("sqlite checkpoint: %s", e)
+        except Exception:
+            log.exception("sqlite checkpoint")
 
 
 async def final_checkpoint(path: Path) -> None:

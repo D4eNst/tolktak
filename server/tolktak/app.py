@@ -108,7 +108,7 @@ def create_app(cfg: Config, server: Server | None = None, init_db: bool = True) 
             for t in tasks:
                 t.cancel()
             for t in tasks:
-                with contextlib.suppress(asyncio.CancelledError):
+                with contextlib.suppress(asyncio.CancelledError, Exception):
                     await t
             await srv.lk.close()
             if init_db:
