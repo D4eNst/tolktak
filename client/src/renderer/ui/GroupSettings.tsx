@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
-import type { FileMeta, Group } from '../api';
+import type { FileMeta, Group, Room, TextChannel } from '../api';
 import { t } from '../i18n';
-import { api, errorText, groupRole, me, online, toast, userName, users } from '../state';
+import { api, errorText, groupRole, me, online, toast, userName, users, view } from '../state';
 import { AddMembersDialog } from './Dialogs';
 import { Avatar, confirmDialog, GroupAvatar, Icon, Modal, promptDialog } from './common';
 import { memberMenu } from './Shell';
@@ -34,6 +34,45 @@ export function pickImage(): Promise<FileMeta | null> {
   });
 }
 
+export async function createTextChannel(g: Group) {
+  const tc = t().groups.channels;
+  const name = await promptDialog(tc.newTextChannel, { max: 40, ok: tc.create });
+  if (!name) return;
+  try {
+    const { channel } = await api().createTextChannel(g.id, name);
+    view.value = { kind: 'group', groupId: g.id, channelId: channel.id };
+  } catch (e) {
+    toast(errorText(e), 'error');
+  }
+}
+
+export async function renameTextChannel(ch: TextChannel) {
+  const name = await promptDialog(t().groups.channels.renameChannel, { initial: ch.name, max: 40 });
+  if (name) api().renameTextChannel(ch.id, name).catch((e) => toast(errorText(e), 'error'));
+}
+
+export async function deleteTextChannel(ch: TextChannel) {
+  const tc = t().groups.channels;
+  if (await confirmDialog(tc.deleteChannelConfirm(ch.name), { text: tc.deleteChannelText, ok: tc.delete, danger: true }))
+    api().deleteTextChannel(ch.id).catch((e) => toast(errorText(e), 'error'));
+}
+
+export async function createRoom(g: Group) {
+  const tc = t().groups.channels;
+  const name = await promptDialog(tc.newVoiceRoom, { ok: tc.create });
+  if (name) api().createRoom(g.id, name).catch((e) => toast(errorText(e), 'error'));
+}
+
+export async function renameRoom(r: Room) {
+  const name = await promptDialog(t().groups.channels.renameRoom, { initial: r.name });
+  if (name) api().renameRoom(r.id, name).catch((e) => toast(errorText(e), 'error'));
+}
+
+export async function deleteRoom(r: Room) {
+  const tc = t().groups.channels;
+  if (await confirmDialog(tc.deleteRoomConfirm(r.name), { ok: tc.delete, danger: true })) api().deleteRoom(r.id).catch((e) => toast(errorText(e), 'error'));
+}
+
 export function GroupSettingsDialog({ group, onClose }: { group: Group; onClose: () => void }) {
   const [tab, setTab] = useState<'main' | 'members' | 'channels'>('main');
   const [name, setName] = useState(group.name);
@@ -43,6 +82,7 @@ export function GroupSettingsDialog({ group, onClose }: { group: Group; onClose:
   const role = groupRole(group);
   const g = group;
   const ts = t().groups.settings;
+  const tc = t().groups.channels;
   const roleOrder = { owner: 0, mod: 1, member: 2 };
 
   const save = async (patch: { name?: string; avatar?: string; description?: string }) => {
@@ -174,13 +214,7 @@ export function GroupSettingsDialog({ group, onClose }: { group: Group; onClose:
             <>
               <div class="row between">
                 <b>{ts.textChannels}</b>
-                <button
-                  class="secondary"
-                  onClick={async () => {
-                    const n = await promptDialog(ts.newTextChannel, { max: 40, ok: ts.create });
-                    if (n) api().createTextChannel(g.id, n).catch((e) => toast(errorText(e), 'error'));
-                  }}
-                >
+                <button class="secondary" onClick={() => createTextChannel(g)}>
                   <Icon name="plus" size={16} /> {ts.channel}
                 </button>
               </div>
@@ -189,25 +223,11 @@ export function GroupSettingsDialog({ group, onClose }: { group: Group; onClose:
                   <div class="manage-row" key={ch.id}>
                     <Icon name="hash" size={16} />
                     <span class="ellipsis">{ch.name}</span>
-                    <button
-                      class="icon-btn tiny"
-                      aria-label={ts.rename}
-                      onClick={async () => {
-                        const n = await promptDialog(ts.renameChannel, { initial: ch.name, max: 40 });
-                        if (n) api().renameTextChannel(ch.id, n).catch((e) => toast(errorText(e), 'error'));
-                      }}
-                    >
+                    <button class="icon-btn tiny" aria-label={tc.rename} onClick={() => renameTextChannel(ch)}>
                       <Icon name="edit" size={14} />
                     </button>
                     {ch.id !== g.channel_id && (
-                      <button
-                        class="icon-btn tiny danger"
-                        aria-label={ts.delete}
-                        onClick={async () => {
-                          if (await confirmDialog(ts.deleteChannel(ch.name), { text: ts.deleteChannelText, ok: ts.delete, danger: true }))
-                            api().deleteTextChannel(ch.id).catch((e) => toast(errorText(e), 'error'));
-                        }}
-                      >
+                      <button class="icon-btn tiny danger" aria-label={tc.delete} onClick={() => deleteTextChannel(ch)}>
                         <Icon name="trash" size={14} />
                       </button>
                     )}
@@ -216,13 +236,7 @@ export function GroupSettingsDialog({ group, onClose }: { group: Group; onClose:
               </div>
               <div class="row between">
                 <b>{ts.voiceRooms}</b>
-                <button
-                  class="secondary"
-                  onClick={async () => {
-                    const n = await promptDialog(ts.newVoiceRoom, { ok: ts.create });
-                    if (n) api().createRoom(g.id, n).catch((e) => toast(errorText(e), 'error'));
-                  }}
-                >
+                <button class="secondary" onClick={() => createRoom(g)}>
                   <Icon name="plus" size={16} /> {ts.room}
                 </button>
               </div>
@@ -231,24 +245,11 @@ export function GroupSettingsDialog({ group, onClose }: { group: Group; onClose:
                   <div class="manage-row" key={r.id}>
                     <Icon name="speaker" size={16} />
                     <span class="ellipsis">{r.name}</span>
-                    <button
-                      class="icon-btn tiny"
-                      aria-label={ts.rename}
-                      onClick={async () => {
-                        const n = await promptDialog(ts.renameRoom, { initial: r.name });
-                        if (n) api().renameRoom(r.id, n).catch((e) => toast(errorText(e), 'error'));
-                      }}
-                    >
+                    <button class="icon-btn tiny" aria-label={tc.rename} onClick={() => renameRoom(r)}>
                       <Icon name="edit" size={14} />
                     </button>
                     {g.rooms.length > 1 && (
-                      <button
-                        class="icon-btn tiny danger"
-                        aria-label={ts.delete}
-                        onClick={async () => {
-                          if (await confirmDialog(ts.deleteRoom(r.name), { ok: ts.delete, danger: true })) api().deleteRoom(r.id).catch((e) => toast(errorText(e), 'error'));
-                        }}
-                      >
+                      <button class="icon-btn tiny danger" aria-label={tc.delete} onClick={() => deleteRoom(r)}>
                         <Icon name="trash" size={14} />
                       </button>
                     )}

@@ -32,8 +32,8 @@ import {
 import { call, deafened, joinVoice, leaveVoice, micOn, prefs, sharing, speaking, startCall, toggleDeafen, toggleMic } from '../voice';
 import { ChatView } from './Chat';
 import { AddMembersDialog, CreateGroupDialog } from './Dialogs';
-import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, openMenuAt, Popover, promptDialog } from './common';
-import { GroupSettingsDialog } from './GroupSettings';
+import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, openMenuAt, Popover } from './common';
+import { createRoom, createTextChannel, deleteRoom, deleteTextChannel, GroupSettingsDialog, renameRoom, renameTextChannel } from './GroupSettings';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { Stage } from './Stage';
 
@@ -288,27 +288,8 @@ function RoomItem({ g, r, mod }: { g: Group; r: Room; mod: boolean }) {
   const menu = (e: MouseEvent) =>
     mod &&
     openMenu(e, [
-      {
-        label: tx.rename,
-        icon: 'edit',
-        run: async () => {
-          const name = await promptDialog(tx.renameRoom, { initial: r.name });
-          if (name) api().renameRoom(r.id, name).catch((er) => toast(errorText(er), 'error'));
-        },
-      },
-      ...(g.rooms.length > 1
-        ? [
-            {
-              label: tx.deleteRoom,
-              icon: 'trash',
-              danger: true,
-              run: async () => {
-                if (await confirmDialog(tx.deleteRoomConfirm(r.name), { ok: tx.delete, danger: true }))
-                  api().deleteRoom(r.id).catch((er) => toast(errorText(er), 'error'));
-              },
-            } as MenuItem,
-          ]
-        : []),
+      { label: t().groups.channels.rename, icon: 'edit', run: () => renameRoom(r) },
+      ...(g.rooms.length > 1 ? [{ label: tx.deleteRoom, icon: 'trash', danger: true, run: () => deleteRoom(r) } as MenuItem] : []),
     ]);
   return (
     <div class={'room' + (members.length ? ' occupied' : '')}>
@@ -347,27 +328,8 @@ function TextChannelItem({ g, channel, active, mod }: { g: Group; channel: TextC
           ...muteMenuItems('c' + channel.id),
           ...(mod ? (['sep'] as MenuItem[]) : []),
           ...(!mod ? [] : [
-          {
-            label: tx.rename,
-            icon: 'edit',
-            run: async () => {
-              const name = await promptDialog(tx.renameChannel, { initial: channel.name, max: 40 });
-              if (name) api().renameTextChannel(channel.id, name).catch((er) => toast(errorText(er), 'error'));
-            },
-          },
-          ...(!main
-            ? [
-                {
-                  label: tx.deleteChannel,
-                  icon: 'trash',
-                  danger: true,
-                  run: async () => {
-                    if (await confirmDialog(tx.deleteChannelConfirm(channel.name), { text: tx.deleteChannelText, ok: tx.delete, danger: true }))
-                      api().deleteTextChannel(channel.id).catch((er) => toast(errorText(er), 'error'));
-                  },
-                } as MenuItem,
-              ]
-            : []),
+          { label: t().groups.channels.rename, icon: 'edit', run: () => renameTextChannel(channel) },
+          ...(!main ? [{ label: tx.deleteChannel, icon: 'trash', danger: true, run: () => deleteTextChannel(channel) } as MenuItem] : []),
           ]),
         ])
       }
@@ -395,34 +357,14 @@ export function groupMenuItems(g: Group, open: (d: 'settings' | 'add') => void):
   const role = groupRole(g);
   const mod = role !== 'member';
   const tx = t().shell.group;
+  const tc = t().groups.channels;
   return [
     ...(mod
       ? ([
           { label: tx.invite, icon: 'userPlus', run: () => open('add') },
           { label: tx.settings, icon: 'settings', run: () => open('settings') },
-          {
-            label: tx.newTextChannel,
-            icon: 'hash',
-            run: async () => {
-              const name = await promptDialog(tx.newTextChannel, { label: tx.name, max: 40, ok: tx.create });
-              if (name) {
-                try {
-                  const { channel } = await api().createTextChannel(g.id, name);
-                  view.value = { kind: 'group', groupId: g.id, channelId: channel.id };
-                } catch (e) {
-                  toast(errorText(e), 'error');
-                }
-              }
-            },
-          },
-          {
-            label: tx.newVoiceRoom,
-            icon: 'speaker',
-            run: async () => {
-              const name = await promptDialog(tx.newVoiceRoom, { ok: tx.create });
-              if (name) api().createRoom(g.id, name).catch((e) => toast(errorText(e), 'error'));
-            },
-          },
+          { label: tc.newTextChannel, icon: 'hash', run: () => createTextChannel(g) },
+          { label: tc.newVoiceRoom, icon: 'speaker', run: () => createRoom(g) },
           'sep',
         ] as MenuItem[])
       : []),
@@ -461,10 +403,9 @@ function GroupSidebar({ g }: { g: Group }) {
   const [dialog, setDialog] = useState<null | 'settings' | 'add'>(null);
   const activeChannel = v.kind === 'group' && !v.stage ? (v.channelId ?? g.channel_id) : 0;
   const tx = t().shell.group;
+  const tc = t().groups.channels;
   const textChannels = groupTextChannels(g);
   const menuItems = groupMenuItems(g, setDialog);
-  const addChannel = menuItems.find((x) => x !== 'sep' && x.icon === 'hash');
-  const addRoom = menuItems.find((x) => x !== 'sep' && x.icon === 'speaker');
   return (
     <aside class="sidebar">
       <header class={'side-head group-head' + (g.avatar ? ' with-cover' : '')}>
@@ -478,8 +419,8 @@ function GroupSidebar({ g }: { g: Group }) {
       <div class="side-list">
         <div class="side-label">
           <span>{tx.textChannels}</span>
-          {mod && addChannel && addChannel !== 'sep' && (
-            <button class="icon-btn tiny" onClick={addChannel.run} title={tx.newChannel} aria-label={tx.newTextChannel}>
+          {mod && (
+            <button class="icon-btn tiny" onClick={() => createTextChannel(g)} title={tc.newTextChannel} aria-label={tc.newTextChannel}>
               <Icon name="plus" size={14} />
             </button>
           )}
@@ -489,8 +430,8 @@ function GroupSidebar({ g }: { g: Group }) {
         ))}
         <div class="side-label">
           <span>{tx.voiceRooms}</span>
-          {mod && addRoom && addRoom !== 'sep' && (
-            <button class="icon-btn tiny" onClick={addRoom.run} title={tx.newRoom} aria-label={tx.createRoom}>
+          {mod && (
+            <button class="icon-btn tiny" onClick={() => createRoom(g)} title={tc.newVoiceRoom} aria-label={tc.newVoiceRoom}>
               <Icon name="plus" size={14} />
             </button>
           )}
