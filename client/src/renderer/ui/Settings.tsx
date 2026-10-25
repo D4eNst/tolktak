@@ -224,18 +224,24 @@ function CameraPreview() {
   const p = prefs.value;
   useEffect(() => {
     if (!on) return;
+    let alive = true;
     let stream: MediaStream | null = null;
     navigator.mediaDevices
       .getUserMedia({ video: { deviceId: p.cameraDevice ? { exact: p.cameraDevice } : undefined, width: p.cameraQuality === '1080p' ? 1920 : 1280 } })
       .then((s) => {
+        if (!alive) return s.getTracks().forEach((tr) => tr.stop());
         stream = s;
         if (ref.current) ref.current.srcObject = s;
       })
       .catch((e) => {
+        if (!alive) return;
         toast(t().settings.camera.unavailable(errorText(e)), 'error');
         setOn(false);
       });
-    return () => stream?.getTracks().forEach((tr) => tr.stop());
+    return () => {
+      alive = false;
+      stream?.getTracks().forEach((tr) => tr.stop());
+    };
   }, [on, p.cameraDevice, p.cameraQuality]);
   return (
     <div class={'cam-preview' + (p.mirrorCamera ? ' mirror' : '')}>
