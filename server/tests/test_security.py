@@ -5,7 +5,7 @@ import time
 import httpx
 from conftest import decode_jwt, post_webhook
 
-from tolktak import db
+from tolktak import db, realtime
 from tolktak.api import voice, ws
 from tolktak.api.files import remove_old_unused_files
 from tolktak.server import parse_room_name
@@ -94,6 +94,38 @@ def test_removed_member_is_kept_out_of_voice(make_env):
     assert post_webhook(e, json.dumps(joined).encode()) == 200
     assert b_id not in [m.user_id for m in e.server.hub.voice_members(room)]
     assert eventually(lambda: (room, str(b_id)) in removed), "a removed member who reconnects must be dropped"
+
+
+def test_outsider_cannot_announce_voice_presence(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    c, c_id = e.user("carol")
+    _, body = e.do("POST", "/api/v1/groups", a, {"name": "G", "members": []})
+    room = f"g{body['group']['id']}r{body['group']['rooms'][0]['id']}"
+    dm = e.do("POST", "/api/v1/dms", a, {"user_id": c_id})[1]["channel"]["id"]
+    with e.c.websocket_connect("/api/v1/ws") as member, e.c.websocket_connect("/api/v1/ws") as outsider:
+        member.send_text(json.dumps({"type": "auth", "token": a}))
+        assert json.loads(member.receive_text())["type"] == "hello"
+        outsider.send_text(json.dumps({"type": "auth", "token": c}))
+        outsider.send_text(json.dumps({"type": "voice.joined", "room": room}))
+        outsider.send_text(json.dumps({"type": "typing", "channel_id": dm}))
+        assert next_event_or_close(member) == ("typing", 0), "the group saw an outsider join its voice room"
+    assert e.server.hub.voice_members(room) == []
+
+
+def test_slow_websocket_is_dropped(make_env):
+    e = make_env()
+    a, a_id = e.user("alice")
+    with e.c.websocket_connect("/api/v1/ws") as sock:
+        sock.send_text(json.dumps({"type": "auth", "token": a}))
+        assert json.loads(sock.receive_text())["type"] == "hello"
+
+        def flood():
+            for _ in range(realtime.SEND_QUEUE + 1):
+                e.server.hub.send_to([a_id], realtime.event("ping"))
+
+        e.c.portal.call(flood)
+        assert next_event_or_close(sock) == ("closed", 4008)
 
 
 def test_reconcile_drops_non_members_from_voice(make_env):
