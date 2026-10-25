@@ -29,6 +29,9 @@ test('Electron client: login, voice, window share via own picker, H.264', async 
     });
     const w = await app.firstWindow();
     w.on('console', (m) => m.type() === 'error' && console.log(`[electron ${user}]`, m.text()));
+    // Both windows share one desktop, and the one without focus would hide video to save power.
+    await w.evaluate(() => localStorage.setItem('tolktak.voice', JSON.stringify({ backgroundSaver: false })));
+    await w.reload();
     await w.fill('input[name=server]', stack.api);
     await w.fill('input[name=username]', user);
     await w.fill('input[name=password]', 'password123');
