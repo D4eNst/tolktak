@@ -137,11 +137,14 @@ async def remove_old_unused_files(s: Server) -> None:
 
 
 async def remove_unused_files(s: Server, fids: list[str]) -> None:
-    for fid in await files.delete_unused(fids):
+    # The records go first, so nothing can attach a file while its copy is being deleted.
+    for f in await files.delete_unused(fids):
         try:
-            await s.files.delete(fid)
+            await s.files.delete(f["id"])
         except Exception as e:
-            log.warning("delete file id=%s: %r", fid, e)
+            log.warning("delete file id=%s: %r", f["id"], e)
+            # Back in place, so the daily cleanup tries again.
+            await files.create_file(f["uploader_id"], f)
 
 
 # Rendered by the client; everything else is downloaded.
