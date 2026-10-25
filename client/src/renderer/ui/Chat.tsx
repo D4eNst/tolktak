@@ -241,7 +241,7 @@ export function EmojiPicker({ onPick, onSticker, onClose, x, y }: { onPick: (e: 
               </div>
               {p.stickers.map((s) => (
                 <button key={s.id} class={'sticker-btn anim-' + s.anim} onClick={() => onSticker(s.id)}>
-                  {s.src ? <img src={s.src} alt="" /> : s.emoji}
+                  {s.emoji}
                 </button>
               ))}
             </>
@@ -412,7 +412,7 @@ const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, edi
         {m.deleted ? (
           <div class="msg-text deleted">{t().chat.message.deleted}</div>
         ) : st ? (
-          <div class={'sticker anim-' + st.anim}>{st.src ? <img src={st.src} alt="" /> : st.emoji}</div>
+          <div class={'sticker anim-' + st.anim}>{st.emoji}</div>
         ) : (
           m.text && (
             <div class={'msg-text' + (isJumbo(m.text) ? ' jumbo' : '')}>
@@ -426,7 +426,7 @@ const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, edi
       </div>
       {!m.deleted && !editing && (
         <div class="msg-actions">
-          {QUICK_REACTIONS.slice(0, 3).map((e) => (
+          {QUICK_REACTIONS.map((e) => (
             <button key={e} class="qr" onClick={() => react(m, e)} title={t().chat.message.reactWith(e)}>
               {e}
             </button>

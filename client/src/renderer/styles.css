@@ -85,14 +85,12 @@ body {
 
 input,
 textarea,
-select,
 button {
   font: inherit;
   color: inherit;
 }
 input,
-textarea,
-select {
+textarea {
   background: var(--bg-input);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
@@ -110,8 +108,7 @@ textarea:hover {
   border-color: rgba(255, 240, 255, 0.2);
 }
 input:focus,
-textarea:focus,
-select:focus {
+textarea:focus {
   border-color: var(--accent-line);
 }
 input::placeholder,
@@ -1724,11 +1721,6 @@ code {
   line-height: 1.1;
   display: inline-block;
   filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35));
-}
-.sticker img {
-  width: 140px;
-  height: 140px;
-  object-fit: contain;
 }
 .anim-bounce {
   animation: st-bounce 1.4s var(--ease) infinite;
