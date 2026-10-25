@@ -11,10 +11,11 @@ const INLINE =
 
 function Spoiler({ children }: { children: ComponentChildren }) {
   const [open, setOpen] = useState(false);
+  if (open) return <span class="spoiler open">{children}</span>;
   return (
-    <span class={'spoiler' + (open ? ' open' : '')} onClick={(e) => (e.stopPropagation(), setOpen(true))} title={open ? undefined : t().chat.markdown.spoiler}>
+    <button class="spoiler" onClick={(e) => (e.stopPropagation(), setOpen(true))} title={t().chat.markdown.spoiler}>
       {children}
-    </span>
+    </button>
   );
 }
 

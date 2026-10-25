@@ -1539,6 +1539,7 @@ code {
   background: #3a3342;
   color: transparent;
   border-radius: 4px;
+  text-align: start;
   cursor: pointer;
   transition:
     background 200ms,
@@ -1639,7 +1640,8 @@ code {
     transform 140ms var(--ease);
   z-index: 2;
 }
-.msg:hover .msg-actions {
+.msg:hover .msg-actions,
+.msg:has(:focus-visible) .msg-actions {
   opacity: 1;
   transform: none;
   pointer-events: auto;
@@ -1711,7 +1713,8 @@ code {
   opacity: 0;
   color: var(--muted);
 }
-.msg:hover .reaction.add {
+.msg:hover .reaction.add,
+.reaction.add:focus-visible {
   opacity: 1;
 }
 

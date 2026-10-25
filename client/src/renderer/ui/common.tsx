@@ -378,6 +378,7 @@ export function MenuHost() {
   const { ref, pos } = useClampedPosition(m?.x ?? 0, m?.y ?? 0, [m]);
   useEffect(() => {
     if (!m) return;
+    ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus();
     const close = () => (menuState.value = null);
     const k = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -398,7 +399,21 @@ export function MenuHost() {
   }, [m]);
   if (!m) return null;
   return (
-    <div class="menu pop-in" ref={ref} style={{ left: pos.x, top: pos.y }} onMouseDown={(e) => e.stopPropagation()} role="menu">
+    <div
+      class="menu pop-in"
+      ref={ref}
+      style={{ left: pos.x, top: pos.y }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role=menuitem]')];
+        const i = items.indexOf(document.activeElement as HTMLElement);
+        const next = ({ ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: -1 } as Record<string, number>)[e.key];
+        if (next === undefined) return;
+        e.preventDefault();
+        items.at(next % items.length)?.focus();
+      }}
+      role="menu"
+    >
       {m.header}
       {m.items.map((it, i) =>
         it === 'sep' ? (
