@@ -137,6 +137,7 @@ export function Modal({
   class?: string;
 }) {
   const [closing, setClosing] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
   const close = () => {
     if (closing) return;
     setClosing(true);
@@ -144,8 +145,10 @@ export function Modal({
   };
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
+      // Escape closes only the top layer: menus and popovers sit above modals, and a later modal above an earlier one.
+      const top = !document.querySelector('.menu, .popover') && ref.current === [...document.querySelectorAll('.modal')].at(-1);
+      if (e.key === 'Escape' && !e.defaultPrevented && top) {
+        e.preventDefault();
         close();
       }
     };
@@ -155,7 +158,7 @@ export function Modal({
   // In <body>: an ancestor with a transform would become the containing block.
   return createPortal(
     <div class={'modal-backdrop' + (closing ? ' closing' : '')} onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div class={'modal' + (wide ? ' wide' : '') + ' ' + cls} role="dialog" aria-label={title}>
+      <div class={'modal' + (wide ? ' wide' : '') + ' ' + cls} ref={ref} role="dialog" aria-label={title}>
         <header>
           <h2>{title}</h2>
           <button class="icon-btn" onClick={close} aria-label={t().common.close}>
@@ -308,6 +311,7 @@ export function Select<T extends string>({ value, options, onChange, label }: { 
             const i = options.findIndex((o) => o.value === value);
             if (e.key === 'ArrowDown') (e.preventDefault(), onChange(options[Math.min(i + 1, options.length - 1)].value));
             if (e.key === 'ArrowUp') (e.preventDefault(), onChange(options[Math.max(i - 1, 0)].value));
+            if (e.key === 'Escape' && open) (e.preventDefault(), setOpen(false));
           }}
           aria-haspopup="listbox"
           aria-label={label}
@@ -375,7 +379,12 @@ export function MenuHost() {
   useEffect(() => {
     if (!m) return;
     const close = () => (menuState.value = null);
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    const k = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      }
+    };
     window.addEventListener('mousedown', close);
     window.addEventListener('blur', close);
     window.addEventListener('keydown', k);
@@ -418,7 +427,12 @@ export function Popover({ x, y, onClose, children, class: cls = '' }: { x: numbe
   const { ref, pos } = useClampedPosition(x, y, [x, y]);
   useEffect(() => {
     const off = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && onClose();
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const k = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('.menu')) {
+        e.preventDefault();
+        onClose();
+      }
+    };
     setTimeout(() => window.addEventListener('mousedown', off));
     window.addEventListener('keydown', k);
     return () => {
