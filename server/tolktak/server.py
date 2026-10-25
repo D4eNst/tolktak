@@ -84,6 +84,20 @@ class Server:
             return xff.rsplit(",", 1)[-1].strip()
         return request.client.host if request.client else ""
 
+    def livekit_url(self, request: Request) -> str:
+        if self.cfg.livekit_public_url:
+            return self.cfg.livekit_public_url
+        h = request.headers
+        scheme, host = request.url.scheme, h.get("host", "")
+        if self.cfg.trust_proxy:
+            scheme = h.get("x-forwarded-proto", scheme).split(",")[0].strip()
+            host = h.get("x-forwarded-host", host).split(",")[0].strip()
+        if scheme == "https":
+            # The reverse proxy sends /rtc on the same domain to LiveKit.
+            return f"wss://{host}"
+        hostname = host if host.endswith("]") else host.rsplit(":", 1)[0]
+        return f"ws://{hostname}:7880"
+
     def limit(self, key: str, burst: float, per_minute: float, message: str) -> None:
         if not self.rl.allow(key, burst, per_minute):
             raise ApiError(429, "rate_limited", message)

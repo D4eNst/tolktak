@@ -12,7 +12,7 @@ class Config:
     server_name: str = "TolkTak"
     # "open", "invite" or "closed". The first account can always be created.
     registration: str = "invite"
-    # ws(s):// URL clients use to reach the SFU.
+    # ws(s):// URL clients use to reach the SFU; derived from each request when empty.
     livekit_public_url: str = ""
     livekit_internal_url: str = "http://127.0.0.1:7880"
     livekit_api_key: str = ""
@@ -54,9 +54,6 @@ def from_env() -> Config:
     reg = _env("TOLKTAK_REGISTRATION", "invite")
     if reg not in ("open", "invite", "closed"):
         raise ConfigError(f"TOLKTAK_REGISTRATION must be open, invite or closed, got {reg!r}")
-    public_lk = _env("LIVEKIT_PUBLIC_URL")
-    if not public_lk:
-        raise ConfigError("LIVEKIT_PUBLIC_URL is required (ws:// or wss:// URL clients use to reach LiveKit)")
     try:
         max_mb = int(_env("TOLKTAK_MAX_UPLOAD_MB", "50"))
     except ValueError:
@@ -76,7 +73,7 @@ def from_env() -> Config:
     return Config(
         server_name=_env("TOLKTAK_SERVER_NAME", "TolkTak"),
         registration=reg,
-        livekit_public_url=public_lk,
+        livekit_public_url=_env("LIVEKIT_PUBLIC_URL"),
         livekit_internal_url=_env("LIVEKIT_INTERNAL_URL", "http://127.0.0.1:7880").rstrip("/"),
         livekit_api_key=key,
         livekit_api_secret=secret,
