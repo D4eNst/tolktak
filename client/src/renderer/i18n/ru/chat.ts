@@ -7,8 +7,6 @@ const ru: typeof en = {
   open: 'Открыть',
   copyLink: 'Копировать ссылку',
   linkCopied: 'Ссылка скопирована',
-  copied: 'Скопировано',
-  copyFailed: 'Не удалось скопировать',
   audio: { pause: 'Пауза', play: 'Слушать' },
   emoji: {
     recent: 'Недавние',

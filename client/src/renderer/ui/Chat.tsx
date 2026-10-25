@@ -33,7 +33,7 @@ import {
 import { Avatar, confirmDialog, dateFormats, dayLabel, Icon, type MenuItem, openMenu, Popover, sizeLabel, timeLabel } from './common';
 import { EMOJI_GROUPS, emojiGroupName, findSticker, QUICK_REACTIONS, recentEmoji, rememberEmoji, STICKER_PACKS, STICKER_RE, stickerPackName } from './emoji';
 import { isJumbo, Markdown } from './markdown';
-import { openProfile } from './Profile';
+import { copyText, openProfile } from './Profile';
 
 const MAX_FILES = 10;
 const MAX_LENGTH = 4000;
@@ -173,7 +173,7 @@ function Attachments({ files }: { files: FileMeta[] }) {
                   openMenu(e, [
                     { label: t().chat.open, icon: 'maximize', run: () => (lightbox.value = { images, index: i }) },
                     { label: t().chat.download, icon: 'download', run: () => download(f) },
-                    { label: t().chat.copyLink, icon: 'link', run: () => copy(fileUrl(f.id, f.name), t().chat.linkCopied) },
+                    { label: t().chat.copyLink, icon: 'link', run: () => copyText(fileUrl(f.id, f.name), t().chat.linkCopied) },
                   ])
                 }
               >
@@ -261,13 +261,6 @@ export function EmojiPicker({ onPick, onSticker, onClose, x, y }: { onPick: (e: 
       )}
     </Popover>
   );
-}
-
-function copy(text: string, done = t().chat.copied) {
-  bridge
-    .copy(text)
-    .then(() => toast(done))
-    .catch(() => toast(t().chat.copyFailed, 'error'));
 }
 
 async function react(m: Message, emoji: string) {
@@ -369,7 +362,7 @@ const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, edi
       { label: tm.quote, icon: 'quote', run: () => quote(m) },
       { label: tm.reaction, icon: 'smilePlus', run: () => setPicker({ x: e.clientX, y: e.clientY }) },
       'sep',
-      ...(m.text && !sticker ? [{ label: sel ? tm.copySelection : tm.copyText, icon: 'copy', run: () => copy(sel || m.text) } as MenuItem] : []),
+      ...(m.text && !sticker ? [{ label: sel ? tm.copySelection : tm.copyText, icon: 'copy', run: () => copyText(sel || m.text) } as MenuItem] : []),
       ...(canPin ? [{ label: m.pinned_at ? tm.unpin : tm.pin, icon: 'pin', run: pin } as MenuItem] : []),
       ...(mine && !sticker ? [{ label: tm.edit, icon: 'edit', run: () => setEditing(m.id) } as MenuItem] : []),
       ...(mine || canDelete ? ['sep' as const, { label: tm.delete, icon: 'trash', danger: true, run: del } as MenuItem] : []),

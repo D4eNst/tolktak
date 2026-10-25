@@ -4,8 +4,6 @@ export default {
   open: 'Open',
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
-  copied: 'Copied',
-  copyFailed: 'Could not copy',
   audio: { pause: 'Pause', play: 'Play' },
   emoji: {
     recent: 'Recent',
