@@ -467,6 +467,11 @@ class RowBoundary extends Component<{ children: ComponentChildren }, { failed?: 
 type Upload = { key: number; name: string; size: number; preview?: string; progress: number; file?: FileMeta; error?: string; abort: AbortController };
 let uploadSeq = 0;
 
+function cancelUpload(u: Upload) {
+  u.abort.abort();
+  if (u.preview) URL.revokeObjectURL(u.preview);
+}
+
 function imageSize(blob: Blob): Promise<{ w: number; h: number } | undefined> {
   if (!blob.type.startsWith('image/')) return Promise.resolve(undefined);
   return createImageBitmap(blob)
@@ -558,6 +563,8 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
   const text = edit ? editText : draft;
   const setText = (v: string) => (edit ? setEditText(v) : setDraft(channelId, v));
   const [uploads, setUploads] = useState<Upload[]>([]);
+  const uploadsRef = useRef(uploads);
+  uploadsRef.current = uploads;
   const [emoji, setEmoji] = useState<{ x: number; y: number } | null>(null);
   const [mention, setMention] = useState<{ q: string; at: number; idx: number } | null>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
@@ -570,6 +577,8 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
   useEffect(() => {
     setUploads([]);
     ta.current?.focus();
+    // Unsent uploads belong to the channel being left.
+    return () => uploadsRef.current.forEach(cancelUpload);
   }, [channelId]);
   useEffect(() => {
     if (reply) ta.current?.focus();
@@ -633,8 +642,7 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
     }
   };
   const removeUpload = (u: Upload) => {
-    u.abort.abort();
-    if (u.preview) URL.revokeObjectURL(u.preview);
+    cancelUpload(u);
     setUploads((list) => list.filter((x) => x.key !== u.key));
   };
 
