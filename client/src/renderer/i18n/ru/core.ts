@@ -4,6 +4,7 @@ const ru: typeof en = {
   preview: {
     deleted: 'сообщение удалено',
     sticker: 'Стикер',
+    code: '[код]',
     photo: 'Фото',
     photos: (n) => `Фото (${n})`,
     voiceMessage: 'Голосовое сообщение',
