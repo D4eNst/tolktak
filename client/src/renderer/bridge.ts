@@ -36,6 +36,7 @@ type Bridge = {
   setTitle(t: string): Promise<void>;
   setBadge(count: number, dataUrl: string): Promise<void>;
   copy(text: string): Promise<void>;
+  download(url: string): Promise<void>;
   mediaAccess(kind: MediaKind, ask: boolean): Promise<MediaAccess>;
   openPrivacySettings(kind: MediaKind): Promise<void>;
   onShortcut(fn: (name: string) => void): () => void;
@@ -100,6 +101,14 @@ const browserFallback: Bridge = {
   async setBadge() {},
   async copy(text) {
     await navigator.clipboard.writeText(text);
+  },
+  async download(url) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   },
   async mediaAccess() {
     return 'granted'; // the browser asks on first use

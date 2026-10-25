@@ -75,12 +75,7 @@ export function LightboxHost() {
 }
 
 function download(f: FileMeta) {
-  const a = document.createElement('a');
-  a.href = fileUrl(f.id, f.name);
-  a.download = f.name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  bridge.download(fileUrl(f.id, f.name));
 }
 
 function AudioPlayer({ f }: { f: FileMeta }) {
