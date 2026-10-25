@@ -4,6 +4,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ['*']
@@ -11,10 +13,14 @@ updates:
     directory: /server
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: docker-compose
     directory: /deploy
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       # A new PostgreSQL major version cannot open the existing data.
       - dependency-name: postgres
@@ -23,6 +29,8 @@ updates:
     directories: [/client, /website]
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       npm:
         update-types: [minor, patch]
@@ -30,6 +38,8 @@ updates:
     directory: /server
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       python:
         update-types: [minor, patch]
