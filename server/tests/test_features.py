@@ -113,3 +113,19 @@ def test_wav_and_ogg_play_inline(make_env):
         assert body["file"]["mime"] == mime
         r = e.c.get(f"/api/v1/files/{body['file']['id']}")
         assert r.headers["content-type"] == mime and r.headers["content-disposition"].startswith("inline")
+
+
+def test_audio_files_get_their_type_from_the_name(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    for name, data, mime in (
+        ("song.mp3", b"\xff\xfb\x90\x00" + bytes(32), "audio/mpeg"),
+        ("song.flac", b"fLaC\x00\x00\x00\x22" + bytes(32), "audio/flac"),
+        ("song.aac", b"\xff\xf1\x50\x80" + bytes(32), "audio/aac"),
+        ("song.m4a", b"\x00\x00\x00\x1cftypM4A \x00\x00\x00\x00M4A mp42isom" + bytes(32), "audio/mp4"),
+        ("song.wav", b"RF64\xff\xff\xff\xffWAVEds64" + bytes(32), "audio/wav"),
+    ):
+        _, body = e.upload(a, name, data)
+        assert body["file"]["mime"] == mime, name
+        r = e.c.get(f"/api/v1/files/{body['file']['id']}")
+        assert r.headers["content-type"] == mime and r.headers["content-disposition"].startswith("inline")

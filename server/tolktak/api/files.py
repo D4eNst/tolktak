@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+import mimetypes
 import os
 import posixpath
 import re
@@ -14,7 +15,7 @@ from fastapi.responses import PlainTextResponse
 
 from ..errors import ApiError, NotFound
 from ..server import Server, current_user
-from ..sniff import SNIFF_LEN, detect_content_type, image_size, type_by_extension
+from ..sniff import SNIFF_LEN, detect_content_type, image_size
 from ..store import files, now
 from .common import json_response, query_int, server
 
@@ -24,6 +25,9 @@ log = logging.getLogger("tolktak")
 User = Annotated[dict, Depends(current_user)]
 
 MAX_SIDE = 16384
+
+# The built-in table only, the same on every host: mimetypes.guess_type also reads files such as /etc/mime.types.
+_MIME_TYPES = mimetypes.MimeTypes()
 
 # Control and text direction characters: an override shows "a\u202egpj.exe" as "aexe.jpg".
 _HIDDEN = re.compile("[\x00-\x1f\x7f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
@@ -87,15 +91,22 @@ async def receive_file(request: Request, s: Server, me: int):
             raise ApiError(400, "empty_file", "File is empty")
         # The content is trusted over the client.
         ctype = detect_content_type(head)
-        if ctype == "application/octet-stream" or ctype.startswith("text/plain"):
-            if by_ext := type_by_extension(posixpath.splitext(name)[1]):
-                ctype = by_ext
+        by_name = _MIME_TYPES.guess_file_type(name)[0]
+        if by_name and (ctype == "application/octet-stream" or ctype.startswith("text/plain")):
+            ctype = by_name
         ctype = ctype.split(";")[0].strip()
-        # Sniffing names WAV and Ogg files by container; players and INLINE_TYPES expect audio types.
-        ctype = {"audio/wave": "audio/wav", "application/ogg": "audio/ogg"}.get(ctype, ctype)
+        # Sniffing and mimetypes give WAV and Ogg other names; players and INLINE_TYPES expect these.
+        ctype = {
+            "audio/wave": "audio/wav",
+            "audio/vnd.wave": "audio/wav",
+            "application/ogg": "audio/ogg",
+        }.get(ctype, ctype)
         # WebM sniffs as video, but a client voice message is audio-only WebM.
         if ctype == "video/webm" and request.headers.get("content-type", "").startswith("audio/webm"):
             ctype = "audio/webm"
+        # So does MP4, but an M4A file is audio.
+        if ctype == "video/mp4" and by_name == "audio/mp4":
+            ctype = by_name
         meta = {"id": fid, "name": name, "mime": ctype, "size": size}
         if ctype.startswith("image/"):
             w, h = image_size(str(path), ctype)

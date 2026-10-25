@@ -97,31 +97,6 @@ def detect_content_type(data: bytes) -> str:
     return "text/plain; charset=utf-8"
 
 
-# Go's built-in extension table, used when sniffing finds nothing specific.
-_BY_EXT = {
-    ".avif": "image/avif",
-    ".css": "text/css; charset=utf-8",
-    ".gif": "image/gif",
-    ".htm": "text/html; charset=utf-8",
-    ".html": "text/html; charset=utf-8",
-    ".jpeg": "image/jpeg",
-    ".jpg": "image/jpeg",
-    ".js": "text/javascript; charset=utf-8",
-    ".json": "application/json",
-    ".mjs": "text/javascript; charset=utf-8",
-    ".pdf": "application/pdf",
-    ".png": "image/png",
-    ".svg": "image/svg+xml",
-    ".wasm": "application/wasm",
-    ".webp": "image/webp",
-    ".xml": "text/xml; charset=utf-8",
-}
-
-
-def type_by_extension(ext: str) -> str:
-    return _BY_EXT.get(ext.lower(), "")
-
-
 def image_size(path: str, ctype: str) -> tuple[int, int]:
     try:
         with open(path, "rb") as f:
