@@ -15,7 +15,7 @@
 
 [Скачать пример конфигурации](https://tolktak.d4enst.ru/docs/nginx.conf.example)
 
-Тот же файл находится в репозитории: `deploy/nginx.conf.example`. Он содержит оба пути, настройки WebSocket и лимит загрузки файлов.
+Тот же файл находится в репозитории: `deploy/nginx.conf.example`. Он содержит оба пути, настройки WebSocket и лимиты тела запроса, а также закрывает вебхук.
 
 1. Добавить содержимое примера в конфигурацию nginx, например в `/etc/nginx/conf.d/tolktak.conf`.
 2. Заменить домен, локальные порты и пути к [сертификатам](certificates.md).
@@ -32,10 +32,12 @@ sudo nginx -t && sudo systemctl reload nginx
 | Параметр | Назначение |
 |---|---|
 | `Upgrade`, `Connection` | Передача WebSocket для событий чата и подключения к звонкам. |
-| `client_max_body_size` | Лимит тела запроса. В примере `60m` при лимите файла TolkTak в 50 МБ. |
+| `client_max_body_size` | Лимит тела запроса: `60m` для загрузок в `/api/v1/files` при лимите файла TolkTak в 50 МБ, `1m` для остального. |
 | `proxy_read_timeout` | Ожидание данных от сервиса: 120 секунд для TolkTak и 3600 для LiveKit в примере. |
 | `X-Forwarded-For` | Адрес участника для ограничения частоты запросов. TolkTak читает последний адрес в заголовке, поэтому прокси должен задавать его или дописывать в конец. В примере это адрес, который видит nginx. |
 | `X-Forwarded-Proto` | `https`: по нему сервер отдаёт приложению адрес LiveKit с `wss://`. |
+| `Strict-Transport-Security` | Браузеры открывают домен только по HTTPS. |
+| `/api/v1/livekit/webhook` | Закрыт снаружи: LiveKit обращается к нему по локальному адресу. Если LiveKit работает в другом месте, например в LiveKit Cloud, уберите этот блок. |
 
 При изменении `TOLKTAK_MAX_UPLOAD_MB` лимит nginx должен оставаться выше с учётом служебных данных запроса. Превышение лимита возвращает HTTP 413. Передача WebSocket описана в [документации nginx](https://nginx.org/ru/docs/http/websocket.html).
 
@@ -43,6 +45,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ```
 chat.example.com {
+    header Strict-Transport-Security max-age=31536000
     reverse_proxy /rtc* 127.0.0.1:7880
     reverse_proxy 127.0.0.1:8080
 }
