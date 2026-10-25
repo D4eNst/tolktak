@@ -4,9 +4,9 @@ from tortoise.transactions import in_transaction
 from .. import db
 from ..db import CONN
 from ..errors import Conflict, Forbidden, NotFound
-from ..models import Channel, ChannelMember, File, Message, Reaction, TextChannel, User
+from ..models import Channel, ChannelMember, File, Message, MessageFile, Reaction, TextChannel, User
 from . import now
-from .files import files_by_ids
+from .files import file_dict
 
 
 def channel_summary(cid: int, kind: str, peer_id: int = 0, group_id: int = 0, last_message: dict | None = None,
@@ -100,16 +100,12 @@ async def mark_read(cid: int, uid: int, message_id: int) -> None:
     )
 
 
-def _split(ids: str) -> list[str]:
-    return ids.split(",") if ids else []
-
-
-_COLUMNS = "id, channel_id, author_id, nonce, text, created_at, edited_at, deleted, reply_to, attachments, pinned_at"
+_COLUMNS = "id, channel_id, author_id, nonce, text, created_at, edited_at, deleted, reply_to, pinned_at"
 
 
 def _message(m: dict) -> dict:
     deleted = m["deleted"] == 1
-    out = {
+    return {
         "id": m["id"],
         "channel_id": m["channel_id"],
         "author_id": m["author_id"],
@@ -123,19 +119,19 @@ def _message(m: dict) -> dict:
         "reactions": [],
         "pinned_at": None if deleted else m["pinned_at"],
     }
-    out["_files"] = [] if deleted else _split(m["attachments"])
-    return out
 
 
 async def _hydrate(ms: list[dict]) -> list[dict]:
     if not ms:
         return ms
-    files = await files_by_ids([f for m in ms for f in m["_files"]])
-    by_id = {}
-    for m in ms:
-        m["attachments"] = [files[f] for f in m.pop("_files") if f in files]
-        by_id[m["id"]] = m
+    by_id = {m["id"]: m for m in ms}
     ids = list(by_id)
+    for r in await db.rows(
+        "SELECT mf.message_id, f.id, f.name, f.mime, f.size, f.width, f.height FROM message_files mf "
+        f"JOIN files f ON f.id = mf.file_id WHERE mf.message_id IN ({db.marks(len(ids))}) ORDER BY mf.position",
+        ids,
+    ):
+        by_id[r["message_id"]]["attachments"].append(file_dict(r))
     reactions = await db.rows(
         f"SELECT message_id, emoji, user_id FROM reactions WHERE message_id IN ({db.marks(len(ids))}) "
         "ORDER BY created_at",
@@ -156,7 +152,9 @@ async def _hydrate(ms: list[dict]) -> list[dict]:
     if reply_ids:
         previews = {}
         for r in await db.rows(
-            f"SELECT id, author_id, text, deleted, attachments FROM messages WHERE id IN ({db.marks(len(reply_ids))})",
+            "SELECT id, author_id, text, deleted, "
+            "(SELECT COUNT(*) FROM message_files WHERE message_id = messages.id) AS attachments "
+            f"FROM messages WHERE id IN ({db.marks(len(reply_ids))})",
             reply_ids,
         ):
             deleted = r["deleted"] == 1
@@ -170,7 +168,7 @@ async def _hydrate(ms: list[dict]) -> list[dict]:
                 "author_id": r["author_id"],
                 "text": text,
                 "deleted": deleted,
-                "attachments": 0 if deleted else len(_split(r["attachments"])),
+                "attachments": 0 if deleted else r["attachments"],
             }
         for m in ms:
             if m["reply_to"] is not None and m["reply_to"] in previews:
@@ -219,10 +217,15 @@ async def create_message(cid: int, author: int, nonce: str, text: str, reply_to:
                         raise Forbidden
                 m = await Message.create(
                     channel_id=cid, author_id=author, nonce=nonce, text=text, created_at=now(), reply_to=reply,
-                    attachments=",".join(attachments), using_db=tx,
+                    using_db=tx,
                 )  # fmt: skip
                 mid = m.id
                 created = True
+                if attachments:
+                    await MessageFile.bulk_create(
+                        [MessageFile(message_id=mid, file_id=f, position=i) for i, f in enumerate(attachments)],
+                        using_db=tx,
+                    )
                 await db.execute(
                     "UPDATE channel_members SET last_read_id = ? WHERE channel_id = ? AND user_id = ?",
                     [mid, cid, author],
@@ -262,9 +265,11 @@ async def search_messages(cid: int, q: str, limit: int) -> list[dict]:
 
 async def attachments_in(cids: list[int]) -> list[str]:
     found = await db.rows(
-        f"SELECT attachments FROM messages WHERE channel_id IN ({db.marks(len(cids))}) AND attachments != ''", cids
+        "SELECT mf.file_id FROM message_files mf JOIN messages m ON m.id = mf.message_id "
+        f"WHERE m.channel_id IN ({db.marks(len(cids))})",
+        cids,
     )
-    return [f for r in found for f in _split(r["attachments"])]
+    return [r["file_id"] for r in found]
 
 
 async def pinned_messages(cid: int) -> list[dict]:
@@ -281,10 +286,12 @@ async def edit_message(mid: int, author: int, text: str) -> dict:
 
 
 async def delete_message(mid: int) -> dict:
-    n = await Message.filter(id=mid, deleted=0).update(text="", attachments="", pinned_at=None, deleted=1)
-    if n == 0:
-        raise NotFound
-    await db.execute("DELETE FROM reactions WHERE message_id = ?", [mid])
+    async with in_transaction(CONN) as tx:
+        n = await Message.filter(id=mid, deleted=0).using_db(tx).update(text="", pinned_at=None, deleted=1)
+        if n == 0:
+            raise NotFound
+        await db.execute("DELETE FROM message_files WHERE message_id = ?", [mid], tx)
+        await db.execute("DELETE FROM reactions WHERE message_id = ?", [mid], tx)
     return await message_by_id(mid)
 
 

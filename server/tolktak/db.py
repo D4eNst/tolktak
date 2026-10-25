@@ -254,12 +254,45 @@ POSTGRES.append("")
 SQLITE.append("CREATE INDEX files_uploader ON files(uploader_id)")
 POSTGRES.append("CREATE INDEX files_uploader ON files(uploader_id)")
 
+# 5: attachments in their own table, so the messages that use a file are found by index.
+SQLITE.append(
+    """
+    CREATE TABLE message_files (
+        message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+        file_id    TEXT NOT NULL,
+        position   INTEGER NOT NULL,
+        PRIMARY KEY (message_id, position)
+    );
+    CREATE INDEX message_files_file ON message_files(file_id);
+    INSERT INTO message_files (message_id, file_id, position)
+        SELECT m.id, f.value, f.key FROM messages m, json_each('["' || replace(m.attachments, ',', '","') || '"]') f
+        WHERE m.attachments != '' AND m.deleted = 0;
+    ALTER TABLE messages DROP COLUMN attachments;
+    """
+)
+POSTGRES.append(
+    """
+    CREATE TABLE message_files (
+        message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+        file_id    TEXT NOT NULL,
+        position   INTEGER NOT NULL,
+        PRIMARY KEY (message_id, position)
+    );
+    CREATE INDEX message_files_file ON message_files(file_id);
+    INSERT INTO message_files (message_id, file_id, position)
+        SELECT m.id, f.file_id, f.n - 1
+        FROM messages m, unnest(string_to_array(m.attachments, ',')) WITH ORDINALITY AS f(file_id, n)
+        WHERE m.attachments != '' AND m.deleted = 0;
+    ALTER TABLE messages DROP COLUMN attachments;
+    """
+)
+
 assert len(SQLITE) == len(POSTGRES)
 
 # Tables in foreign-key order, for copying between databases.
 TABLES = [
     "users", "sessions", "invites", "channels", "channel_members", "groups", "group_members",
-    "rooms", "messages", "files", "reactions", "text_channels",
+    "rooms", "messages", "message_files", "files", "reactions", "text_channels",
 ]  # fmt: skip
 
 

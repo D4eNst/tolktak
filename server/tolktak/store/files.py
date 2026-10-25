@@ -51,52 +51,21 @@ async def file_by_id(fid: str) -> tuple[dict, int]:
     return file_dict(f), f.uploader_id
 
 
+_UNUSED = (
+    "NOT EXISTS (SELECT 1 FROM message_files WHERE file_id = files.id) "
+    "AND id NOT IN (SELECT avatar FROM users UNION SELECT avatar FROM groups)"
+)
+
+
 async def delete_unused(fids: list[str]) -> list[str]:
     """Deletes the records of files no message, profile or group uses and returns their ids."""
     if not fids:
         return []
     fids = list(set(fids))
-    m = db.marks(len(fids))
-    found = await db.rows(f"SELECT id, uploader_id FROM files WHERE id IN ({m})", fids)
-    if not found:
-        return []
-    used = {
-        r["avatar"]
-        for r in await db.rows(
-            f"SELECT avatar FROM users WHERE avatar IN ({m}) UNION SELECT avatar FROM groups WHERE avatar IN ({m})",
-            fids + fids,
-        )
-    }
-    # Only the uploader can attach a file, so only their messages are searched.
-    uploaders = list({r["uploader_id"] for r in found})
-    for r in await db.rows(
-        f"SELECT attachments FROM messages WHERE author_id IN ({db.marks(len(uploaders))}) "
-        "AND deleted = 0 AND attachments != ''",
-        uploaders,
-    ):
-        used.update(r["attachments"].split(","))
-    unused = [r["id"] for r in found if r["id"] not in used]
-    if unused:
-        await File.filter(id__in=unused).delete()
-    return unused
+    found = await db.rows(f"DELETE FROM files WHERE id IN ({db.marks(len(fids))}) AND {_UNUSED} RETURNING id", fids)
+    return [r["id"] for r in found]
 
 
 async def unused_before(t: int) -> list[str]:
     """Ids of files uploaded before t that no message, profile or group uses."""
-    found = {r["id"] for r in await db.rows("SELECT id FROM files WHERE created_at < ?", [t])}
-    if found:
-        for r in await db.rows("SELECT avatar FROM users UNION SELECT avatar FROM groups"):
-            found.discard(r["avatar"])
-        for r in await db.rows("SELECT attachments FROM messages WHERE deleted = 0 AND attachments != ''"):
-            found.difference_update(r["attachments"].split(","))
-    return sorted(found)
-
-
-async def files_by_ids(ids: list[str]) -> dict[str, dict]:
-    if not ids:
-        return {}
-    ids = list(set(ids))
-    found = await db.rows(
-        f"SELECT id, name, mime, size, width, height FROM files WHERE id IN ({db.marks(len(ids))})", ids
-    )
-    return {f["id"]: file_dict(f) for f in found}
+    return [r["id"] for r in await db.rows(f"SELECT id FROM files WHERE created_at < ? AND {_UNUSED}", [t])]
