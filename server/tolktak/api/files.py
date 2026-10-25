@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import logging
 import os
 import posixpath
 import re
@@ -9,7 +10,7 @@ from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import PlainTextResponse
 
 from ..errors import ApiError, NotFound
 from ..server import Server, current_user
@@ -18,6 +19,7 @@ from ..store import files, now
 from .common import json_response, query_int, server
 
 router = APIRouter(prefix="/api/v1")
+log = logging.getLogger("tolktak")
 
 User = Annotated[dict, Depends(current_user)]
 
@@ -60,9 +62,10 @@ async def receive_file(request: Request, s: Server, me: int):
         if declared > room:
             raise full
     name = clean_name(request.query_params.get("name", ""))
-    os.makedirs(s.cfg.files_dir, mode=0o750, exist_ok=True)
+    uploads = s.cfg.data_dir / "uploads"
+    os.makedirs(uploads, mode=0o750, exist_ok=True)
     fid = files.new_file_id()
-    path = s.cfg.files_dir / fid
+    path = uploads / fid
     head = b""
     size = 0
     ok = False
@@ -105,6 +108,7 @@ async def receive_file(request: Request, s: Server, me: int):
                 meta["width"] = w
             if h:
                 meta["height"] = h
+        await s.files.save(fid, path)
         await files.create_file(me, meta)
         ok = True
     finally:
@@ -123,8 +127,10 @@ async def remove_old_unused_files(s: Server) -> None:
 
 async def remove_unused_files(s: Server, fids: list[str]) -> None:
     for fid in await files.delete_unused(fids):
-        with contextlib.suppress(OSError):
-            os.remove(s.cfg.files_dir / fid)
+        try:
+            await s.files.delete(fid)
+        except Exception as e:
+            log.warning("delete file id=%s: %r", fid, e)
 
 
 # Rendered by the client; everything else is downloaded.
@@ -145,20 +151,14 @@ async def download(request: Request, id: str):
         meta, _ = await files.file_by_id(id)
     except NotFound:
         return not_found
-    path = server(request).cfg.files_dir / id
-    if not path.is_file():
-        return not_found
     ctype = meta["mime"]
     disp = "inline" if ctype in INLINE_TYPES else "attachment"
     if disp == "attachment":
         ctype = "application/octet-stream"
-    return FileResponse(
-        path,
-        media_type=ctype,
-        headers={
-            "Content-Disposition": f"{disp}; filename*=UTF-8''{quote(meta['name'], safe='')}",
-            "Cache-Control": "private, max-age=31536000, immutable",
-            # Uploaded content never runs as a page of this origin.
-            "Content-Security-Policy": "sandbox; default-src 'none'",
-        },
-    )
+    headers = {
+        "Content-Disposition": f"{disp}; filename*=UTF-8''{quote(meta['name'], safe='')}",
+        "Cache-Control": "private, max-age=31536000, immutable",
+        # Uploaded content never runs as a page of this origin.
+        "Content-Security-Policy": "sandbox; default-src 'none'",
+    }
+    return await server(request).files.response(id, request, meta["size"], ctype, headers) or not_found

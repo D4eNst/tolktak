@@ -12,6 +12,7 @@ dependencies = [
     "argon2-cffi>=25.1",
     "httpx>=0.28,<1",
     "orjson>=3.13",
+    "obstore>=0.12,<1",
 ]
 
 [project.scripts]

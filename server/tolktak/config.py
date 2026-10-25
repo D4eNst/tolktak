@@ -23,6 +23,12 @@ class Config:
     data_dir: Path = Path("data")
     # SQLite in the data directory unless a postgres:// URL is given.
     database_url: str = ""
+    # Files go to this S3 bucket instead of the data directory when it is set.
+    s3_bucket: str = ""
+    s3_endpoint: str = ""
+    s3_region: str = ""
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
     max_upload_bytes: int = 50 << 20
     # Total size of the files one user may keep; 0 for no limit.
     user_quota_bytes: int = 2048 << 20
@@ -54,6 +60,9 @@ def from_env() -> Config:
     reg = _env("TOLKTAK_REGISTRATION", "invite")
     if reg not in ("open", "invite", "closed"):
         raise ConfigError(f"TOLKTAK_REGISTRATION must be open, invite or closed, got {reg!r}")
+    bucket = _env("TOLKTAK_S3_BUCKET")
+    if bucket and not (_env("TOLKTAK_S3_ACCESS_KEY") and _env("TOLKTAK_S3_SECRET_KEY")):
+        raise ConfigError("TOLKTAK_S3_ACCESS_KEY and TOLKTAK_S3_SECRET_KEY are required with TOLKTAK_S3_BUCKET")
     try:
         max_mb = int(_env("TOLKTAK_MAX_UPLOAD_MB", "50"))
     except ValueError:
@@ -81,6 +90,11 @@ def from_env() -> Config:
         trust_proxy=_env("TOLKTAK_TRUST_PROXY") == "1",
         data_dir=Path(_env("TOLKTAK_DATA_DIR", "./data")),
         database_url=db,
+        s3_bucket=bucket,
+        s3_endpoint=_env("TOLKTAK_S3_ENDPOINT"),
+        s3_region=_env("TOLKTAK_S3_REGION"),
+        s3_access_key=_env("TOLKTAK_S3_ACCESS_KEY"),
+        s3_secret_key=_env("TOLKTAK_S3_SECRET_KEY"),
         max_upload_bytes=max_mb << 20,
         user_quota_bytes=quota_mb << 20,
         listen_host=host,
