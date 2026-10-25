@@ -36,6 +36,7 @@ The installer checks that Docker, Compose and `openssl` are there and downloads 
 | How people reach the server | A domain with a certificate from Caddy; a domain behind your own reverse proxy; an IP address over plain HTTP |
 | Database | PostgreSQL in this setup, with a generated password; your own PostgreSQL; SQLite |
 | Uploaded files | Garage in this setup; your own S3 bucket; the server's disk |
+| Server updates | Manual, automatic or off (`TOLKTAK_UPDATES`) |
 | Server name | `TolkTak` |
 
 Press Enter to take the value in brackets. The details of your own PostgreSQL or S3 can be entered right away or later in `.env`. The installer writes `.env` with generated secrets, readable only by its owner, prints the ports to open and offers to start the server. It changes nothing outside the directory and stops if `.env` already exists. You can read `install.sh` before running it.
@@ -98,7 +99,7 @@ Open `https://chat.example.com` and register. **The first account becomes the ad
 `COMPOSE_PROFILES` in `.env` lists the bundled services that Compose starts:
 
 ```sh
-COMPOSE_PROFILES=livekit,postgres,garage,caddy
+COMPOSE_PROFILES=livekit,postgres,garage,caddy,updater
 ```
 
 To use your own service instead, remove it from the list, set what replaces it in `.env` and run `docker compose up -d`. A bundled service that is already running keeps running; remove it with `docker compose rm -sf garage` (or `livekit`, `postgres`, `caddy`). Its volume stays.
@@ -127,7 +128,9 @@ docker compose up -d
 
 ## Upgrade
 
-Read the [release notes](https://github.com/D4eNst/tolktak/releases) and take a [backup](../operations/maintenance.md#backups) first: the database is migrated when the new version starts.
+The `updater` service, which the installer enables unless you choose Off, installs new releases according to `TOLKTAK_UPDATES` in `.env`: with `manual`, the default, an administrator starts the update in Settings → Server; with `auto`, the server installs it when nobody is in voice. See [Maintenance](../operations/maintenance.md#upgrading). The service needs the Docker socket and replaces only the server's image, writing the installed release into `TOLKTAK_VERSION` in `.env`. It does not replace `compose.yaml`, which pins the versions of LiveKit, PostgreSQL, Garage, Caddy and the updater itself, so run the manual upgrade below now and then. It runs Compose inside its own container, so use absolute host paths in `compose.override.yaml`. To update by hand instead, remove `updater` from `COMPOSE_PROFILES` and run `docker compose rm -sf updater`.
+
+By hand, read the [release notes](https://github.com/D4eNst/tolktak/releases) and take a [backup](../operations/maintenance.md#backups) first: the database is migrated when the new version starts.
 
 ```sh
 curl -fsSLO https://github.com/D4eNst/tolktak/releases/latest/download/compose.yaml

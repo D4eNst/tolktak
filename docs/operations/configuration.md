@@ -50,7 +50,7 @@ The embedded LiveKit listens on TCP 7880 (signalling), TCP 7881 and UDP 7882 (ca
 |---|---|---|
 | `TOLKTAK_DOMAIN` | required | Domain name of the server. Caddy obtains its certificate. |
 | `TOLKTAK_VERSION` | `latest` | Tag of `d4enst/tolktak-server` to run. Pin a release such as `0.2.0` to upgrade only when you choose. |
-| `COMPOSE_PROFILES` | `livekit,postgres,garage,caddy` | Bundled services to start. Remove one to use your own; see [Install with Docker Compose](../install/compose.md#your-own-database-storage-or-proxy). |
+| `COMPOSE_PROFILES` | `livekit,postgres,garage,caddy,updater` | Bundled services to start. Remove one to use your own, see [Install with Docker Compose](../install/compose.md#your-own-database-storage-or-proxy), or `updater` to update by hand. |
 | `TOLKTAK_PORT`, `LIVEKIT_PORT` | `8080`, `7880` | Ports on `127.0.0.1` for your own reverse proxy. |
 | `LIVEKIT_TCP_PORT`, `LIVEKIT_UDP_PORT` | `7881`, `7882` | Call ports of the `livekit` service. |
 | `LIVEKIT_USE_EXTERNAL_IP`, `LIVEKIT_NODE_IP` | `true`, empty | LiveKit discovers the public address through STUN. On a local network, set `LIVEKIT_USE_EXTERNAL_IP=false` and the server's local address in `LIVEKIT_NODE_IP`. |

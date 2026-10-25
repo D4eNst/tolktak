@@ -68,7 +68,7 @@ jobs:
       - name: Check install.sh and compose.yaml
         working-directory: deploy
         run: |
-          printf '1\nchat.example.com\n1\nn\n1\nServer #1\nn\n' | sh install.sh
+          printf '1\nchat.example.com\n1\n1\n1\nServer #1\nn\n' | sh install.sh
           docker compose config --format json | grep -qF '"TOLKTAK_SERVER_NAME": "Server #1"'
       - run: docker build --target server server
       - run: docker build server

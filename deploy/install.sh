@@ -163,6 +163,15 @@ case $(choose "Uploaded files:" "S3 storage in this setup (Garage)" "My own S3 b
     ;;
 esac
 
+case $(choose "Server updates:" \
+  "Manual: the administrator is told about a new release and installs it with one click" \
+  "Automatic: install new releases when nobody is in a call" \
+  "Off: update by hand with docker compose pull") in
+  1) set_env TOLKTAK_UPDATES manual; profiles=$profiles,updater ;;
+  2) set_env TOLKTAK_UPDATES auto; profiles=$profiles,updater ;;
+  3) set_env TOLKTAK_UPDATES off ;;
+esac
+
 set_env TOLKTAK_SERVER_NAME "$(ask "Server name shown in the app" TolkTak)"
 
 set_env COMPOSE_PROFILES "$profiles"

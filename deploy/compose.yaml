@@ -15,6 +15,7 @@ services:
       TOLKTAK_USER_QUOTA_MB: ${TOLKTAK_USER_QUOTA_MB:-2048}
       TOLKTAK_CLIENT_DOWNLOAD_URL: ${TOLKTAK_CLIENT_DOWNLOAD_URL:-}
       TOLKTAK_TRUST_PROXY: ${TOLKTAK_TRUST_PROXY:-1}
+      TOLKTAK_UPDATES: ${TOLKTAK_UPDATES:-manual}
       TOLKTAK_DATABASE_URL: ${TOLKTAK_DATABASE_URL:-postgres://tolktak:${POSTGRES_PASSWORD:-}@postgres:5432/tolktak}
       TOLKTAK_S3_BUCKET: ${TOLKTAK_S3_BUCKET-tolktak}
       TOLKTAK_S3_ENDPOINT: ${TOLKTAK_S3_ENDPOINT-http://garage:3900}
@@ -131,6 +132,22 @@ services:
       - caddy-data:/data
       - caddy-config:/config
 
+  # Installs new releases when the server asks for one (TOLKTAK_UPDATES in .env). It needs
+  # the Docker socket: remove `updater` from COMPOSE_PROFILES to update by hand instead.
+  updater:
+    profiles: [updater]
+    image: docker:28-cli
+    restart: unless-stopped
+    working_dir: /deploy
+    entrypoint: [sh, /updater.sh]
+    configs:
+      - source: updater
+        target: /updater.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/deploy
+      - data:/data
+
 configs:
   caddy:
     content: |
@@ -151,6 +168,49 @@ configs:
       [s3_api]
       s3_region = "garage"
       api_bind_addr = "[::]:3900"
+  # The server writes /data/updates/request ("pull 1.2.3" or "apply 1.2.3"); the updater answers
+  # in status ("pulled 1.2.3" or "failed 1.2.3 <reason>") and touches agent while it runs.
+  # $$ is how Compose writes a literal $.
+  updater:
+    content: |
+      # /data/updates belongs to the server's user: never write through a link it may have planted.
+      dir=/data/updates
+      project=$$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$(hostname)" 2>/dev/null)
+      [ -n "$$project" ] && export COMPOSE_PROJECT_NAME=$$project
+      # The heartbeat runs on its own so a long pull does not look like a dead updater.
+      (while true; do [ -d $$dir ] && rm -f $$dir/agent && (set -C; : > $$dir/agent); sleep 5; done) &
+      while true; do
+        sleep 5
+        [ -f $$dir/request ] || continue
+        read -r action version < $$dir/request
+        rm -f $$dir/request
+        echo "$$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || continue
+        case "$$action" in
+          pull)
+            if TOLKTAK_VERSION=$$version docker compose pull -q tolktak; then
+              result="pulled $$version"
+            else
+              result="failed $$version pull failed"
+            fi
+            ;;
+          apply)
+            # Pin the version in .env, or the next manual `up -d` would start the old image on the migrated data.
+            (
+              umask 077
+              if grep -q '^TOLKTAK_VERSION=' .env; then
+                sed "s/^TOLKTAK_VERSION=.*/TOLKTAK_VERSION=$$version/" .env > .env.tmp
+              else
+                { cat .env; echo; echo "TOLKTAK_VERSION=$$version"; } > .env.tmp
+              fi
+            )
+            cat .env.tmp > .env && rm .env.tmp
+            docker compose up -d --no-deps tolktak && continue
+            result="failed $$version compose failed"
+            ;;
+          *) continue ;;
+        esac
+        rm -f $$dir/status.tmp && (set -C; echo "$$result" > $$dir/status.tmp) && mv $$dir/status.tmp $$dir/status
+      done
 
 volumes:
   data:
