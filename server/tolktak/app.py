@@ -34,6 +34,7 @@ _PAGES = [
         b"default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
     ),
 ]
+_ROUTERS = (auth.router, chat.router, files.router, groups.router, voice.router, ws.router, web.router)
 
 
 class HeadersMiddleware:
@@ -82,16 +83,15 @@ class HeadersMiddleware:
             await send({"type": "http.response.body", "body": body})
 
 
-def create_app(cfg: Config, server: Server | None = None, init_db: bool = True) -> FastAPI:
-    srv = server or Server(cfg, __version__)
+def create_app(cfg: Config) -> FastAPI:
+    srv = Server(cfg, __version__)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         users.reset_caches()
-        if init_db:
-            await db.init(cfg.database_url, cfg.data_dir)
-            if await users.count_users() == 0:
-                log.info("no accounts yet: the first one to register becomes the administrator")
+        await db.init(cfg.database_url, cfg.data_dir)
+        if await users.count_users() == 0:
+            log.info("no accounts yet: the first one to register becomes the administrator")
         tasks = [
             asyncio.create_task(voice.reconcile_loop(srv, 20)),
             asyncio.create_task(_prune_loop(srv)),
@@ -99,7 +99,7 @@ def create_app(cfg: Config, server: Server | None = None, init_db: bool = True) 
         ]
         if srv.updater.enabled:
             tasks.append(asyncio.create_task(srv.updater.run()))
-        sqlite_file = db.sqlite_path(cfg.database_url, cfg.data_dir) if init_db else None
+        sqlite_file = db.sqlite_path(cfg.database_url, cfg.data_dir)
         if sqlite_file is not None:
             tasks.append(asyncio.create_task(sqlite_backend.checkpoint_loop(sqlite_file)))
         try:
@@ -111,14 +111,13 @@ def create_app(cfg: Config, server: Server | None = None, init_db: bool = True) 
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await t
             await srv.lk.close()
-            if init_db:
-                await db.close()
+            await db.close()
             if sqlite_file is not None:
                 await sqlite_backend.final_checkpoint(sqlite_file)
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.server = srv
-    for r in (auth.router, chat.router, files.router, groups.router, voice.router, ws.router, web.router):
+    for r in _ROUTERS:
         app.include_router(r)
     app.mount("/static", web.static_files, name="static")
 
@@ -166,8 +165,8 @@ def create_app(cfg: Config, server: Server | None = None, init_db: bool = True) 
 
 def _allowed_methods(app: FastAPI, scope: Scope) -> str:
     methods: set[str] = set()
-    routers = [auth.router, chat.router, files.router, groups.router, voice.router, ws.router, web.router, app.router]
-    for route in (r for router in routers for r in router.routes):
+    # app.routes holds the included routers, not their routes.
+    for route in (r for router in (*_ROUTERS, app.router) for r in router.routes):
         if isinstance(route, Route) and route.methods and route.matches(scope)[0] != Match.NONE:
             methods |= route.methods
     if "GET" in methods:

@@ -18,3 +18,8 @@ def test_health_check_reports_the_database(make_env, monkeypatch):
 
     monkeypatch.setattr(db, "rows", broken)
     assert e.c.get("/healthz").status_code == 503
+
+
+def test_method_not_allowed_lists_every_method_of_the_path(make_env):
+    r = make_env().c.put("/api/v1/messages/1")
+    assert r.status_code == 405 and r.headers["allow"] == "DELETE, PATCH"
