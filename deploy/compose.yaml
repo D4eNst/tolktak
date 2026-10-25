@@ -28,6 +28,10 @@ services:
       TOLKTAK_DEBUG: ${TOLKTAK_DEBUG:-}
     volumes:
       - data:/data
+    read_only: true
+    tmpfs: /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     ports:
       - ${TOLKTAK_BIND:-127.0.0.1}:${TOLKTAK_PORT:-8080}:8080
     depends_on:
@@ -77,6 +81,8 @@ services:
       - ${LIVEKIT_BIND:-127.0.0.1}:${LIVEKIT_PORT:-7880}:7880
       - ${LIVEKIT_TCP_PORT:-7881}:${LIVEKIT_TCP_PORT:-7881}
       - ${LIVEKIT_UDP_PORT:-7882}:${LIVEKIT_UDP_PORT:-7882}/udp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
 
   postgres:
     profiles: [postgres]
@@ -129,6 +135,7 @@ configs:
   caddy:
     content: |
       ${TOLKTAK_DOMAIN:?set TOLKTAK_DOMAIN in .env} {
+        header Strict-Transport-Security max-age=31536000
         reverse_proxy /rtc* livekit:7880
         reverse_proxy tolktak:8080
       }

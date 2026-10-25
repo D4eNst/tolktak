@@ -15,7 +15,7 @@ The server must know it is behind a proxy: set `TOLKTAK_TRUST_PROXY=1`. Then it 
 
 [Download the example configuration](https://tolktak.d4enst.ru/docs/nginx.conf.example)
 
-The same file is in the repository at `deploy/nginx.conf.example`. It configures both paths, WebSocket forwarding and the upload limit.
+The same file is in the repository at `deploy/nginx.conf.example`. It configures both paths, WebSocket forwarding and the body limits, and closes the webhook.
 
 1. Add the example to the nginx configuration, for example `/etc/nginx/conf.d/tolktak.conf`.
 2. Replace the domain, local ports and [certificate](certificates.md) paths.
@@ -32,10 +32,12 @@ The `systemctl` command applies to a system using systemd. The example uses [`ht
 | Parameter | Purpose |
 |---|---|
 | `Upgrade`, `Connection` | WebSocket forwarding for chat events and call connections. |
-| `client_max_body_size` | Request body limit. The example sets `60m` for a TolkTak file limit of 50 MB. |
+| `client_max_body_size` | Request body limit: `60m` for uploads to `/api/v1/files` with a TolkTak file limit of 50 MB, `1m` for everything else. |
 | `proxy_read_timeout` | Time to wait for service data: 120 seconds for TolkTak and 3600 for LiveKit in the example. |
 | `X-Forwarded-For` | The participant's address, for rate limits. TolkTak reads the last address in the header, so the proxy must set it or append to it. The example sets it to the address nginx sees. |
 | `X-Forwarded-Proto` | `https`, so the server gives the apps a `wss://` address for LiveKit. |
+| `Strict-Transport-Security` | Tells browsers to open the domain over HTTPS only. |
+| `/api/v1/livekit/webhook` | Closed from outside: LiveKit calls it on the local address. Remove this block when LiveKit runs elsewhere, such as LiveKit Cloud. |
 
 When changing `TOLKTAK_MAX_UPLOAD_MB`, keep the nginx limit higher to allow for request overhead. Requests over the limit return HTTP 413. See [nginx's documentation](https://nginx.org/en/docs/http/websocket.html) for WebSocket forwarding.
 
@@ -43,6 +45,7 @@ When changing `TOLKTAK_MAX_UPLOAD_MB`, keep the nginx limit higher to allow for 
 
 ```
 chat.example.com {
+    header Strict-Transport-Security max-age=31536000
     reverse_proxy /rtc* 127.0.0.1:7880
     reverse_proxy 127.0.0.1:8080
 }
