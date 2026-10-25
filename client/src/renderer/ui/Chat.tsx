@@ -1031,7 +1031,7 @@ export function ChatView({
 
   const onReply = (m: Message) => setReply(channelId, m);
   const onQuote = (m: Message) => {
-    const quoted = plain(m.text)
+    const quoted = m.text
       .split('\n')
       .map((l) => '> ' + l)
       .join('\n');
