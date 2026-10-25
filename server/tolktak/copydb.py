@@ -70,8 +70,7 @@ async def _copy_table(src, dst, table: str) -> int:
             return total
         cols = list(batch[0])
         q = db.sql(f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", dst)
-        for row in batch:
-            await dst.execute_query(q, [_value(row[c]) for c in cols])
+        await dst.execute_many(q, [[_value(row[c]) for c in cols] for row in batch])
         total += len(batch)
         offset += BATCH
 
