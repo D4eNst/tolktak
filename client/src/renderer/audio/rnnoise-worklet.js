@@ -20,15 +20,6 @@ class RnnoiseProcessor extends AudioWorkletProcessor {
     this.write = 0;
     this.frameAt = FRAME * 2;
     this.vad = 0;
-    this.port.onmessage = (e) => e.data === 'destroy' && this.destroy();
-  }
-
-  destroy() {
-    if (!this.state) return;
-    this.m._rnnoise_destroy(this.state);
-    this.m._free(this.inPtr);
-    this.m._free(this.outPtr);
-    this.state = 0;
   }
 
   process(inputs, outputs) {

@@ -52,15 +52,13 @@ export class VoiceChain {
   readonly output: MediaStreamTrack;
   readonly denoise: Denoise;
   private readonly node: AudioWorkletNode;
-  private readonly dn?: GtcrnWorkletNode | AudioWorkletNode;
   private readonly src: MediaStreamAudioSourceNode;
   private closed = false;
 
-  private constructor(ctx: AudioContext, src: MediaStreamAudioSourceNode, node: AudioWorkletNode, dn: VoiceChain['dn'], denoise: Denoise) {
+  private constructor(ctx: AudioContext, src: MediaStreamAudioSourceNode, node: AudioWorkletNode, denoise: Denoise) {
     this.ctx = ctx;
     this.src = src;
     this.node = node;
-    this.dn = dn;
     this.denoise = denoise;
     const dest = ctx.createMediaStreamDestination();
     node.connect(dest);
@@ -72,7 +70,7 @@ export class VoiceChain {
     const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
     try {
       await ctx.audioWorklet.addModule(moduleUrl('voice', voiceWorklet));
-      let dn: VoiceChain['dn'];
+      let dn: GtcrnWorkletNode | AudioWorkletNode | undefined;
       if (denoise === 'light') {
         await ctx.audioWorklet.addModule(moduleUrl('rnnoise', rnnoiseGlue.replace(/export default createRNNWasmModuleSync;\s*$/, '') + '\n' + rnnoiseWorklet));
         dn = new AudioWorkletNode(ctx, 'tolktak-rnnoise', MONO);
@@ -89,7 +87,7 @@ export class VoiceChain {
       if (dn) src.connect(dn).connect(node);
       else src.connect(node);
       if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
-      return new VoiceChain(ctx, src, node, dn, denoise);
+      return new VoiceChain(ctx, src, node, denoise);
     } catch (e) {
       ctx.close().catch(() => {});
       throw e;
@@ -105,11 +103,6 @@ export class VoiceChain {
     this.closed = true;
     this.src.disconnect();
     this.node.port.onmessage = null;
-    if (this.dn && 'destroy' in this.dn) this.dn.destroy();
-    else {
-      this.dn?.port.postMessage('destroy');
-      this.dn?.disconnect();
-    }
     this.output.stop();
     this.ctx.close().catch(() => {});
   }
