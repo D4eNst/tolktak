@@ -173,6 +173,27 @@ def test_websocket_of_a_deleted_session_closes(make_env, monkeypatch):
         assert (msg["type"], msg.get("code")) == ("websocket.close", 4001)
 
 
+def test_websocket_frames_are_rate_limited(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    b, b_id = e.user("bob")
+    _, body = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})
+    cid = body["channel"]["id"]
+    with e.c.websocket_connect("/api/v1/ws") as receiver, e.c.websocket_connect("/api/v1/ws") as sender:
+        receiver.send_text(json.dumps({"type": "auth", "token": b}))
+        assert json.loads(receiver.receive_text())["type"] == "hello"
+        sender.send_text(json.dumps({"type": "auth", "token": a}))
+        for _ in range(60):
+            sender.send_text(json.dumps({"type": "typing", "channel_id": cid}))
+        # Once the budget has room again, this frame marks the end of the typing ones.
+        time.sleep(0.3)
+        sender.send_text(json.dumps({"type": "voice.joined", "room": f"dm{cid}"}))
+        typing = 0
+        while (ev := json.loads(receiver.receive_text()))["type"] != "voice.room":
+            typing += ev["type"] == "typing"
+    assert 20 <= typing <= 25, f"{typing} typing events reached the other user"
+
+
 def test_only_dm_members_can_ring(make_env):
     e = make_env()
     a, _ = e.user("alice")
@@ -199,6 +220,16 @@ def test_profile_updates_are_rate_limited(make_env):
     a, _ = e.user("alice")
     codes = [e.do("PATCH", "/api/v1/me", a, {"status": f"s{i}"})[0] for i in range(30)]
     assert codes[0] == 200 and 429 in codes, "every profile update is broadcast to all connected users"
+
+
+def test_search_is_rate_limited(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    _, body = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})
+    path = f"/api/v1/channels/{body['channel']['id']}/messages?q=word"
+    codes = [e.do("GET", path, a)[0] for _ in range(20)]
+    assert codes[0] == 200 and 429 in codes, "a search reads every message of the chat"
 
 
 def test_jpeg_size_scan_is_bounded(tmp_path):
