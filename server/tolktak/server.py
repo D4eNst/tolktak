@@ -4,6 +4,7 @@ import re
 
 from fastapi import Request
 
+from . import storage
 from .config import Config
 from .errors import ApiError, NotFound
 from .livekit import LiveKit
@@ -48,6 +49,7 @@ class Server:
         self.cfg = cfg
         self.version = version
         self.lk = lk or LiveKit(cfg.livekit_api_key, cfg.livekit_api_secret, cfg.livekit_internal_url)
+        self.files = storage.open_storage(cfg)
         self.hub = Hub(self.room_audience)
         self.rl = RateLimiter()
         self.upload_locks: dict[int, asyncio.Lock] = {}

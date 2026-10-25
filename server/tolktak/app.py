@@ -57,7 +57,7 @@ class HeadersMiddleware:
         head = scope["method"] == "HEAD"
         if head:
             # Every GET route also answers HEAD, without a body.
-            scope = {**scope, "method": "GET"}
+            scope = {**scope, "method": "GET", "head": True}
 
         async def send_with_headers(message: Message) -> None:
             nonlocal started
