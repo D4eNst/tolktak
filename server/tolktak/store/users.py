@@ -226,6 +226,11 @@ async def delete_session(token: str) -> None:
     await Session.filter(token_hash=h).delete()
 
 
+async def delete_idle_sessions() -> None:
+    """Ends sessions not used for 90 days; one in use updates last_seen every minute."""
+    await Session.filter(last_seen__lt=now() - 90 * 24 * 60 * 60 * 1000).delete()
+
+
 def invite_dict(i: Invite) -> dict:
     return {
         "code": i.code,

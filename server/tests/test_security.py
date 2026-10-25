@@ -158,6 +158,19 @@ def test_session_deleted_in_database_stops_working(make_env, monkeypatch):
     assert e.do("GET", "/api/v1/me", a)[0] == 401
 
 
+def test_sessions_unused_for_90_days_end(make_env, monkeypatch):
+    e = make_env()
+    idle, _ = e.user("alice")
+    used, _ = e.user("bob")
+    assert e.do("GET", "/api/v1/me", idle)[0] == 200
+    later = users.now() + 91 * 24 * 60 * 60 * 1000
+    monkeypatch.setattr(users, "now", lambda: later)
+    assert e.do("GET", "/api/v1/me", used)[0] == 200
+    e.c.portal.call(users.delete_idle_sessions)
+    assert e.do("GET", "/api/v1/me", idle)[0] == 401
+    assert e.do("GET", "/api/v1/me", used)[0] == 200
+
+
 def test_websocket_of_a_deleted_session_closes(make_env, monkeypatch):
     monkeypatch.setattr(ws, "PING_EVERY", 0.05)
     e = make_env()
