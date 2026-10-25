@@ -1297,14 +1297,17 @@ const TONES = {
   test: [523, 659, 784, 1047],
 };
 
-let actx: AudioContext | null = null;
-export function playTone(kind: keyof typeof TONES) {
+export async function playTone(kind: keyof typeof TONES) {
   if (!prefs.value.sounds) return;
   try {
-    actx ??= new AudioContext();
+    const actx = new AudioContext() as AudioContext & { setSinkId(id: string): Promise<void> };
+    const out = prefs.value.outputDevice;
+    // Not the constructor's sinkId: with an unplugged device that context stays silent.
+    if (out && out !== 'default') await actx.setSinkId(out).catch(() => {});
     let at = actx.currentTime;
+    let o: OscillatorNode | undefined;
     for (const f of TONES[kind]) {
-      const o = actx.createOscillator();
+      o = actx.createOscillator();
       const g = actx.createGain();
       o.frequency.value = f;
       o.type = 'sine';
@@ -1316,6 +1319,7 @@ export function playTone(kind: keyof typeof TONES) {
       o.stop(at + 0.15);
       at += 0.12;
     }
+    if (o) o.onended = () => actx.close();
   } catch {
     /* audio unavailable */
   }
