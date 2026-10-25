@@ -983,11 +983,13 @@ export function ChatView({
   const [drag, setDrag] = useState(false);
   const dragDepth = useRef(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     stickToBottom.current = true;
     setEditing(0);
     openChannel(channelId);
   }, [channelId]);
+  // Where reading stopped when the channel opened: the divider stays there while new messages are read.
+  const readMark = useMemo(() => channels.value.get(channelId)?.last_read_id ?? 0, [channelId]);
   useEffect(() => {
     const sent = () => {
       stickToBottom.current = true;
@@ -1002,7 +1004,8 @@ export function ChatView({
   const pending = cm?.pending ?? [];
   const last = items[items.length - 1];
 
-  useEffect(() => {
+  // Before paint, so a message read on arrival never shows as unread.
+  useLayoutEffect(() => {
     if (last && document.hasFocus() && stickToBottom.current) markRead(channelId, last.id);
     const onFocus = () => last && stickToBottom.current && markRead(channelId, last.id);
     window.addEventListener('focus', onFocus);
@@ -1059,7 +1062,6 @@ export function ChatView({
 
   const typers = [...(typing.value.get(channelId)?.entries() ?? [])].filter(([, until]) => until > Date.now()).map(([id]) => userName(id));
   const channel = channels.value.get(channelId);
-  const unreadMarker = channel?.last_read_id ?? 0;
   const unreadBelow = !atBottom ? (channel?.unread ?? 0) : 0;
   const g = channel?.group_id ? groups.value.get(channel.group_id) : undefined;
 
@@ -1130,7 +1132,7 @@ export function ChatView({
                       <span>{dayLabel(m.created_at)}</span>
                     </div>
                   )}
-                  {prev && prev.id <= unreadMarker && m.id > unreadMarker && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
+                  {prev && prev.id <= readMark && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
                   <RowBoundary>
                     <MessageRow m={m} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} onReply={onReply} onQuote={onQuote} editing={editing === m.id} setEditing={setEditing} />
                   </RowBoundary>
