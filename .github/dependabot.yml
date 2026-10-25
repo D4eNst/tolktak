@@ -11,6 +11,14 @@ updates:
     directory: /server
     schedule:
       interval: weekly
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule:
+      interval: weekly
+    ignore:
+      # A new PostgreSQL major version cannot open the existing data.
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
   - package-ecosystem: npm
     directories: [/client, /website]
     schedule:
