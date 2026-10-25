@@ -78,6 +78,8 @@ def test_group_roles_and_text_channels(make_env):
     assert any(c["id"] == tc and c["group_id"] == gid for c in body["channels"])
     _, body = e.do("POST", f"/api/v1/channels/{tc}/messages", mem, {"text": "спам", "nonce": "m2"})
     spam = body["message"]["id"]
+    code, res = e.do("POST", f"/api/v1/messages/{spam}/pin", mem)
+    assert (code, err_code(res)) == (403, "pin_forbidden")
     assert e.do("DELETE", f"/api/v1/messages/{spam}", mod)[0] == 200
     assert e.do("DELETE", f"/api/v1/groups/{gid}/members/{mem_id}", mod)[0] == 204
     assert e.do("GET", f"/api/v1/channels/{tc}/messages", mem)[0] == 404, "kicked member loses access"
