@@ -199,17 +199,32 @@ window.addEventListener('tolktak:unauthorized', () => {
 
 export async function boot() {
   const s = await bridge.getSettings();
-  if (s.server && s.token) {
-    try {
-      const a = new Api(s.server, s.token);
-      const [{ user }, info] = await Promise.all([a.me(), a.serverInfo()]);
-      await startSession(a, user, info);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401) await bridge.setSettings({ token: '' });
-      else if (e instanceof ApiError && e.status === 0) toast(t().core.serverUnavailable, 'error');
-    }
+  if (s.server && s.token && !(await resume(s.server, s.token))) {
+    toast(t().core.serverUnavailable, 'error');
+    // The server may be restarting for an update, or the network still coming up after login.
+    (async () => {
+      for (let delay = 2000; ; delay = Math.min(delay * 2, 30000)) {
+        await new Promise((res) => setTimeout(res, delay));
+        const now = await bridge.getSettings();
+        if (session.value || now.server !== s.server || now.token !== s.token) return;
+        if (await resume(s.server, s.token)) return;
+      }
+    })();
   }
   booting.value = false;
+}
+
+/** False when the server could not be reached. */
+async function resume(server: string, token: string) {
+  try {
+    const a = new Api(server, token);
+    const [{ user }, info] = await Promise.all([a.me(), a.serverInfo()]);
+    await startSession(a, user, info);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 0) return false;
+    if (e instanceof ApiError && e.status === 401) await bridge.setSettings({ token: '' });
+  }
+  return true;
 }
 
 export async function login(serverInput: string, username: string, password: string) {
