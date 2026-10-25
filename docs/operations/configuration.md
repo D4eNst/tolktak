@@ -17,6 +17,7 @@ Restart the server after a change. In the Compose setup, `docker compose up -d` 
 | `TOLKTAK_MAX_UPLOAD_MB` | `50` | Maximum size of one uploaded file. Keep the reverse proxy's body limit above it. |
 | `TOLKTAK_USER_QUOTA_MB` | `2048` | Total size of the files one user can keep on the server. Files are freed when the messages they were sent in are deleted; files nothing uses, such as replaced pictures, are removed within two days of upload. `0` removes the limit. |
 | `TOLKTAK_CLIENT_DOWNLOAD_URL` | empty | Link to the desktop app on the server's website. Empty hides the button. |
+| `TOLKTAK_UPDATES` | `manual` | How the server installs new releases. `manual`: when an administrator chooses Update now in Settings → Server. `auto`: by itself, when nobody is in voice and at most a day after the release. `off`: the server does not check for releases. Installing needs the `updater` service of the Compose setup; without it the server only reports new versions. See [Maintenance](maintenance.md#upgrading). |
 | `TOLKTAK_LISTEN` | `:8080` | Listen address, `host:port`. |
 | `TOLKTAK_DATA_DIR` | `./data` | The SQLite database, uploaded files unless they go to S3, and the generated LiveKit keys. `/data` in the images. |
 | `TOLKTAK_DATABASE_URL` | empty | Database to use. Empty: SQLite in `tolktak.db` in the data directory. `postgres://user:password@host:5432/dbname` (or `postgresql://...`) for PostgreSQL, recommended for a main server; `sqlite:///absolute/path.db` for an SQLite file elsewhere. See [PostgreSQL](../guides/postgres.md). |

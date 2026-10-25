@@ -2,6 +2,8 @@
 
 ## Upgrading
 
+**Automatic.** In the Compose setup with the `updater` service, the server installs releases according to `TOLKTAK_UPDATES` (`manual` by default, see [Configuration](configuration.md)). It checks for a new release every hour. In `manual` mode, Settings → Server shows administrators the new version and an Update now button. In `auto` mode, the server downloads the image in advance and restarts when nobody is in voice, at most a day after it saw the release; urgent security releases install at once. Connected users see that the server is updating, and their apps reconnect by themselves. The updater replaces only the server's image and writes the release into `TOLKTAK_VERSION` in `.env`; `compose.yaml`, with LiveKit and the other services, stays as it was, so run the Compose upgrade below now and then. An update only goes forward, so keep [backups](#backups). A server started with `docker run` does not update itself: Settings → Server tells administrators about a new release, and they update with the commands below.
+
 Read the [release notes](https://github.com/D4eNst/tolktak/releases) first. The database schema is migrated automatically when the new version starts; there is no way back to an older version after that except restoring a backup, so take one first.
 
 **`docker run`.** Pull the image and start a new container with the same options, as in [Install with Docker](../install/docker.md#5-upgrade):
@@ -24,7 +26,7 @@ The new `compose.yaml` brings the tested versions of LiveKit and the other servi
 
 **Source install.** Check out the new release tag, run `uv sync --no-dev` and restart the service, as in [Install from source](../install/source.md#5-finish).
 
-Users' apps update themselves from GitHub Releases.
+Users' apps follow the server: they install its version when they start, and offer a restart while they are open. See [the desktop app](../install/desktop-app.md#updates).
 
 ## Backups
 
