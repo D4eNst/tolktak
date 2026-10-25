@@ -28,7 +28,7 @@ async def server_info(request: Request):
         "name": s.cfg.server_name,
         "version": s.version,
         "registration": reg,
-        "livekit_url": s.cfg.livekit_public_url,
+        "livekit_url": s.livekit_url(request),
         "client_download_url": s.cfg.client_download_url,
     })  # fmt: skip
 

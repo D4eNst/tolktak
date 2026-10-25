@@ -48,7 +48,7 @@ async def voice_join(request: Request, user: User):
     s = server(request)
     meta = orjson.dumps({"username": user["username"], "color": user["color"]}).decode()
     token = s.lk.join_token(str(user["id"]), user["display_name"], meta, room, TOKEN_TTL)
-    return json_response({"url": s.cfg.livekit_public_url, "token": token, "room": room})
+    return json_response({"url": s.livekit_url(request), "token": token, "room": room})
 
 
 class LeaveReq(Body):

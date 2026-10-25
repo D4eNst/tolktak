@@ -23,7 +23,7 @@ def serve() -> int:
     app = create_app(cfg)
     log.info(
         "tolktak-server listening addr=%s:%d version=%s registration=%s livekit=%s database=%s",
-        cfg.listen_host, cfg.listen_port, __version__, cfg.registration, cfg.livekit_public_url,
+        cfg.listen_host, cfg.listen_port, __version__, cfg.registration, cfg.livekit_public_url or "auto",
         "postgres" if cfg.database_url.startswith("postgres") else "sqlite",
     )  # fmt: skip
     config = uvicorn.Config(
