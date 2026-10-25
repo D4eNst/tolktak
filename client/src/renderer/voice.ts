@@ -18,7 +18,7 @@ import {
 import { VoiceChain, type ChainSettings, type ChainStats, type Denoise } from './audio/chain';
 import { bridge, platform, type AudioMode } from './bridge';
 import { t } from './i18n';
-import { api, appActive, callEvents, errorText, me, sendRealtime, toast, userName, windowHidden } from './state';
+import { api, appActive, callEvents, errorText, me, sendRealtime, session, toast, userName, windowHidden } from './state';
 import { STREAM_REACTIONS } from './ui/emoji';
 
 export type Prefs = {
@@ -170,7 +170,8 @@ export const streams = computed(() => peers.value.filter((p) => p.screen));
 
 let room: Room | null = null;
 let leaving = false;
-let rejoinAttempt = 0;
+// Room of the running rejoin loop: a call joined later gets its own.
+let rejoining = '';
 let screenTracks: { video?: LocalVideoTrack; audio?: LocalAudioTrack } = {};
 
 // For tests and diagnostics.
@@ -240,7 +241,6 @@ async function connect(url: string, token: string, isRejoin: boolean) {
   if (r !== room) return;
   syncSubscriptions(r);
   if (call.value) call.value = { ...call.value, status: call.value.status === 'ringing' ? 'ringing' : 'connected' };
-  rejoinAttempt = 0;
   if (!isRejoin && prefs.value.startMuted) setPrefs({ micMuted: true });
   const wantMic = !prefs.value.micMuted && !deafened.value;
   try {
@@ -293,11 +293,13 @@ export async function leaveVoice() {
   audioSink().replaceChildren();
   if (c) {
     playTone('leave');
-    api()
-      .leaveVoice(c.room)
-      .catch(() => {});
+    session.value?.api.leaveVoice(c.room).catch(() => {});
   }
 }
+
+effect(() => {
+  if (!session.value && call.value) leaveVoice();
+});
 
 function wantSubscribed(source: Track.Source, identity: string) {
   return source !== Track.Source.ScreenShareAudio || watching.value === identity;
@@ -411,21 +413,26 @@ function wire(r: Room) {
     });
 }
 
+// A failed connect also fires Disconnected: one loop retries until it gets back in.
 async function rejoin() {
   const c = call.value;
-  if (!c) return;
+  if (!c || rejoining === c.room) return;
+  rejoining = c.room;
   call.value = { ...c, status: 'reconnecting' };
-  const delay = Math.min(30000, 1000 * 2 ** rejoinAttempt++);
-  await new Promise((res) => setTimeout(res, delay));
-  if (!call.value || call.value.room !== c.room) return;
-  try {
-    const { url, token } = await api().joinVoice(c.target);
-    await room?.disconnect().catch(() => {});
-    await connect(url, token, true);
-    toast(t().core.voice.rejoined);
-  } catch {
-    rejoin();
+  for (let attempt = 0; ; attempt++) {
+    await new Promise((res) => setTimeout(res, Math.min(30000, 1000 * 2 ** attempt)));
+    if (call.value?.room !== c.room) break;
+    try {
+      const { url, token } = await api().joinVoice(c.target);
+      await room?.disconnect().catch(() => {});
+      await connect(url, token, true);
+      toast(t().core.voice.rejoined);
+      break;
+    } catch {
+      /* try again */
+    }
   }
+  if (rejoining === c.room) rejoining = '';
 }
 
 let refreshQueued = false;
