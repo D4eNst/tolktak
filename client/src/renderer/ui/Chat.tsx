@@ -31,7 +31,7 @@ import {
 } from '../state';
 import { Avatar, confirmDialog, dayLabel, Icon, type MenuItem, openMenu, Popover, sizeLabel, timeLabel } from './common';
 import { EMOJI_GROUPS, emojiGroupName, findSticker, QUICK_REACTIONS, recentEmoji, rememberEmoji, STICKER_PACKS, STICKER_RE, stickerPackName } from './emoji';
-import { isJumbo, Markdown, plain } from './markdown';
+import { isJumbo, Markdown } from './markdown';
 import { openProfile } from './Profile';
 
 const MAX_FILES = 10;
@@ -380,7 +380,7 @@ function MessageRow({ m, grouped, canPin, canDelete, onReply, onQuote, editing, 
           <Icon name="reply" size={14} />
           <Avatar id={m.reply.author_id} size={16} />
           <b>{userName(m.reply.author_id)}</b>
-          <span class="ellipsis">{m.reply.deleted ? t().chat.message.replyDeleted : plain(messagePreview(m.reply)) || t().chat.message.attachment}</span>
+          <span class="ellipsis">{m.reply.deleted ? t().chat.message.replyDeleted : messagePreview(m.reply) || t().chat.message.attachment}</span>
         </button>
       )}
       <div class="msg-gutter">
@@ -738,7 +738,7 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
         <div class="reply-bar">
           <Icon name="reply" size={16} />
           <span>
-            {t().chat.composer.replyingTo} <b>{userName(reply.author_id)}</b>: <span class="muted">{plain(messagePreview(reply)).slice(0, 120)}</span>
+            {t().chat.composer.replyingTo} <b>{userName(reply.author_id)}</b>: <span class="muted">{messagePreview(reply).slice(0, 120)}</span>
           </span>
           <button class="icon-btn tiny" onClick={() => setReply(channelId, null)} aria-label={t().chat.composer.cancelReply}>
             <Icon name="x" size={14} />
@@ -874,7 +874,7 @@ function MiniMessage({ m, onJump }: { m: Message; onJump: () => void }) {
         <span class="mini-msg-head">
           <b>{userName(m.author_id)}</b> <span class="muted small">{timeLabel(m.created_at)}</span>
         </span>
-        <span class="mini-msg-text">{plain(messagePreview(m))}</span>
+        <span class="mini-msg-text">{messagePreview(m)}</span>
       </span>
     </button>
   );

@@ -2,6 +2,7 @@ export default {
   preview: {
     deleted: 'message deleted',
     sticker: 'Sticker',
+    code: '[code]',
     photo: 'Photo',
     photos: (n: number) => `Photos (${n})`,
     voiceMessage: 'Voice message',

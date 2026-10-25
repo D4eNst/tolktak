@@ -102,6 +102,5 @@ export default {
   },
   markdown: {
     spoiler: 'Spoiler. Click to reveal',
-    code: '[code]',
   },
 };

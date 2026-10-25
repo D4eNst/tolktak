@@ -105,7 +105,6 @@ const ru: typeof en = {
   },
   markdown: {
     spoiler: 'Спойлер. Нажмите, чтобы показать',
-    code: '[код]',
   },
 };
 

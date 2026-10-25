@@ -57,7 +57,13 @@ export function messagePreview(m: { text: string; deleted?: boolean; attachments
   const p = t().core.preview;
   if (m.deleted) return p.deleted;
   if (/^\[\[sticker:[\w-]+\]\]$/.test(m.text)) return p.sticker;
-  const text = m.text.replace(/[*_~`|>#]+/g, '').replace(/\s+/g, ' ').trim();
+  // Spoilers are masked before markup characters, | among them, are stripped.
+  const text = m.text
+    .replace(/```[\s\S]*?```/g, p.code)
+    .replace(/\|\|[\s\S]+?\|\|/g, '▒▒▒')
+    .replace(/[*_~`|>#]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (text) return text;
   const att = m.attachments;
   const n = typeof att === 'number' ? att : (att?.length ?? 0);

@@ -132,13 +132,3 @@ const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}(?:️|‍|\p{Emoji_Modifier}|\
 export function isJumbo(text: string) {
   return text.length <= 40 && EMOJI_ONLY.test(text.trim());
 }
-
-export function plain(text: string) {
-  return text
-    .replace(/```[\s\S]*?```/g, t().chat.markdown.code)
-    .replace(/\|\|[\s\S]+?\|\|/g, '▒▒▒')
-    .replace(/[*_~`]+/g, '')
-    .replace(/^>\s?/gm, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
