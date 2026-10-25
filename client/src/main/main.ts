@@ -207,11 +207,12 @@ function createWindow() {
     return { action: 'deny' };
   });
   win.on('close', (e) => {
-    if (!quitting && settings.minimizeToTray !== false) {
+    if (!quitting && (process.platform === 'darwin' || settings.minimizeToTray !== false)) {
       e.preventDefault();
       win?.hide();
     }
   });
+  win.on('closed', () => (win = null));
   win.on('focus', () => win?.flashFrame(false));
   watchOcclusion(win, (occluded) => win?.webContents.send('app:occluded', occluded));
 }
@@ -365,6 +366,8 @@ function installPermissions() {
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(allowed.has(permission) && ours(wc)));
   session.defaultSession.setPermissionCheckHandler((wc, permission) => allowed.has(permission) && ours(wc));
 }
+
+app.on('activate', () => win?.show());
 
 app.on('second-instance', () => {
   if (win) {
