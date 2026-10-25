@@ -57,13 +57,16 @@ _UNUSED = (
 )
 
 
-async def delete_unused(fids: list[str]) -> list[str]:
-    """Deletes the records of files no message, profile or group uses and returns their ids."""
+async def delete_unused(fids: list[str]) -> list[dict]:
+    """Deletes the records of files no message, profile or group uses and returns them."""
     if not fids:
         return []
     fids = list(set(fids))
-    found = await db.rows(f"DELETE FROM files WHERE id IN ({db.marks(len(fids))}) AND {_UNUSED} RETURNING id", fids)
-    return [r["id"] for r in found]
+    return await db.rows(
+        f"DELETE FROM files WHERE id IN ({db.marks(len(fids))}) AND {_UNUSED} "
+        "RETURNING id, uploader_id, name, mime, size, width, height",
+        fids,
+    )
 
 
 async def unused_before(t: int) -> list[str]:

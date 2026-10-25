@@ -8,9 +8,10 @@ from conftest import decode_jwt, post_webhook
 from tolktak import db, realtime
 from tolktak.api import voice, ws
 from tolktak.api.files import remove_old_unused_files
+from tolktak.errors import Forbidden
 from tolktak.server import parse_room_name
 from tolktak.sniff import image_size
-from tolktak.store import users
+from tolktak.store import chat, users
 
 
 def record_removals(e) -> list[tuple[str, str]]:
@@ -398,6 +399,48 @@ def test_parallel_uploads_share_the_quota(make_env):
             return sorted(r.status_code for r in await asyncio.gather(*sent))
 
     assert e.c.portal.call(two_uploads) == [201, 507]
+
+
+def test_a_file_whose_copy_cannot_be_deleted_keeps_its_record(make_env, monkeypatch):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, b_id = e.user("bob")
+    cid = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})[1]["channel"]["id"]
+    fid = e.upload(a, "a.png", PNG)[1]["file"]["id"]
+    msg = {"text": "", "nonce": "n1", "attachments": [fid]}
+    _, body = e.do("POST", f"/api/v1/channels/{cid}/messages", a, msg)
+
+    async def storage_down(fid):
+        raise OSError("storage is down")
+
+    monkeypatch.setattr(e.server.files, "delete", storage_down)
+    assert e.do("DELETE", f"/api/v1/messages/{body['message']['id']}", a)[0] == 200
+    assert e.c.get(f"/api/v1/files/{fid}").status_code == 200, "the record waits for the next cleanup"
+    monkeypatch.undo()
+    e.c.portal.call(db.execute, "UPDATE files SET created_at = 0")
+    e.c.portal.call(remove_old_unused_files, e.server)
+    assert e.c.get(f"/api/v1/files/{fid}").status_code == 404
+
+
+def test_a_file_being_deleted_cannot_be_attached(make_env, monkeypatch):
+    e = make_env()
+    a, a_id = e.user("alice")
+    _, b_id = e.user("bob")
+    cid = e.do("POST", "/api/v1/dms", a, {"user_id": b_id})[1]["channel"]["id"]
+    fid = e.upload(a, "a.png", PNG)[1]["file"]["id"]
+    _, body = e.do("POST", f"/api/v1/channels/{cid}/messages", a, {"text": "", "nonce": "n1", "attachments": [fid]})
+    attached = []
+
+    async def attach_meanwhile(fid):
+        try:
+            await chat.create_message(cid, a_id, "n2", "", 0, [fid])
+            attached.append(True)
+        except Forbidden:
+            attached.append(False)
+
+    monkeypatch.setattr(e.server.files, "delete", attach_meanwhile)
+    assert e.do("DELETE", f"/api/v1/messages/{body['message']['id']}", a)[0] == 200
+    assert attached == [False], "a file whose copy is being deleted takes no new references"
 
 
 def test_files_nothing_uses_are_removed_after_a_day(make_env):
