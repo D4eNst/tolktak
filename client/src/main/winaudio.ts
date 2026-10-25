@@ -77,7 +77,7 @@ function processes(w: NonNullable<typeof api>): Map<number, { parent: number; ex
 }
 
 /** Climbs to the top ancestor with the same exe, so the loopback covers child processes. */
-export function audioPidForWindow(hwnd: bigint): number | null {
+export function audioProcessForWindow(hwnd: bigint): { pid: number; exe: string } | null {
   const w = load();
   if (!w) return null;
   const out = [0];
@@ -92,10 +92,5 @@ export function audioPidForWindow(hwnd: bigint): number | null {
     if (!me || !parent || parent.exe.toLowerCase() !== me.exe.toLowerCase() || me.parent === current) break;
     current = me.parent;
   }
-  return current;
-}
-
-export function exeForPid(pid: number): string {
-  const w = load();
-  return w ? (processes(w).get(pid)?.exe ?? '') : '';
+  return { pid: current, exe: procs.get(current)?.exe ?? '' };
 }

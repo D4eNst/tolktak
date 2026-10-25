@@ -42,7 +42,7 @@ export function VideoView({ track, cover, muted = true, mirror, onEl }: { track?
   }, []);
   useEffect(() => {
     const el = ref.current;
-    if (!el || !track || !(track as { attach?: unknown }).attach) return;
+    if (!el || !track) return;
     track.attach(el);
     return () => {
       track.detach(el);
@@ -335,7 +335,7 @@ export function Stage({ extra }: { extra?: ComponentChildren } = {}) {
   const c = call.value;
   if (!c) return null;
   const tx = t().shell.stage;
-  const watched = watching.value ? peers.value.find((p) => p.identity === watching.value && p.screen) : undefined;
+  const watched = watching.value ? peers.value.find((p) => p.identity === watching.value && p.shared) : undefined;
   return (
     <section class="stage">
       <header class="main-head">
