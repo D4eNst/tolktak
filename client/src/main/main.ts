@@ -16,7 +16,7 @@ import {
   systemPreferences,
   Tray,
 } from 'electron';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globalPushToTalk, type HotkeyName, type Hotkeys, installHotkeys, uninstallHotkeys } from './hotkeys';
@@ -103,7 +103,9 @@ function writeSettings(s: Persisted) {
     out.tokenEnc = safeStorage.encryptString(s.token).toString('base64');
     delete out.token;
   }
-  writeFileSync(settingsFile(), JSON.stringify(out), { mode: 0o600 });
+  const file = settingsFile();
+  writeFileSync(file + '.tmp', JSON.stringify(out), { mode: 0o600 });
+  renameSync(file + '.tmp', file);
 }
 
 let settings: Persisted = {};
