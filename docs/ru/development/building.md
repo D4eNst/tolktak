@@ -11,7 +11,7 @@
 | `client/src/preload/` | IPC-мост |
 | `client/src/renderer/` | Интерфейс, обработка звука, переводы и API-клиент |
 | `client/e2e/` | Сквозные тесты Playwright |
-| `deploy/` | Compose и шаблоны конфигурации |
+| `deploy/` | Установка через Compose и пример nginx |
 | `website/` | Продуктовый сайт и генератор документации |
 | `perf/`, `tools/voice-scores/` | Проверки ресурсов и качества голоса |
 
@@ -27,6 +27,15 @@ uv run pytest
 ```
 
 Тесты используют временную SQLite-базу. Для проверки PostgreSQL задайте `TOLKTAK_TEST_POSTGRES` с адресом отдельной тестовой базы.
+
+`server/Dockerfile` собирает два образа. Цель по умолчанию, `full`, — это `d4enst/tolktak` с `livekit-server` внутри; `--target server` — `d4enst/tolktak-server`, только сервер:
+
+```sh
+docker build -t tolktak server
+docker build --target server -t tolktak-server server
+```
+
+Релиз по тегу `v*` публикует оба образа на Docker Hub и в GHCR и прикладывает к релизу `deploy/install.sh`, `deploy/compose.yaml` и `deploy/example.env`. Для Docker Hub нужны секреты репозитория `DOCKERHUB_USERNAME` и `DOCKERHUB_TOKEN`. Тег `latest` переносится только на стабильные релизы.
 
 ## Локальный стек
 

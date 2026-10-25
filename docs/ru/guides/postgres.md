@@ -1,92 +1,68 @@
 # PostgreSQL
 
-По умолчанию TolkTak хранит базу в файле `tolktak.db`. Для небольшого сервера SQLite позволяет начать без настройки отдельной базы. PostgreSQL удобен, когда важны параллельная запись, отдельное обслуживание базы и её собственные инструменты резервного копирования.
+[Установка через Compose](../install/compose.md) запускает PostgreSQL рядом с TolkTak. Сервер, запущенный [через `docker run`](../install/docker.md) или [из исходников](../install/source.md), по умолчанию хранит базу в файле `tolktak.db`: для небольшого сервера SQLite позволяет начать без настройки отдельной базы. PostgreSQL удобен, когда важны параллельная запись, отдельное обслуживание базы и её собственные инструменты резервного копирования.
 
-Файлы пользователей в обоих случаях остаются в каталоге данных TolkTak. Сначала можно запустить SQLite и перенести базу позже.
+Загруженные файлы в базе не хранятся; о них — в [инструкции по S3](s3.md). Сначала можно запустить SQLite и перенести базу позже. База выбирается переменной `TOLKTAK_DATABASE_URL`; строка журнала `tolktak-server listening` показывает `database=postgres` или `database=sqlite`.
 
-## PostgreSQL рядом с TolkTak
+## PostgreSQL в установке через Compose
 
-Создайте `deploy/docker-compose.override.yml`. Compose автоматически объединит его с основным файлом:
+Его настраивает установщик: сервис `postgres` хранит данные в томе `postgres-data`, база и пользователь называются `tolktak`, а пароль — `POSTGRES_PASSWORD` в `.env`. База доступна только другим сервисам установки, снаружи её не видно.
 
-```yaml
-services:
-  postgres:
-    image: postgres:17
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: tolktak
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: tolktak
-    ports:
-      - 127.0.0.1:5432:5432
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tolktak -d tolktak"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-  tolktak:
-    depends_on:
-      postgres:
-        condition: service_healthy
-volumes:
-  postgres-data:
-```
-
-TolkTak использует сеть хоста, поэтому обращается к базе по `127.0.0.1:5432`, а не по имени `postgres`.
-
-Сгенерируйте пароль через `openssl rand -hex 24`. Добавьте в `.env` две строки с этим значением:
-
-```sh
-POSTGRES_PASSWORD=<сгенерированный пароль>
-TOLKTAK_DATABASE_URL=postgres://tolktak:<сгенерированный пароль>@127.0.0.1:5432/tolktak
-```
-
-Шестнадцатеричный пароль не требует экранирования в URL. В собственном пароле символы `@`, `:`, `/`, `#` нужно кодировать через percent-encoding.
-
-Для нового сервера выполните `docker compose up -d`. Для сервера с существующими данными сначала сделайте перенос, иначе он откроет пустую PostgreSQL-базу.
+Мажорная версия закреплена в `compose.yaml` (`postgres:17`). Новая мажорная версия не откроет старый каталог данных; переход на неё требует дампа и восстановления, как в разделе [«Резервная копия»](#резервная-копия).
 
 ## Уже существующая база
 
-Создайте пользователя и базу от имени администратора PostgreSQL:
+Подойдёт любой доступный серверу PostgreSQL: на этой же машине, на другой или облачный. Создайте пользователя и базу от имени администратора PostgreSQL:
 
 ```sql
 CREATE USER tolktak WITH PASSWORD 'choose-a-password';
 CREATE DATABASE tolktak OWNER tolktak;
 ```
 
-Укажите адрес через `TOLKTAK_DATABASE_URL` в `.env`. TolkTak создаст таблицы при старте. При удалённой базе разрешите доступ только серверу TolkTak через `pg_hba.conf` и файрвол. Задержка до базы влияет почти на каждый запрос.
+TolkTak создаст таблицы при старте. Передайте серверу адрес:
+
+- **Compose:** задайте `TOLKTAK_DATABASE_URL` в `.env`, уберите `postgres` из `COMPOSE_PROFILES`, затем выполните `docker compose up -d` и `docker compose rm -sf postgres`.
+- **`docker run`:** добавьте к команде `-e TOLKTAK_DATABASE_URL=...`.
+- **Установка из исходников:** добавьте строку в `/etc/tolktak/.env` и перезапустите службу.
+
+```sh
+TOLKTAK_DATABASE_URL=postgres://tolktak:choose-a-password@db.example.com:5432/tolktak
+```
+
+Пароль из латинских букв и цифр не требует экранирования в URL. В остальных случаях символы `@`, `:`, `/`, `#` нужно кодировать через percent-encoding.
+
+При удалённой базе разрешите доступ только серверу TolkTak через `pg_hba.conf` и файрвол. Задержка до базы влияет почти на каждый запрос. PostgreSQL на той же машине изнутри контейнера в установке через Compose доступен не по `127.0.0.1`: он должен слушать адрес Docker-моста.
 
 ## Перенос с SQLite
 
-Сначала [сделайте резервную копию](../operations/maintenance.md). База назначения должна быть пустой: команда откажется писать в базу, где уже есть аккаунты.
+Сначала [сделайте резервную копию](../operations/maintenance.md). База назначения должна быть пустой: команда откажется писать в базу, где уже есть аккаунты. Сессии копируются вместе с остальными данными: участники остаются авторизованы.
+
+Переезд с сервера `docker run` на установку через Compose описан в разделе [«Переезд с docker run»](../install/compose.md#переезд-с-docker-run). Для установки из исходников:
 
 ```sh
-cd tolktak/deploy
-docker compose stop tolktak
-docker compose run --rm tolktak copy-db sqlite:///data/tolktak.db \
-  postgres://tolktak:<password>@127.0.0.1:5432/tolktak
+sudo systemctl stop tolktak
+sudo -u tolktak /opt/tolktak/server/.venv/bin/tolktak-server copy-db \
+  sqlite:///var/lib/tolktak/tolktak.db postgres://tolktak:<password>@127.0.0.1:5432/tolktak
 ```
 
-Задайте `TOLKTAK_DATABASE_URL` в `.env` и запустите `docker compose up -d`. Сессии копируются вместе с остальными данными: участники остаются авторизованы. Загрузки перемещать не нужно.
+Затем добавьте `TOLKTAK_DATABASE_URL` в `/etc/tolktak/.env` и выполните `sudo systemctl start tolktak`.
 
 Не удаляйте SQLite-файл до проверки. Для возврата уберите `TOLKTAK_DATABASE_URL`, но учтите: новые записи, сделанные после переноса в PostgreSQL, не появятся в старом SQLite-файле. `copy-db` умеет переносить данные и в обратном направлении — в пустую базу.
 
 ## Резервная копия
 
-Копия состоит из дампа базы, каталога `files/` и конфигурации сервера.
+Копия состоит из дампа базы, загруженных файлов и `.env`. В установке через Compose, из каталога с `compose.yaml`:
 
 ```sh
-docker compose exec -T postgres pg_dump -U tolktak -Fc tolktak > tolktak-db.dump
+docker compose exec -T postgres pg_dump -U tolktak -Fc tolktak > tolktak-db-$(date +%F).dump
 ```
 
-`pg_dump` создаёт согласованный снимок без остановки базы. Для восстановления остановите TolkTak:
+`pg_dump` создаёт согласованный снимок без остановки базы. Файлы сохраняются по [инструкции по обслуживанию](../operations/maintenance.md#резервные-копии). Для восстановления остановите TolkTak:
 
 ```sh
 docker compose stop tolktak
-docker compose exec -T postgres pg_restore -U tolktak -d tolktak --clean --if-exists < tolktak-db.dump
+docker compose exec -T postgres pg_restore -U tolktak -d tolktak --clean --if-exists < tolktak-db-2026-01-31.dump
 docker compose start tolktak
 ```
 
-Восстановление заменяет данные базы. Сначала проверьте его на отдельной тестовой базе. Не публикуйте PostgreSQL в интернете и закрепляйте мажорную версию образа: её смена требует отдельной миграции.
+Восстановление заменяет данные базы. Сначала проверьте его на отдельной тестовой базе.

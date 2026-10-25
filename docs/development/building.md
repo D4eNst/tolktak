@@ -18,7 +18,7 @@
 | `client/e2e/` | Playwright end-to-end tests. |
 | `tools/voice-scores/` | DNSMOS, PESQ and STOI thresholds for `voice-quality.spec.ts`. |
 | `perf/` | CPU and memory regression runs of the client on Linux (`perf.yml`). |
-| `deploy/` | Docker Compose deployment. |
+| `deploy/` | The Compose setup and an nginx example. |
 
 See [Architecture](architecture.md) for how the pieces fit together.
 
@@ -38,6 +38,13 @@ TOLKTAK_TEST_POSTGRES=postgres://tolktak:secret@127.0.0.1:5432/tolktak_test uv r
 ```
 
 The release version is written into `tolktak/_version.py` when the Docker image is built (build argument `VERSION`); a checkout reports `0.1.0-dev`.
+
+`server/Dockerfile` builds two images. The default target, `full`, is `d4enst/tolktak` with `livekit-server` inside; `--target server` is `d4enst/tolktak-server`, the server alone:
+
+```sh
+docker build -t tolktak server
+docker build --target server -t tolktak-server server
+```
 
 ## Running a local stack
 
@@ -109,7 +116,7 @@ Environment variables for the client:
 | `TOLKTAK_USER_DATA` | app | Uses a different profile directory, so several instances can run side by side |
 | `TOLKTAK_NO_UPDATES` | app | Disables the update check in a packaged build |
 
-Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) when a `v*` tag is pushed: it builds the installers for all three platforms, publishes them to GitHub Releases, and pushes the server image to `ghcr.io/d4enst/tolktak-server`.
+Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) when a `v*` tag is pushed: it builds the installers for all three platforms, publishes them to GitHub Releases, pushes both images to Docker Hub (`d4enst/tolktak`, `d4enst/tolktak-server`) and GHCR (`ghcr.io/d4enst/...`), and attaches `deploy/install.sh`, `deploy/compose.yaml` and `deploy/example.env` to the release. Docker Hub needs the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. `latest` moves only on stable releases.
 
 ## End-to-end tests
 

@@ -1,6 +1,12 @@
 # Настройки
 
-Сервер настраивается переменными окружения. В Docker они находятся в `deploy/.env`, при [запуске через systemd](../install/source.md) — в `/etc/tolktak/.env`. После изменений выполните `docker compose up -d` или перезапустите службу.
+Сервер настраивается переменными окружения:
+
+- при [`docker run`](../install/docker.md) — параметрами `-e ИМЯ=значение`;
+- в [установке через Compose](../install/compose.md) — в `.env` рядом с `compose.yaml`, созданном из [`example.env`](../../../deploy/example.env);
+- при [установке из исходников](../install/source.md) — в `/etc/tolktak/.env`.
+
+После изменений перезапустите сервер. В установке через Compose `docker compose up -d` пересоздаёт контейнеры с изменившимися настройками; при `docker run` удалите контейнер и запустите его заново.
 
 ## Основные параметры
 
@@ -11,37 +17,42 @@
 | `TOLKTAK_MAX_UPLOAD_MB` | `50` | Размер одного файла в МБ. Лимит прокси должен быть выше |
 | `TOLKTAK_USER_QUOTA_MB` | `2048` | Сколько МБ файлов один пользователь может хранить на сервере. Место освобождается при удалении сообщений с файлами; файлы, которые нигде не используются, например заменённые аватарки, удаляются в течение двух суток после загрузки. `0` снимает ограничение |
 | `TOLKTAK_CLIENT_DOWNLOAD_URL` | Пусто | Ссылка на приложение на странице сервера. Пустое значение скрывает кнопку |
-| `LIVEKIT_PUBLIC_URL` | Обязателен | Доступный участникам адрес LiveKit: `wss://` с HTTPS, `ws://` без него |
-| `LIVEKIT_API_KEY` | Обязателен | Ключ из `keys` в `livekit.yaml` |
-| `LIVEKIT_API_SECRET` | Обязателен | Секрет из того же файла, не короче 32 символов |
-| `LIVEKIT_INTERNAL_URL` | `http://127.0.0.1:7880` | Адрес API LiveKit для самого сервера |
-| `TOLKTAK_LISTEN` | `:8080` | Адрес прослушивания. В Compose задаётся через bind и port |
-| `TOLKTAK_DATA_DIR` | `./data` | Загрузки и SQLite. В контейнере — `/data` |
-| `TOLKTAK_DATABASE_URL` | Пусто | Пусто — SQLite в каталоге данных. `postgres://user:password@host:5432/dbname` — PostgreSQL. Допустим `sqlite:///absolute/path.db` |
-| `TOLKTAK_TRUST_PROXY` | Выключен | `1` берёт адрес клиента из последнего значения `X-Forwarded-For`, которое добавляет прокси. Включайте только при доступе исключительно через свой прокси |
+| `TOLKTAK_LISTEN` | `:8080` | Адрес прослушивания, `host:port` |
+| `TOLKTAK_DATA_DIR` | `./data` | SQLite, загрузки, если они не в S3, и созданные ключи LiveKit. В образах — `/data` |
+| `TOLKTAK_DATABASE_URL` | Пусто | Пусто — SQLite в каталоге данных. `postgres://user:password@host:5432/dbname` — PostgreSQL. Допустим `sqlite:///absolute/path.db`. См. [PostgreSQL](../guides/postgres.md) |
+| `TOLKTAK_S3_BUCKET` | Пусто | Бакет S3 для загрузок. Пусто — файлы в каталоге данных. См. [хранилище S3](../guides/s3.md) |
+| `TOLKTAK_S3_ENDPOINT` | Пусто | Адрес S3 провайдера. Пусто — AWS S3 |
+| `TOLKTAK_S3_REGION` | `us-east-1` | Регион бакета |
+| `TOLKTAK_S3_ACCESS_KEY`, `TOLKTAK_S3_SECRET_KEY` | Пусто | Ключ доступа к бакету. Обязательны, если задан `TOLKTAK_S3_BUCKET` |
+| `TOLKTAK_TRUST_PROXY` | Выключен | `1`, когда сервер доступен только через ваш обратный прокси. Тогда лимиты запросов берут последний адрес из `X-Forwarded-For`, который добавляет прокси, а адрес LiveKit строится по `X-Forwarded-Proto` и `X-Forwarded-Host`. Без прокси не включайте: клиенты смогут подменять свой адрес |
 | `TOLKTAK_DEBUG` | Выключен | `1` включает подробные журналы |
 
 Если обязательная переменная не задана или значение недопустимо, сервер завершится с сообщением о причине.
 
-## Параметры Docker Compose
+## LiveKit
 
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
-| `TOLKTAK_VERSION` | `latest` | Тег образа сервера. Укажите версию, чтобы обновляться вручную |
-| `TOLKTAK_BIND`, `LIVEKIT_BIND` | `127.0.0.1` | `0.0.0.0` при прямом HTTP-доступе |
-| `TOLKTAK_PORT`, `LIVEKIT_PORT` | `8080`, `7880` | HTTP-порты |
-| `RTC_TCP_PORT` | `7881` | Медиа по TCP |
-| `RTC_UDP_START`, `RTC_UDP_END` | `50000`, `60000` | Диапазон медиа по UDP |
-| `TURN_UDP_PORT` | `3478` | TURN |
-| `TURN_RELAY_START`, `TURN_RELAY_END` | `30000`, `40000` | Диапазон TURN relay |
+| `TOLKTAK_EMBEDDED_LIVEKIT` | Выключен; `1` в `d4enst/tolktak` | `1` — сервер сам запускает `livekit-server` с ключами, созданными при первом старте и сохранёнными в `livekit-keys` в каталоге данных. `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` и `LIVEKIT_INTERNAL_URL` тогда не используются |
+| `LIVEKIT_PUBLIC_URL` | Пусто | Адрес LiveKit для приложения. Пусто — сервер строит его из адреса, по которому подключилось приложение: `wss://<домен>` по HTTPS, `ws://<адрес>:7880` по HTTP. Задайте, если у LiveKit свой адрес, например `wss://lk.example.com` |
+| `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Обязательны без встроенного LiveKit | Должны совпадать с ключами в конфигурации LiveKit. Секрет не короче 32 символов |
+| `LIVEKIT_INTERNAL_URL` | `http://127.0.0.1:7880` | Адрес API LiveKit для самого сервера. В установке через Compose — `http://livekit:7880` |
 
-`init.sh` записывает порты также в `livekit.yaml`. Изменение только `.env` не перенастроит LiveKit. Порядок изменения описан в [инструкции по портам](../guides/firewall.md).
+В установке через Compose эти четыре переменные задаются в `.env`, как и остальные; `LIVEKIT_API_KEY` там по умолчанию `tolktak`.
 
-## LiveKit
+Встроенный LiveKit читает и собственные переменные LiveKit из окружения сервера. Чаще всего нужна `NODE_IP` — адрес, который LiveKit сообщает приложению для звонков. По умолчанию LiveKit определяет публичный адрес через STUN; задайте `NODE_IP`, если участники подключаются к серверу по локальной сети, и определение через STUN отключится.
 
-- `rtc.use_external_ip` определяет публичный IP через STUN. Для сервера в интернете оставьте `true`.
-- `rtc.interfaces` ограничивает сетевые интерфейсы. Полезно при наличии VPN и Docker-мостов.
-- `turn` включает встроенный TURN по UDP. TURN по TLS на 443 в шаблоне не настроен.
-- `webhook.urls` должен вести на `/api/v1/livekit/webhook` сервера TolkTak: так обновляется список участников комнат.
+Встроенный LiveKit слушает TCP 7880 (сигналинг), TCP 7881 и UDP 7882 (звонки), TURN у него выключен, а вебхук он отправляет на порт из `TOLKTAK_LISTEN`. Сервис `livekit` в установке через Compose работает так же, с настройками из таблицы ниже. Остальные параметры описаны в [официальной документации LiveKit](https://docs.livekit.io/home/self-hosting/deployment/); чтобы изменить какой-то из них, переопределите `LIVEKIT_CONFIG` сервиса `livekit` в `compose.override.yaml`.
 
-Полный список параметров — в [официальной документации LiveKit](https://docs.livekit.io/home/self-hosting/deployment/).
+## Только для установки через Compose
+
+| Переменная | По умолчанию | Назначение |
+|---|---|---|
+| `TOLKTAK_DOMAIN` | Обязательна | Доменное имя сервера. На него Caddy получает сертификат |
+| `TOLKTAK_VERSION` | `latest` | Тег образа `d4enst/tolktak-server`. Укажите версию, например `0.2.0`, чтобы обновляться вручную |
+| `COMPOSE_PROFILES` | `livekit,postgres,garage,caddy` | Встроенные сервисы, которые запускаются. Уберите сервис, чтобы использовать свой; см. [установку через Docker Compose](../install/compose.md#своя-база-хранилище-или-прокси) |
+| `TOLKTAK_PORT`, `LIVEKIT_PORT` | `8080`, `7880` | Порты на `127.0.0.1` для своего обратного прокси |
+| `LIVEKIT_TCP_PORT`, `LIVEKIT_UDP_PORT` | `7881`, `7882` | Порты звонков сервиса `livekit` |
+| `LIVEKIT_USE_EXTERNAL_IP`, `LIVEKIT_NODE_IP` | `true`, пусто | LiveKit определяет публичный адрес через STUN. В локальной сети задайте `LIVEKIT_USE_EXTERNAL_IP=false` и локальный адрес сервера в `LIVEKIT_NODE_IP` |
+| `TOLKTAK_BIND`, `LIVEKIT_BIND` | `127.0.0.1` | Интерфейсы портов TolkTak и сигналинга LiveKit. `0.0.0.0` — прямой доступ по обычному HTTP без обратного прокси; тогда задайте и `TOLKTAK_TRUST_PROXY=0`, в этой установке он равен `1` |
+| `POSTGRES_PASSWORD`, `LIVEKIT_API_SECRET`, `GARAGE_RPC_SECRET`, `GARAGE_ACCESS_KEY`, `GARAGE_SECRET_KEY` | Обязательны | Секреты, их записывает [установщик](../install/compose.md#2-установка). Если позже изменить пароль PostgreSQL либо ключи Garage, в уже созданных томах они не изменятся |

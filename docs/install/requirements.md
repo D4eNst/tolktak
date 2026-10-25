@@ -2,16 +2,19 @@
 
 ## Server
 
-The Docker setup requires:
-
 - Linux on x86-64 or ARM64;
-- Git, Docker Engine and the Compose plugin;
+- Docker Engine, and the Compose plugin 2.23.1 or later for [Install with Docker Compose](compose.md);
 - access to network and firewall settings;
 - storage for the database, uploaded files and backups.
 
-The standard setup runs two services: TolkTak and LiveKit. SQLite is included; [PostgreSQL](../guides/postgres.md) can be configured separately.
+There are two ways to run TolkTak with Docker:
 
-An [installation from source](source.md) requires Python 3.14, uv and LiveKit Server instead of Docker. That guide covers the versions and installation steps.
+| Setup | What runs | When to use |
+|---|---|---|
+| [`docker run`](docker.md) | One container with TolkTak and LiveKit, SQLite and files in a volume, plain HTTP | A trial, a local network, a small server behind your own reverse proxy |
+| [Docker Compose](compose.md) | TolkTak, LiveKit, PostgreSQL, Garage S3 storage and Caddy for HTTPS | A permanent server on its own domain |
+
+An [installation from source](source.md) needs Python 3.14, uv and the LiveKit Server binary instead of Docker.
 
 ## Load
 
@@ -23,26 +26,22 @@ LiveKit forwards streams to participants. If five people watch one screen share,
 
 | Setup | Addresses and connectivity |
 |---|---|
-| Internet server with HTTPS | Two host names, a public IP or port forwarding, a reverse proxy and certificates. |
-| Local network without HTTPS | An IP address or host name that participants can reach. Each service uses its own port. |
+| Internet server with HTTPS | One domain name, a public IP or port forwarding, and certificates (Caddy in the Compose setup obtains them automatically). |
+| Local network without HTTPS | An IP address or host name that participants can reach. |
 
 See [Domains and addresses](../guides/domains.md) for setup. In HTTP mode, passwords, messages and files are sent without encryption.
 
 ## Ports
 
-Default values from the project's configuration:
-
 | Port | Protocol | Purpose |
 |---|---|---|
-| 443 | TCP | HTTPS through the reverse proxy |
-| 80 | TCP | Certificate validation via HTTP-01, if used |
-| 8080, 7880 | TCP | Direct access to TolkTak and LiveKit in HTTP mode |
-| 7881 | TCP | Media for connections where UDP is unavailable |
-| 50000–60000 | UDP | Voice, video and screen sharing |
-| 3478 | UDP | TURN |
-| 30000–40000 | UDP | TURN relay |
+| 80, 443 | TCP | HTTPS and certificate issuance, in the Compose setup or with your own reverse proxy |
+| 443 | UDP | HTTP/3, in the Compose setup |
+| 8080, 7880 | TCP | TolkTak and LiveKit directly, with `docker run` without HTTPS |
+| 7881 | TCP | Calls when UDP is unavailable |
+| 7882 | UDP | Voice, video and screen sharing |
 
-With HTTPS, ports 8080 and 7880 listen only on `127.0.0.1`. LiveKit media ports need to be opened separately: port 443 alone is not enough for calls. See [Firewall and ports](../guides/firewall.md) for example rules and port changes.
+Calls need ports 7881 and 7882 in every setup: port 443 alone is not enough. See [Firewall and ports](../guides/firewall.md) for example rules.
 
 ## Desktop app
 

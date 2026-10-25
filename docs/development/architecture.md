@@ -22,7 +22,7 @@ Desktop client (Electron)
 | `server/` | `tolktak-server`: REST API, WebSocket events, the website (registration, invite management), LiveKit token issuing and webhook handling. Python 3.14 with FastAPI on Uvicorn and Tortoise ORM; SQLite or PostgreSQL. |
 | `client/` | The Electron app: `src/main` (main process), `src/preload` (IPC bridge), `src/renderer` (UI, TypeScript and Preact). |
 | `client/e2e/` | End-to-end tests against a real LiveKit and server, and Windows capture checks. |
-| `deploy/` | Docker Compose deployment with LiveKit, configuration templates and an nginx example. |
+| `deploy/` | `compose.yaml` and `example.env` for the Compose setup, and an nginx example. |
 
 ### tolktak-server
 

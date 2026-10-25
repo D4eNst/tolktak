@@ -23,41 +23,37 @@ echo "__version__ = \"$(git describe --tags --always)\"" | sudo tee tolktak/_ver
 
 ## 2. Install LiveKit
 
-Download `livekit-server` 1.13 for your architecture from the [LiveKit releases](https://github.com/livekit/livekit/releases) and install it to `/usr/local/bin/`.
+Download `livekit-server` 1.13 for your architecture from the [LiveKit releases](https://github.com/livekit/livekit/releases) and install it to `/usr/local/bin/`. The server starts it itself, with generated keys, as in the [`docker run` image](docker.md).
 
-## 3. Generate the configuration
-
-The same `init.sh` as for Docker writes both files. Run it in `deploy/` and move the results:
-
-```sh
-cd /opt/tolktak/deploy
-sudo ./init.sh talk.example.com lk.example.com     # or: ./init.sh --http 203.0.113.10
-sudo mkdir -p /etc/tolktak
-sudo mv .env livekit.yaml /etc/tolktak/
-```
-
-`.env` does not set the listen address and data directory, which Docker Compose otherwise supplies. Add them to `/etc/tolktak/.env`, using `0.0.0.0:8080` as the listen address if you run without a certificate:
-
-```sh
-TOLKTAK_LISTEN=127.0.0.1:8080
-TOLKTAK_DATA_DIR=/var/lib/tolktak
-LIVEKIT_INTERNAL_URL=http://127.0.0.1:7880
-```
-
-## 4. Create the services
+## 3. Configuration
 
 ```sh
 sudo useradd --system --home /var/lib/tolktak --create-home tolktak
-sudo chown root:tolktak /etc/tolktak/.env /etc/tolktak/livekit.yaml
-sudo chmod 640 /etc/tolktak/.env /etc/tolktak/livekit.yaml
+sudo mkdir -p /etc/tolktak
+sudo install -m 640 -g tolktak /dev/null /etc/tolktak/.env
 ```
+
+`/etc/tolktak/.env`:
+
+```sh
+TOLKTAK_EMBEDDED_LIVEKIT=1
+TOLKTAK_DATA_DIR=/var/lib/tolktak
+# 127.0.0.1:8080 behind a reverse proxy with HTTPS; 0.0.0.0:8080 to serve plain HTTP directly.
+TOLKTAK_LISTEN=127.0.0.1:8080
+# 1 behind a reverse proxy: rate limits then use X-Forwarded-For, and LiveKit is reached through /rtc.
+TOLKTAK_TRUST_PROXY=1
+```
+
+Other settings are listed in the [configuration reference](../operations/configuration.md). LiveKit listens on ports 7880, 7881 and 7882; see [Firewall and ports](../guides/firewall.md).
+
+## 4. Create the service
 
 `/etc/systemd/system/tolktak.service`:
 
 ```ini
 [Unit]
 Description=TolkTak server
-After=network-online.target livekit.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -65,23 +61,6 @@ User=tolktak
 WorkingDirectory=/opt/tolktak/server
 EnvironmentFile=/etc/tolktak/.env
 ExecStart=/opt/tolktak/server/.venv/bin/tolktak-server
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-`/etc/systemd/system/livekit.service`:
-
-```ini
-[Unit]
-Description=LiveKit media server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=tolktak
-ExecStart=/usr/local/bin/livekit-server --config /etc/tolktak/livekit.yaml
 Restart=on-failure
 LimitNOFILE=65536
 
@@ -91,13 +70,15 @@ WantedBy=multi-user.target
 
 ```sh
 sudo systemctl daemon-reload
-sudo systemctl enable --now livekit tolktak
+sudo systemctl enable --now tolktak
 journalctl -u tolktak -f
 ```
 
+The journal holds both the server's and LiveKit's log. If LiveKit stops, the server stops too, and systemd restarts both.
+
 ## 5. Finish
 
-With HTTPS, set up the [reverse proxy](../guides/reverse-proxy.md). Then open the server's address and register the administrator account, as described in [Install with Docker](docker.md#4-create-the-administrator).
+With HTTPS, set up the [reverse proxy](../guides/reverse-proxy.md). Then open the server's address and register: **the first account becomes the administrator**.
 
 To upgrade:
 
