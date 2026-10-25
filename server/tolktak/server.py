@@ -46,10 +46,10 @@ def background(coro) -> None:
 
 
 class Server:
-    def __init__(self, cfg: Config, version: str, lk: LiveKit | None = None):
+    def __init__(self, cfg: Config, version: str):
         self.cfg = cfg
         self.version = version
-        self.lk = lk or LiveKit(cfg.livekit_api_key, cfg.livekit_api_secret, cfg.livekit_internal_url)
+        self.lk = LiveKit(cfg.livekit_api_key, cfg.livekit_api_secret, cfg.livekit_internal_url)
         self.files = storage.open_storage(cfg)
         self.hub = Hub(self.room_audience)
         self.rl = RateLimiter()
