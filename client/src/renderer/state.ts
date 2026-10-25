@@ -447,15 +447,12 @@ function onMessageCreated(m: Message) {
   const mine = m.author_id === session.value?.me.id;
   const c = channels.value.get(m.channel_id);
   if (!c || mine) return;
-  if (isChannelVisible(m.channel_id)) {
-    markRead(m.channel_id, m.id);
-  } else {
-    setIn(channels, c.id, { ...c, unread: c.unread + 1 });
-    if (channelMuted(c)) return;
-    bridge.requestAttention();
-    const where = c.kind === 'group' ? groups.value.get(c.group_id!)?.name : undefined;
-    notify(where ? t().core.messageIn(userName(m.author_id), where) : userName(m.author_id), messagePreview(m).slice(0, 140));
-  }
+  // Counted in the open chat too, which marks it read once it is seen.
+  setIn(channels, c.id, { ...c, unread: c.unread + 1 });
+  if (isChannelVisible(m.channel_id) || channelMuted(c)) return;
+  bridge.requestAttention();
+  const where = c.kind === 'group' ? groups.value.get(c.group_id!)?.name : undefined;
+  notify(where ? t().core.messageIn(userName(m.author_id), where) : userName(m.author_id), messagePreview(m).slice(0, 140));
 }
 
 const NOTIFY_KEY = 'tolktak.notify';
