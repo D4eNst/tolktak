@@ -8,17 +8,17 @@ The server is a Python application. It needs Python 3.14 and [uv](https://docs.a
 
 ```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh     # or see the uv documentation for other ways
-sudo git clone https://github.com/D4eNst/tolktak.git /opt/tolktak
+sudo git clone --branch v0.2.0 https://github.com/D4eNst/tolktak.git /opt/tolktak
 cd /opt/tolktak/server
 sudo UV_PYTHON_INSTALL_DIR=/opt/tolktak/python "$(command -v uv)" sync --no-dev
 ```
 
-This creates a virtual environment in `server/.venv` with the `tolktak-server` command in `server/.venv/bin/`. `UV_PYTHON_INSTALL_DIR` keeps a Python downloaded by uv under `/opt/tolktak`, where the service user can read it, rather than in root's home directory. The website is part of the package. By default the server keeps its data in SQLite; to use PostgreSQL, see [PostgreSQL](../guides/postgres.md).
+`v0.2.0` is a release tag; take the newest one from the [releases](https://github.com/D4eNst/tolktak/releases). This creates a virtual environment in `server/.venv` with the `tolktak-server` command in `server/.venv/bin/`. `UV_PYTHON_INSTALL_DIR` keeps a Python downloaded by uv under `/opt/tolktak`, where the service user can read it, rather than in root's home directory. The website is part of the package. By default the server keeps its data in SQLite; to use PostgreSQL, see [PostgreSQL](../guides/postgres.md).
 
 A source install reports its version as `0.1.0-dev`. To show the real one, write it into `tolktak/_version.py` before starting:
 
 ```sh
-echo "__version__ = \"$(git describe --tags --always)\"" | sudo tee tolktak/_version.py
+echo "__version__ = \"$(git describe --tags --always | sed 's/^v//')\"" | sudo tee tolktak/_version.py
 ```
 
 ## 2. Install LiveKit
@@ -85,9 +85,10 @@ To upgrade:
 ```sh
 cd /opt/tolktak/server
 sudo git checkout tolktak/_version.py      # only if you wrote the version into it
-sudo git pull
+sudo git fetch --tags
+sudo git checkout v0.2.1                   # the new release tag
 sudo UV_PYTHON_INSTALL_DIR=/opt/tolktak/python "$(command -v uv)" sync --no-dev
 sudo systemctl restart tolktak
 ```
 
-Database migrations run on start.
+If you write the version into `tolktak/_version.py`, do it again before the restart. Database migrations run on start.
