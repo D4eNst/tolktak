@@ -46,14 +46,14 @@ export const EMOJI_GROUPS: { id: EmojiGroupId; icon: string; list: string }[] = 
   },
 ];
 
-export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
+export const QUICK_REACTIONS = ['👍', '❤️', '😂'];
 export const STREAM_REACTIONS = ['🔥', '😂', '😱', '❤️', '👏', '🍿', '💀', '🤯'];
 
-export type Sticker = { id: string; emoji?: string; src?: string; anim: 'bounce' | 'wiggle' | 'pulse' | 'spin' | 'float' };
-export type StickerPack = { id: string; name?: string; stickers: Sticker[] };
+export type Sticker = { id: string; emoji: string; anim: 'bounce' | 'wiggle' | 'pulse' | 'spin' | 'float' };
+export type StickerPack = { id: string; stickers: Sticker[] };
 
 export const emojiGroupName = (id: EmojiGroupId) => t().chat.emoji.groups[id];
-export const stickerPackName = (p: StickerPack) => p.name ?? t().chat.emoji.packs[p.id] ?? p.id;
+export const stickerPackName = (p: StickerPack) => t().chat.emoji.packs[p.id] ?? p.id;
 
 export const STICKER_PACKS: StickerPack[] = [
   {
