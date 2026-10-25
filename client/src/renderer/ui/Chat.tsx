@@ -603,14 +603,6 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
   }, [edit?.id]);
-  useLayoutEffect(() => {
-    const el = ta.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    const h = el.scrollHeight + 1; // fractional line heights round down
-    el.style.height = Math.min(h, 240) + 'px';
-    el.style.overflowY = h > 240 ? 'auto' : 'hidden';
-  }, [text, channelId]);
 
   useEffect(() => {
     const h = (e: Event) => addFiles((e as CustomEvent<File[]>).detail);
