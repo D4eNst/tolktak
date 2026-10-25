@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { globalPushToTalk, type HotkeyName, type Hotkeys, installHotkeys, uninstallHotkeys } from './hotkeys';
 import { watchOcclusion } from './occlusion';
 import { checkBeforeLaunch, closeLaunchWindow, installUpdate, installUpdater, serverChanged } from './updater';
-import { audioPidForWindow, exeForPid, hwndFromSourceId, processLoopbackSupported, windowsBuild } from './winaudio';
+import { audioProcessForWindow, hwndFromSourceId, processLoopbackSupported, windowsBuild } from './winaudio';
 
 if (process.env.TOLKTAK_USER_DATA) app.setPath('userData', path.resolve(process.env.TOLKTAK_USER_DATA));
 
@@ -118,7 +118,7 @@ const str = () => (app.getLocale().toLowerCase().startsWith('ru') ? STRINGS.ru :
 
 const AUDIO_MODES = ['app', 'system', 'system-all', 'none'] as const;
 type CaptureChoice = { id: string; audio: (typeof AUDIO_MODES)[number] };
-let offeredSources = new Set<string>();
+let offeredSources = new Map<string, string>();
 let pendingChoice: CaptureChoice | null = null;
 let lastAudioInfo: { device: string; pid?: number; exe?: string } | null = null;
 
@@ -130,10 +130,10 @@ function audioDeviceFor(choice: CaptureChoice): string | null {
   if (!supported) return null;
   if (choice.audio === 'app') {
     const hwnd = hwndFromSourceId(choice.id);
-    const pid = hwnd !== null ? audioPidForWindow(hwnd) : null;
-    if (pid) {
-      lastAudioInfo = { device: 'applicationLoopback', pid, exe: exeForPid(pid) };
-      return `applicationLoopback:${pid}`;
+    const proc = hwnd !== null ? audioProcessForWindow(hwnd) : null;
+    if (proc) {
+      lastAudioInfo = { device: 'applicationLoopback', ...proc };
+      return `applicationLoopback:${proc.pid}`;
     }
   }
   // Whole screen, or a window whose PID is unknown: everything except TolkTak.
@@ -142,27 +142,22 @@ function audioDeviceFor(choice: CaptureChoice): string | null {
 }
 
 function installDisplayMediaHandler() {
-  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     const choice = pendingChoice;
     pendingChoice = null;
-    if (!choice) {
+    const name = choice ? offeredSources.get(choice.id) : undefined;
+    if (!choice || name === undefined) {
       callback({});
       return;
     }
     try {
-      const sources = await desktopCapturer.getSources({ types: ['window', 'screen'], thumbnailSize: { width: 0, height: 0 } });
-      const source = sources.find((s) => s.id === choice.id);
-      if (!source) {
-        callback({});
-        return;
-      }
-      const streams: Electron.Streams = { video: source };
+      const streams: Electron.Streams = { video: { id: choice.id, name } };
       const device = request.audioRequested ? audioDeviceFor(choice) : null;
       if (device) {
         // Electron forwards a plain string as the Chromium audio device id.
         (streams as { audio?: string }).audio = device;
       }
-      console.log(`[capture] source=${source.id} (${source.name}) audio=${device ?? 'none'} pid=${lastAudioInfo?.pid ?? '-'} exe=${lastAudioInfo?.exe ?? '-'}`);
+      console.log(`[capture] source=${choice.id} (${name}) audio=${device ?? 'none'} pid=${lastAudioInfo?.pid ?? '-'} exe=${lastAudioInfo?.exe ?? '-'}`);
       callback(streams);
     } catch (err) {
       console.error('display media handler', err);
@@ -299,7 +294,7 @@ function installIpc() {
       fetchWindowIcons: true,
     });
     const offered = sources.filter((s) => s.id !== own && s.name !== 'TolkTak');
-    offeredSources = new Set(offered.map((s) => s.id));
+    offeredSources = new Map(offered.map((s) => [s.id, s.name]));
     return offered.map((s) => ({
       id: s.id,
       name: s.name,

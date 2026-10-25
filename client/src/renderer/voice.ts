@@ -125,6 +125,7 @@ export type PeerView = {
   micMuted: boolean;
   camera?: Track;
   screen?: Track;
+  shared: boolean;
   screenAudio: boolean;
   quality: string;
 };
@@ -162,7 +163,7 @@ export const watching = signal<string | null>(null);
 export const speakingRemote = signal(false);
 export const speaking = signal<ReadonlySet<string>>(new Set());
 
-export const streams = computed(() => peers.value.filter((p) => p.screen));
+export const streams = computed(() => peers.value.filter((p) => p.shared));
 
 let room: Room | null = null;
 let leaving = false;
@@ -456,14 +457,12 @@ function viewOf(p: Participant, isLocal: boolean): PeerView {
     speaking: speaking.value.has(p.identity),
     micMuted: !mic || mic.isMuted,
     camera: cam && !cam.isMuted ? cam.track : undefined,
-    screen: scr ? (scr.track ?? (isLocal ? undefined : placeholderTrack)) : undefined,
+    screen: scr?.track,
+    shared: !!scr,
     screenAudio: !!scrA,
     quality: p.connectionQuality,
   };
 }
-
-// Unsubscribed shares still need a "watch" card.
-const placeholderTrack = {} as Track;
 
 function refresh() {
   const r = room;
@@ -473,7 +472,7 @@ function refresh() {
   }
   const list = [viewOf(r.localParticipant, true), ...[...r.remoteParticipants.values()].map((p) => viewOf(p, false))];
   peers.value = list;
-  if (watching.value && !list.some((p) => p.identity === watching.value && p.screen)) watching.value = null;
+  if (watching.value && !list.some((p) => p.identity === watching.value && p.shared)) watching.value = null;
 }
 
 export async function toggleMic() {
