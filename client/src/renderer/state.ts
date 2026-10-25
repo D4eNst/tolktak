@@ -274,7 +274,11 @@ async function resync() {
       const last = cm.items[cm.items.length - 1];
       if (!last) continue;
       const { messages: fresh } = await api().messages(cid, { after: last.id, limit: 100 });
-      fresh.forEach(upsertMessage);
+      if (fresh.length < 100) fresh.forEach(upsertMessage);
+      else {
+        setIn(messages, cid, { ...cmFor(cid), items: [], loaded: false });
+        await openChannel(cid);
+      }
     }
   } catch (e) {
     console.warn('resync failed', e);
