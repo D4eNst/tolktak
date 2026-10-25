@@ -1,0 +1,154 @@
+# TolkTak with HTTPS, PostgreSQL, S3 file storage and LiveKit. See docs/install/compose.md.
+#   Put .env next to this file, then: docker compose up -d
+# COMPOSE_PROFILES in .env picks the bundled services. Upgrades replace this file:
+# keep your own changes in .env or compose.override.yaml.
+name: tolktak
+
+services:
+  tolktak:
+    image: d4enst/tolktak-server:${TOLKTAK_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      TOLKTAK_SERVER_NAME: ${TOLKTAK_SERVER_NAME:-TolkTak}
+      TOLKTAK_REGISTRATION: ${TOLKTAK_REGISTRATION:-invite}
+      TOLKTAK_MAX_UPLOAD_MB: ${TOLKTAK_MAX_UPLOAD_MB:-50}
+      TOLKTAK_USER_QUOTA_MB: ${TOLKTAK_USER_QUOTA_MB:-2048}
+      TOLKTAK_CLIENT_DOWNLOAD_URL: ${TOLKTAK_CLIENT_DOWNLOAD_URL:-}
+      TOLKTAK_TRUST_PROXY: ${TOLKTAK_TRUST_PROXY:-1}
+      TOLKTAK_DATABASE_URL: ${TOLKTAK_DATABASE_URL:-postgres://tolktak:${POSTGRES_PASSWORD:-}@postgres:5432/tolktak}
+      TOLKTAK_S3_BUCKET: ${TOLKTAK_S3_BUCKET-tolktak}
+      TOLKTAK_S3_ENDPOINT: ${TOLKTAK_S3_ENDPOINT-http://garage:3900}
+      TOLKTAK_S3_REGION: ${TOLKTAK_S3_REGION-garage}
+      TOLKTAK_S3_ACCESS_KEY: ${TOLKTAK_S3_ACCESS_KEY:-${GARAGE_ACCESS_KEY:-}}
+      TOLKTAK_S3_SECRET_KEY: ${TOLKTAK_S3_SECRET_KEY:-${GARAGE_SECRET_KEY:-}}
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-}
+      LIVEKIT_INTERNAL_URL: ${LIVEKIT_INTERNAL_URL:-http://livekit:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-tolktak}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?generate the secrets, see docs/install/compose.md}
+      TOLKTAK_DEBUG: ${TOLKTAK_DEBUG:-}
+    volumes:
+      - data:/data
+    ports:
+      - ${TOLKTAK_BIND:-127.0.0.1}:${TOLKTAK_PORT:-8080}:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      garage:
+        condition: service_started
+        required: false
+
+  livekit:
+    profiles: [livekit]
+    image: livekit/livekit-server:v1.13.10
+    restart: unless-stopped
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        rtc:
+          tcp_port: ${LIVEKIT_TCP_PORT:-7881}
+          udp_port: ${LIVEKIT_UDP_PORT:-7882}
+          use_external_ip: ${LIVEKIT_USE_EXTERNAL_IP:-true}
+          node_ip: ${LIVEKIT_NODE_IP:-}
+        keys:
+          ${LIVEKIT_API_KEY:-tolktak}: ${LIVEKIT_API_SECRET:?generate the secrets, see docs/install/compose.md}
+        webhook:
+          api_key: ${LIVEKIT_API_KEY:-tolktak}
+          urls: [http://tolktak:8080/api/v1/livekit/webhook]
+        room:
+          empty_timeout: 60
+          # Adds H.264 42001f: Chromium encodes it on the GPU, the default 42e01f only in software.
+          enabled_codecs:
+            - mime: audio/opus
+            - mime: audio/red
+            - mime: audio/PCMU
+            - mime: audio/PCMA
+            - mime: video/H264
+              fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
+            - mime: video/H264
+            - mime: video/VP8
+            - mime: video/VP9
+            - mime: video/AV1
+            - mime: video/H265
+            - mime: video/rtx
+        turn:
+          enabled: false
+    ports:
+      - ${LIVEKIT_BIND:-127.0.0.1}:${LIVEKIT_PORT:-7880}:7880
+      - ${LIVEKIT_TCP_PORT:-7881}:${LIVEKIT_TCP_PORT:-7881}
+      - ${LIVEKIT_UDP_PORT:-7882}:${LIVEKIT_UDP_PORT:-7882}/udp
+
+  postgres:
+    profiles: [postgres]
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tolktak
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?generate the secrets, see docs/install/compose.md}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD, pg_isready, -U, tolktak]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  garage:
+    profiles: [garage]
+    image: dxflrs/garage:v2.5.0
+    restart: unless-stopped
+    command: [/garage, server, --single-node, --default-bucket]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?generate the secrets, see docs/install/compose.md}
+      GARAGE_DEFAULT_ACCESS_KEY: ${GARAGE_ACCESS_KEY:?generate the secrets, see docs/install/compose.md}
+      GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_SECRET_KEY:?generate the secrets, see docs/install/compose.md}
+      GARAGE_DEFAULT_BUCKET: tolktak
+    configs:
+      - source: garage
+        target: /etc/garage.toml
+    volumes:
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+
+  caddy:
+    profiles: [caddy]
+    image: caddy:2.11
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    configs:
+      - source: caddy
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
+configs:
+  caddy:
+    content: |
+      ${TOLKTAK_DOMAIN:?set TOLKTAK_DOMAIN in .env} {
+        reverse_proxy /rtc* livekit:7880
+        reverse_proxy tolktak:8080
+      }
+  garage:
+    content: |
+      metadata_dir = "/var/lib/garage/meta"
+      data_dir = "/var/lib/garage/data"
+      db_engine = "sqlite"
+      replication_factor = 1
+      rpc_bind_addr = "[::]:3901"
+      rpc_public_addr = "127.0.0.1:3901"
+
+      [s3_api]
+      s3_region = "garage"
+      api_bind_addr = "[::]:3900"
+
+volumes:
+  data:
+  postgres-data:
+  garage-meta:
+  garage-data:
+  caddy-data:
+  caddy-config:

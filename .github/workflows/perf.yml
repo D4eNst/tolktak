@@ -3,7 +3,7 @@ name: Perf
 # Shared runners without a GPU: only large regressions are caught.
 on:
   pull_request:
-    paths: ['client/src/**', 'client/package*.json', 'client/e2e/stack.ts', 'perf/**', 'deploy/livekit.yaml.template', '.github/workflows/perf.yml']
+    paths: ['client/src/**', 'client/package*.json', 'client/e2e/stack.ts', 'perf/**', 'server/tolktak/livekit_process.py', 'deploy/compose.yaml', '.github/workflows/perf.yml']
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
