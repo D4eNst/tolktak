@@ -135,6 +135,6 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - run: gh release upload "$GITHUB_REF_NAME" deploy/compose.yaml deploy/example.env --clobber
+      - run: gh release upload "$GITHUB_REF_NAME" deploy/install.sh deploy/compose.yaml deploy/example.env --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
