@@ -126,9 +126,9 @@ test('voice processing: noise suppression and leveller on the wire', async () =>
   await expect(alice.locator('.select:has-text("Максимальное")')).toBeVisible();
   await alice.click('button:has-text("Послушать себя")');
   await expect(alice.locator('.meter-gain').first()).toBeVisible({ timeout: 10_000 });
-  await alice.waitForTimeout(1500);
-  const fill = await alice.locator('.meter-fill').first().evaluate((e) => parseFloat((e as HTMLElement).style.width));
-  expect(fill, 'meter moves with the processed voice').toBeGreaterThan(0);
+  // The pauses between words are silent after the strongest noise suppression.
+  const fill = () => alice.locator('.meter-fill').first().evaluate((e) => parseFloat((e as HTMLElement).style.width));
+  await expect.poll(fill, { message: 'meter moves with the processed voice', timeout: 5000 }).toBeGreaterThan(0);
   if (process.env.SHOWCASE_DIR) await alice.screenshot({ path: path.join(process.env.SHOWCASE_DIR, '20-voice-processing.png') });
   await alice.click('button:has-text("Остановить")');
   await alice.keyboard.press('Escape');
