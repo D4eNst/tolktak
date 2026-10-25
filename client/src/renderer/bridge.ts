@@ -32,10 +32,7 @@ type Bridge = {
   lastCaptureAudio(): Promise<{ device: string; pid?: number; exe?: string } | null>;
   setInCall(v: boolean): Promise<void>;
   requestAttention(): Promise<void>;
-  openExternal(url: string): Promise<void>;
-  setTitle(t: string): Promise<void>;
   setBadge(count: number, dataUrl: string): Promise<void>;
-  copy(text: string): Promise<void>;
   download(url: string): Promise<void>;
   mediaAccess(kind: MediaKind, ask: boolean): Promise<MediaAccess>;
   openPrivacySettings(kind: MediaKind): Promise<void>;
@@ -92,16 +89,7 @@ const browserFallback: Bridge = {
   },
   async setInCall() {},
   async requestAttention() {},
-  async openExternal(url) {
-    window.open(url, '_blank', 'noopener');
-  },
-  async setTitle(t) {
-    document.title = t;
-  },
   async setBadge() {},
-  async copy(text) {
-    await navigator.clipboard.writeText(text);
-  },
   async download(url) {
     const a = document.createElement('a');
     a.href = url;
@@ -135,5 +123,18 @@ const browserFallback: Bridge = {
   },
 };
 
-export const bridge: Bridge = native ?? browserFallback;
+// Web APIs work the same in Electron, whose window-open handler sends http(s) links to the browser.
+const web = {
+  async openExternal(url: string) {
+    window.open(url, '_blank', 'noopener');
+  },
+  async setTitle(t: string) {
+    document.title = t;
+  },
+  async copy(text: string) {
+    await navigator.clipboard.writeText(text);
+  },
+};
+
+export const bridge = { ...(native ?? browserFallback), ...web };
 export const platform: 'win32' | 'darwin' | 'other' = navigator.userAgent.includes('Windows') ? 'win32' : navigator.userAgent.includes('Mac') ? 'darwin' : 'other';

@@ -1,7 +1,6 @@
 import {
   app,
   BrowserWindow,
-  clipboard,
   desktopCapturer,
   ipcMain,
   type IpcMainInvokeEvent,
@@ -283,7 +282,6 @@ function installIpc() {
   // fetch() cannot read large assets from file://.
   const assets = new Set(['dfn/df_bg.wasm', 'dfn/model.tar.gz']);
   handle('asset:read', (name: string) => (assets.has(name) ? readFileSync(path.join(__dirname, 'assets', name)) : null));
-  handle('app:copy', (text: string) => clipboard.writeText(String(text).slice(0, 10000)));
   handle('app:info', () => ({
     version: app.getVersion(),
     platform: process.platform,
@@ -330,10 +328,6 @@ function installIpc() {
   handle('app:attention', () => {
     if (win && !win.isFocused()) win.flashFrame(true);
   });
-  handle('app:openExternal', (url: string) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
-  });
-  handle('app:setTitle', (title: string) => win?.setTitle(String(title).slice(0, 120)));
   // The page is file://, so <a download> is ignored for files on the server.
   handle('app:download', (url: string) => {
     if (/^https?:\/\//i.test(url)) win?.webContents.downloadURL(url);
