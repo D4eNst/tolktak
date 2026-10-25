@@ -178,7 +178,7 @@ export function QuickSwitcher() {
             if (e.key === 'ArrowDown') (e.preventDefault(), setIdx(Math.min(idx + 1, items.length - 1)));
             if (e.key === 'ArrowUp') (e.preventDefault(), setIdx(Math.max(idx - 1, 0)));
             if (e.key === 'Enter') pick(items[idx]);
-            if (e.key === 'Escape') close();
+            if (e.key === 'Escape') (e.preventDefault(), close());
           }}
         />
         <div class="switcher-list" ref={listRef}>
