@@ -2,7 +2,7 @@ import { signal } from '@preact/signals';
 import { Component, type ComponentChildren } from 'preact';
 import { memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import type { FileMeta, Message } from '../api';
+import { ApiError, type FileMeta, type Message } from '../api';
 import { bridge } from '../bridge';
 import { t } from '../i18n';
 import {
@@ -937,7 +937,8 @@ function SearchPanel({ channelId, onClose }: { channelId: number; onClose: () =>
       api()
         .messages(channelId, { q: s, limit: 50 })
         .then((r) => setRes(r.messages))
-        .catch((e) => toast(errorText(e), 'error'));
+        // The next keystroke searches again.
+        .catch((e) => e instanceof ApiError && e.code === 'rate_limited' ? undefined : toast(errorText(e), 'error'));
     }, 250);
     return () => clearTimeout(timer);
   }, [q, channelId]);

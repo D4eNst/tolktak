@@ -131,7 +131,7 @@ async def _writer(ws: WebSocket, conn: Conn, token: str) -> None:
 async def _reader(ws: WebSocket, s: Server, uid: int) -> None:
     while True:
         f = await _read(ws)
-        if f is None:
+        if f is None or not s.rl.allow(f"ws:{uid}", 20, 300):
             continue
         match f.get("type"):
             case "typing":

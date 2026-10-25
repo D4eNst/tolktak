@@ -51,6 +51,7 @@ async def list_messages(request: Request, user: User):
     if not 0 < limit <= 100:
         limit = 50
     if search := request.query_params.get("q", "").strip():
+        server(request).limit(f"search:{user['id']}", 10, 30, "Too many searches, slow down")
         msgs = await chat.search_messages(cid, search, limit)
     else:
         msgs = await chat.list_messages(cid, query_int(request, "before"), query_int(request, "after"), limit)
