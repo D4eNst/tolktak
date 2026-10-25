@@ -142,12 +142,13 @@ export function QuickSwitcher() {
       });
     }
     const s = q.trim().toLowerCase();
+    const dms = new Map([...channels.value.values()].filter((c) => c.kind === 'dm').map((c) => ['u' + c.peer_id, c]));
     const scored = out
       .map((it) => {
         const l = it.label.toLowerCase();
         const h = it.hint.toLowerCase();
         const score = !s ? 1 : l.startsWith(s) ? 3 : l.includes(s) ? 2 : h.includes(s) ? 1 : 0;
-        const unreadBoost = !s && it.key.startsWith('u') ? [...channels.value.values()].some((c) => c.kind === 'dm' && 'u' + c.peer_id === it.key && c.unread) ? 1 : 0 : 0;
+        const unreadBoost = !s && dms.get(it.key)?.unread ? 1 : 0;
         return { it, score: score + unreadBoost };
       })
       .filter((x) => x.score > 0)

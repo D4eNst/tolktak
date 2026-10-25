@@ -8,7 +8,6 @@ import {
   channelMuted,
   channels,
   connection,
-  dmChannelWith,
   errorText,
   groupRole,
   groups,
@@ -215,11 +214,12 @@ function HomeSidebar() {
   const [q, setQ] = useState('');
   const myId = me.value?.id;
   const tx = t().shell.home;
+  const dms = new Map([...channels.value.values()].filter((c) => c.kind === 'dm').map((c) => [c.peer_id, c]));
   const people = [...users.value.values()]
     .filter((u) => u.id !== myId && (u.display_name.toLowerCase().includes(q.toLowerCase()) || u.username.includes(q.toLowerCase())))
     .sort((a, b) => {
-      const ca = dmChannelWith(a.id)?.last_message?.id ?? 0;
-      const cb = dmChannelWith(b.id)?.last_message?.id ?? 0;
+      const ca = dms.get(a.id)?.last_message?.id ?? 0;
+      const cb = dms.get(b.id)?.last_message?.id ?? 0;
       if (ca !== cb) return cb - ca;
       return Number(online.value.has(b.id)) - Number(online.value.has(a.id)) || a.display_name.localeCompare(b.display_name);
     });
@@ -238,7 +238,7 @@ function HomeSidebar() {
           <span class="side-label-count">{tx.onlineCount(people.filter((p) => online.value.has(p.id)).length)}</span>
         </div>
         {people.map((u) => {
-          const ch = dmChannelWith(u.id);
+          const ch = dms.get(u.id);
           const active = v.kind === 'home' && ch && v.channelId === ch.id;
           const inCall = ch && (voiceRooms.value.get('dm' + ch.id) ?? []).length > 0;
           const sub = ch?.last_message ? messagePreview(ch.last_message) : u.status || '@' + u.username;
