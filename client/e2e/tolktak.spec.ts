@@ -24,6 +24,7 @@ test('DM: realtime delivery, unread badge, reply', async ({ browser }) => {
   await expect(bobItem.locator('.badge')).toHaveText('1');
   await bobItem.click();
   await expect(bob.locator('.msg-text', { hasText: 'Привет, Боб!' })).toBeVisible();
+  await expect(bob.locator('.new-divider')).toBeVisible();
   await expect(bobItem.locator('.badge')).toHaveCount(0);
   await bob.locator('.composer textarea').fill('Привет!');
   await bob.keyboard.press('Enter');

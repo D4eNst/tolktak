@@ -1152,7 +1152,7 @@ export function ChatView({
                       <span>{dayLabel(m.created_at)}</span>
                     </div>
                   )}
-                  {prev && prev.id <= readMark && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
+                  {(prev ? prev.id <= readMark : !cm?.hasOlder) && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
                   <RowBoundary>
                     <MessageRow m={m} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} editing={editing === m.id} setEditing={setEditing} />
                   </RowBoundary>
