@@ -419,8 +419,10 @@ async function rejoin() {
     if (call.value?.room !== c.room) break;
     try {
       const { url, token } = await api().joinVoice(c.target);
+      if (call.value?.room !== c.room) break;
       await room?.disconnect().catch(() => {});
       await connect(url, token, true);
+      if (call.value?.room !== c.room) break;
       toast(t().core.voice.rejoined);
       break;
     } catch {
