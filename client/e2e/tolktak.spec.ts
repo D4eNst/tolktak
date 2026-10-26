@@ -193,3 +193,48 @@ test('signing out leaves voice, also while the join request is in flight', async
   expect(await joining.evaluate(() => (globalThis as any).__tolktak.room === null), 'no LiveKit room after signing out').toBe(true);
   await joining.context().close();
 });
+
+test('message previews, the keyboard message menu and labels after midnight', async ({ browser }) => {
+  const alice = await loginToken(stack.api, 'alice');
+  const call = (path: string, body: unknown) =>
+    fetch(stack.api + '/api/v1' + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + alice },
+      body: JSON.stringify(body),
+    }).then((r) => r.json());
+  const { channel } = await call('/dms', { user_id: ids.carol });
+  await call(`/channels/${channel.id}/messages`, { text: 'Открой **config_file.py** и _снова_ проверь snake_case * 2', nonce: crypto.randomUUID() });
+
+  const ctx = await browser.newContext({ locale: 'ru-RU' });
+  const carol = await ctx.newPage();
+  const now = new Date();
+  await carol.clock.install({ time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 30) });
+  await carol.goto(stack.web);
+  await carol.fill('input[name=server]', stack.api);
+  await carol.fill('input[name=username]', 'carol');
+  await carol.fill('input[name=password]', 'password123');
+  await carol.click('button[type=submit]');
+  const aliceItem = carol.locator('.side-item', { hasText: 'Alice' });
+  await expect(aliceItem.locator('.side-item-sub')).toHaveText('Открой config_file.py и снова проверь snake_case * 2');
+
+  await aliceItem.click();
+  const msg = carol.locator('.msg', { hasText: 'snake_case' });
+  await msg.hover();
+  const more = msg.locator('.msg-actions button[aria-label="Ещё"]');
+  await more.focus();
+  await carol.keyboard.press('Enter');
+  const box = (await more.boundingBox())!;
+  const menu = (await carol.locator('.menu').boundingBox())!;
+  expect(Math.abs(menu.y - (box.y + box.height)), 'the menu opens under the button').toBeLessThan(box.height);
+  await carol.keyboard.press('Escape');
+  await expect(carol.locator('.menu')).toHaveCount(0);
+  await expect(more).toBeFocused();
+
+  const time = msg.locator('.msg-time');
+  await expect(time).not.toContainText('вчера');
+  await carol.clock.runFor(60_000);
+  // Before the socket's watchdog, now behind the clock, reconnects and redraws everything.
+  await expect(time).toContainText('вчера', { timeout: 2000 });
+  await expect(carol.locator('.day-divider', { hasText: 'Вчера' })).toBeVisible({ timeout: 2000 });
+  await ctx.close();
+});
