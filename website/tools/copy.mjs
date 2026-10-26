@@ -70,6 +70,6 @@ export const copy = {
 };
 
 export const docGroups = {
-  ru: { install: 'Начало работы', guides: 'Сеть и база данных', operations: 'Управление сервером', development: 'Разработка', project: 'Проект' },
+  ru: { install: 'Начало работы', guides: 'Сеть и база данных', operations: 'Управление сервером', project: 'Проект' },
   en: { install: 'Getting started', guides: 'Network and database', operations: 'Server administration', development: 'Development', project: 'Project' },
 };
