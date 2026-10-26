@@ -167,7 +167,7 @@
   font: 600 9px/1 var(--w-mono);
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #6f6779;
+  color: var(--w-faint);
   white-space: nowrap;
   transition: color 0.4s var(--w-ease);
 }
