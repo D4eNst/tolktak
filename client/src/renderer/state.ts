@@ -53,15 +53,19 @@ export function setDraft(cid: number, text: string) {
   if (text) setIn(drafts, cid, text);
   else delIn(drafts, cid);
 }
+// Inline markup as Markdown renders it; any other * and _ are text.
+const MARKUP = /(\*\*|__|~~)([\s\S]+?)\1|`([^`\n]+)`|\*([^*\s](?:[^*]*[^*\s])?)\*|\b_([^_\s](?:[^_]*[^_\s])?)_\b/g;
+const unmark = (s: string): string => s.replace(MARKUP, (_, _mark, inner, code, em, em2) => code ?? unmark(inner ?? em ?? em2));
 export function messagePreview(m: { text: string; deleted?: boolean; attachments?: FileMeta[] | number }): string {
   const p = t().core.preview;
   if (m.deleted) return p.deleted;
   if (/^\[\[sticker:[\w-]+\]\]$/.test(m.text)) return p.sticker;
-  // Spoilers are masked before markup characters, | among them, are stripped.
-  const text = m.text
-    .replace(/```[\s\S]*?```/g, p.code)
-    .replace(/\|\|[\s\S]+?\|\|/g, '▒▒▒')
-    .replace(/[*_~`|>#]+/g, '')
+  const text = unmark(
+    m.text
+      .replace(/```[\s\S]*?```/g, p.code)
+      .replace(/\|\|[\s\S]+?\|\|/g, '▒▒▒')
+      .replace(/^(?:>\s?)+/gm, ''),
+  )
     .replace(/\s+/g, ' ')
     .trim();
   if (text) return text;
