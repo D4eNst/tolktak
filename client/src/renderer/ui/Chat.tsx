@@ -167,7 +167,7 @@ function Attachments({ files }: { files: FileMeta[] }) {
               <button
                 key={f.id}
                 class="img-att"
-                style={single ? { width: Math.max(80, Math.round(w * scale)), aspectRatio: `${w} / ${h}` } : undefined}
+                style={single ? { width: `${Math.max(80, Math.round(w * scale))}px`, aspectRatio: `${w} / ${h}` } : undefined}
                 onClick={() => (lightbox.value = { images, index: i })}
                 onContextMenu={(e) =>
                   openMenu(e, [
