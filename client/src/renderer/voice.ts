@@ -423,6 +423,7 @@ async function rejoin() {
       await room?.disconnect().catch(() => {});
       await connect(url, token, true);
       if (call.value?.room !== c.room) break;
+      if (room?.state === ConnectionState.Disconnected) continue;
       toast(t().core.voice.rejoined);
       break;
     } catch {
