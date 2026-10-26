@@ -353,7 +353,7 @@ const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, edi
       toast(errorText(e), 'error');
     }
   };
-  const menu = (e: MouseEvent) => {
+  const menu = (e: Parameters<typeof openMenu>[0]) => {
     if (m.deleted) return;
     const sel = window.getSelection()?.toString();
     const tm = t().chat.message;
@@ -442,7 +442,14 @@ const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, edi
               <Icon name="edit" size={18} />
             </button>
           )}
-          <button onClick={menu} title={t().chat.message.more} aria-label={t().chat.message.more}>
+          <button
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              menu(e.detail ? e : { clientX: r.left, clientY: r.bottom + 4 });
+            }}
+            title={t().chat.message.more}
+            aria-label={t().chat.message.more}
+          >
             <Icon name="more" size={18} />
           </button>
         </div>
