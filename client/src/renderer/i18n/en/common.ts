@@ -43,7 +43,7 @@ export default {
     password: 'Password',
     signingIn: 'Signing in…',
     signIn: 'Sign in',
-    register: 'No account? Sign up with an invite',
+    register: 'No account? Sign up on the server’s website',
     showPassword: 'Show password',
     hidePassword: 'Hide password',
     capsLock: 'Caps Lock is on',
