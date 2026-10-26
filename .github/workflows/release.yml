@@ -96,14 +96,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - id: image
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+          echo "hub=docker.io/${HUB,,}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+        env:
+          HUB: ${{ secrets.DOCKERHUB_USERNAME }}
       # Pre-releases get only their own tag; latest follows stable releases.
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
             ${{ steps.image.outputs.name }}
-            name=docker.io/d4enst/${{ matrix.name }},enable=${{ env.DOCKERHUB }}
+            name=${{ steps.image.outputs.hub }},enable=${{ env.DOCKERHUB }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
