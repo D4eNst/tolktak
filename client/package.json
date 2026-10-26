@@ -29,7 +29,7 @@
     "@sapphi-red/web-noise-suppressor": "^0.4.1",
     "@types/node": "^22.20.5",
     "electron": "45.0.0",
-    "electron-builder": "26.15.3",
+    "electron-builder": "26.17.0",
     "esbuild": "0.28.2",
     "livekit-client": "2.23.0",
     "preact": "10.29.8",
