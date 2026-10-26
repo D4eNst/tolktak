@@ -34,6 +34,10 @@ updates:
     groups:
       npm:
         update-types: [minor, patch]
+    ignore:
+      # Node types follow the Node version inside Electron and move with Electron updates.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
   - package-ecosystem: uv
     directory: /server
     schedule:
