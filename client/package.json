@@ -34,7 +34,7 @@
     "livekit-client": "2.23.0",
     "preact": "10.29.8",
     "rcedit": "5.0.2",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "build": {
     "appId": "org.tolktak.client",
