@@ -1,4 +1,4 @@
-import { expect, test, type WebSocketRoute } from '@playwright/test';
+import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 import { expectFlowing, joinRoom, openClient, stats } from './helpers';
 import { loginToken, register, startStack, type Stack } from './stack';
 
@@ -150,4 +150,46 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   await expect(carol.locator('.room-member')).toHaveCount(2);
 
   for (const p of [alice, bob, carol]) await p.context().close();
+});
+
+test('signing out leaves voice, also while the join request is in flight', async ({ browser }) => {
+  const token = await loginToken(stack.api, 'carol');
+  await fetch(stack.api + '/api/v1/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ name: 'Выход', members: [], room_name: 'Общая' }),
+  });
+  const logOut = async (p: Page) => {
+    await p.click('.self-id');
+    await p.locator('.self-menu button.danger-text').click();
+    await p.click('.modal .danger-btn');
+    await expect(p.locator('input[name=username]')).toBeVisible();
+  };
+
+  const inCall = await openClient(browser, stack, 'carol');
+  await joinRoom(inCall, 'Выход');
+  const left = inCall.waitForResponse('**/api/v1/voice/leave');
+  await logOut(inCall);
+  expect((await left).status(), 'the room must be left while the token is still valid').toBe(204);
+  await inCall.context().close();
+
+  const joining = await openClient(browser, stack, 'carol');
+  let joinSent!: () => void;
+  let releaseJoin!: () => void;
+  const sent = new Promise<void>((r) => (joinSent = r));
+  const released = new Promise<void>((r) => (releaseJoin = r));
+  await joining.route('**/api/v1/voice/join', async (route) => {
+    const res = await route.fetch();
+    joinSent();
+    await released;
+    await route.fulfill({ response: res });
+  });
+  await joining.locator('.rail-btn.group', { hasText: 'ВЫ' }).click();
+  await joining.locator('.room-join', { hasText: 'Общая' }).click();
+  await sent;
+  await logOut(joining);
+  releaseJoin();
+  await joining.waitForTimeout(3000);
+  expect(await joining.evaluate(() => (globalThis as any).__tolktak.room === null), 'no LiveKit room after signing out').toBe(true);
+  await joining.context().close();
 });

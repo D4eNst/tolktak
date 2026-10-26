@@ -3,7 +3,7 @@ import { bridge, isDesktop, platform, type AppInfo, type DesktopSettings, type H
 import { accelFromEvent, accelFromMouse, accelLabel, hotkeys, hotkeysAreGlobal, setHotkey } from '../keys';
 import { api, errorText, logout, me, notificationsOn, serverUpdate, session, setNotifications, settingsOpen, type SettingsTab, toast } from '../state';
 import type { ChainStats, Denoise, VoiceChain } from '../audio/chain';
-import { call, micOn, toggleMic, chainSettings, createVoiceChain, micConstraints, micGain, micLevel, playTone, prefs, restartCamera, restartMic, setPrefs, switchDevices, applyGate, cameraOn } from '../voice';
+import { call, micOn, toggleMic, leaveVoice, chainSettings, createVoiceChain, micConstraints, micGain, micLevel, playTone, prefs, restartCamera, restartMic, setPrefs, switchDevices, applyGate, cameraOn } from '../voice';
 import { Avatar, confirmDialog, Icon, Modal, type Option, Select, Slider, Toggle } from './common';
 import { pickImage } from './GroupSettings';
 import { intlLocale, LOCALES, locale, setLocale, t, type Locale } from '../i18n';
@@ -379,7 +379,7 @@ function ProfileTab() {
         onClick={async () => {
           if (!(await confirmDialog(tx.logoutConfirm, { ok: tx.logoutOk, danger: true }))) return;
           settingsOpen.value = false;
-          logout();
+          leaveVoice().finally(logout);
         }}
       >
         <Icon name="logout" size={16} /> {tx.logout}
