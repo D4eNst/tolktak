@@ -297,7 +297,7 @@ async function resync() {
       const { messages: fresh } = await api().messages(cid, { after: last.id, limit: 100 });
       if (fresh.length < 100) fresh.forEach(upsertMessage);
       else {
-        setIn(messages, cid, { ...cmFor(cid), items: [], loaded: false });
+        setIn(messages, cid, { ...cmFor(cid), items: [], loading: false, loaded: false });
         await openChannel(cid);
       }
     }
@@ -531,6 +531,7 @@ export async function loadOlder(cid: number) {
   try {
     const { messages: older } = await api().messages(cid, { before: cm.items[0].id, limit: 50 });
     const now = cmFor(cid);
+    if (now.items[0]?.id !== cm.items[0].id) return;
     setIn(messages, cid, { ...now, items: [...older, ...now.items], hasOlder: older.length === 50, loading: false });
   } catch (e) {
     setIn(messages, cid, { ...cmFor(cid), loading: false });
