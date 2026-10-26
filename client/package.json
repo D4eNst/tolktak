@@ -104,6 +104,8 @@
     "mac": {
       "icon": "build/icon.png",
       "category": "public.app-category.social-networking",
+      "identity": "-",
+      "hardenedRuntime": false,
       "target": [
         {
           "target": "dmg",
