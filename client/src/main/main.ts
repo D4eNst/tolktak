@@ -74,7 +74,7 @@ function cleanSettings(raw: unknown): Persisted {
   return out;
 }
 
-function readSettings(): Persisted {
+async function readSettings(): Promise<Persisted> {
   let raw: Record<string, unknown>;
   try {
     raw = JSON.parse(readFileSync(settingsFile(), 'utf8'));
@@ -82,9 +82,9 @@ function readSettings(): Persisted {
     return { minimizeToTray: true };
   }
   if (!raw || typeof raw !== 'object') return { minimizeToTray: true };
-  if (typeof raw.tokenEnc === 'string' && safeStorage.isEncryptionAvailable()) {
+  if (typeof raw.tokenEnc === 'string' && (await safeStorage.isAsyncEncryptionAvailable())) {
     try {
-      raw.token = safeStorage.decryptString(Buffer.from(raw.tokenEnc, 'base64'));
+      raw.token = (await safeStorage.decryptStringAsync(Buffer.from(raw.tokenEnc, 'base64'))).result;
     } catch (err) {
       // Encrypted under another OS account or keychain: sign in again, keep the other settings.
       console.warn('settings: cannot decrypt the saved token', err);
@@ -94,12 +94,19 @@ function readSettings(): Persisted {
   return cleanSettings(raw);
 }
 
+let saving = Promise.resolve();
+// In order: a write still encrypting must not land after a later one.
 function writeSettings(s: Persisted) {
+  const snapshot = { ...s };
+  return (saving = saving.catch(() => {}).then(() => saveSettings(snapshot)));
+}
+
+async function saveSettings(s: Persisted) {
   const dir = app.getPath('userData');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const out: Persisted & { tokenEnc?: string } = { ...s };
-  if (s.token && safeStorage.isEncryptionAvailable()) {
-    out.tokenEnc = safeStorage.encryptString(s.token).toString('base64');
+  if (s.token && (await safeStorage.isAsyncEncryptionAvailable())) {
+    out.tokenEnc = (await safeStorage.encryptStringAsync(s.token)).toString('base64');
     delete out.token;
   }
   const file = settingsFile();
@@ -261,10 +268,10 @@ function installIpc() {
     openAtLogin: !!settings.openAtLogin,
     allowWin10Loopback: !!settings.allowWin10Loopback,
   }));
-  handle('settings:set', (patch: unknown) => {
+  handle('settings:set', async (patch: unknown) => {
     const valid = cleanSettings(patch);
     Object.assign(settings, valid);
-    writeSettings(settings);
+    await writeSettings(settings);
     if ('hotkeys' in valid) registerShortcuts();
     if ('openAtLogin' in valid && app.isPackaged) app.setLoginItemSettings({ openAtLogin: !!settings.openAtLogin, args: ['--hidden'] });
     return true;
@@ -375,7 +382,7 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   // Packaged builds take the dock icon from the bundle.
   if (process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, 'assets', 'icon-512.png'));
-  settings = readSettings();
+  settings = await readSettings();
   // First, so that nothing failing below can keep the app from receiving a fix.
   installUpdater(() => win);
   restrictFileProtocol();
