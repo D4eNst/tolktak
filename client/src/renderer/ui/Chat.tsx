@@ -501,8 +501,9 @@ function useRecorder(onDone: (blob: Blob) => void) {
   const start = async () => {
     if (starting.current) return;
     starting.current = true;
+    let stream: MediaStream | undefined;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       if (!alive.current) return stream.getTracks().forEach((track) => track.stop());
       const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 48000 });
       const chunks: Blob[] = [];
@@ -524,7 +525,7 @@ function useRecorder(onDone: (blob: Blob) => void) {
       mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
       mr.onstop = () => {
         cancelAnimationFrame(st.raf);
-        stream.getTracks().forEach((track) => track.stop());
+        st.stream.getTracks().forEach((track) => track.stop());
         ctx.close();
         setRec(null);
         ref.current = null;
@@ -533,6 +534,7 @@ function useRecorder(onDone: (blob: Blob) => void) {
       };
       mr.start(250);
     } catch (e) {
+      stream?.getTracks().forEach((track) => track.stop());
       toast(t().chat.composer.micUnavailable(errorText(e)), 'error');
     } finally {
       starting.current = false;
