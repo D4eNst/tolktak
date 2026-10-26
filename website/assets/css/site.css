@@ -91,6 +91,9 @@ body {
 :where(button) {
   cursor: pointer;
 }
+button:disabled {
+  cursor: default;
+}
 :where(a) {
   color: inherit;
 }
