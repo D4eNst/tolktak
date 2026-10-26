@@ -378,6 +378,7 @@ export function MenuHost() {
   const { ref, pos } = useClampedPosition(m?.x ?? 0, m?.y ?? 0, [m]);
   useEffect(() => {
     if (!m) return;
+    const opener = document.activeElement;
     ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus();
     const close = () => (menuState.value = null);
     const k = (e: KeyboardEvent) => {
@@ -395,6 +396,7 @@ export function MenuHost() {
       window.removeEventListener('blur', close);
       window.removeEventListener('keydown', k);
       window.removeEventListener('resize', close);
+      if (document.activeElement === document.body && opener instanceof HTMLElement) opener.focus();
     };
   }, [m]);
   if (!m) return null;
