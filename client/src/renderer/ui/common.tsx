@@ -481,11 +481,15 @@ export const dateFormats = computed(() => {
   };
 });
 
+// Memoised message rows read it, so their labels change at midnight.
+const today = signal(new Date().toDateString());
+setInterval(() => (today.value = new Date().toDateString()), 60_000);
+
 export function timeLabel(ms: number) {
   const d = new Date(ms);
   const now = new Date();
   const hm = dateFormats.value.time.format(d);
-  if (d.toDateString() === now.toDateString()) return hm;
+  if (d.toDateString() === today.value) return hm;
   if (isYesterday(d, now)) return t().common.time.yesterdayAt(hm);
   return dateFormats.value.dayMonth.format(d) + ' ' + hm;
 }
@@ -493,7 +497,7 @@ export function timeLabel(ms: number) {
 export function dayLabel(ms: number) {
   const d = new Date(ms);
   const now = new Date();
-  if (d.toDateString() === now.toDateString()) return t().common.time.today;
+  if (d.toDateString() === today.value) return t().common.time.today;
   if (isYesterday(d, now)) return t().common.time.yesterday;
   return (d.getFullYear() === now.getFullYear() ? dateFormats.value.day : dateFormats.value.dayYear).format(d);
 }
