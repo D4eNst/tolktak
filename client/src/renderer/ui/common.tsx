@@ -103,7 +103,7 @@ export function Avatar({
   return (
     <span
       class={'avatar' + (speaking ? ' speaking' : '') + (src ? ' has-img' : '')}
-      style={{ width: size, height: size, '--c': u?.color ?? '#7a6f86', fontSize: size * 0.4 }}
+      style={{ width: `${size}px`, height: `${size}px`, '--c': u?.color ?? '#7a6f86', fontSize: `${size * 0.4}px` }}
       title={name}
     >
       {src ? <img src={src} alt="" draggable={false} /> : initials(name)}
@@ -117,7 +117,7 @@ export function GroupAvatar({ id, size = 44 }: { id: number; size?: number }) {
   if (!g) return null;
   const src = g.avatar ? avatarUrl(g.avatar) : '';
   return (
-    <span class={'group-avatar' + (src ? ' has-img' : '')} style={{ width: size, height: size, fontSize: size * 0.36 }}>
+    <span class={'group-avatar' + (src ? ' has-img' : '')} style={{ width: `${size}px`, height: `${size}px`, fontSize: `${size * 0.36}px` }}>
       {src ? <img src={src} alt="" draggable={false} /> : g.name.slice(0, 2).toUpperCase()}
     </span>
   );
@@ -402,7 +402,7 @@ export function MenuHost() {
     <div
       class="menu pop-in"
       ref={ref}
-      style={{ left: pos.x, top: pos.y }}
+      style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role=menuitem]')];
@@ -456,7 +456,7 @@ export function Popover({ x, y, onClose, children, class: cls = '' }: { x: numbe
     };
   }, [onClose]);
   return (
-    <div class={'popover pop-in ' + cls} ref={ref} style={{ left: pos.x, top: pos.y }}>
+    <div class={'popover pop-in ' + cls} ref={ref} style={{ left: `${pos.x}px`, top: `${pos.y}px` }}>
       {children}
     </div>
   );

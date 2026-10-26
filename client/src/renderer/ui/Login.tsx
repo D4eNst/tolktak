@@ -74,7 +74,7 @@ export function Login() {
           <span class="pw-field">
             <input
               name="password"
-              type={showPw ? 'text' : 'password'}
+              {...(showPw ? { type: 'text' as const } : { type: 'password' as const })}
               value={password}
               onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
               onKeyUp={(e) => setCaps(e.getModifierState('CapsLock'))}
