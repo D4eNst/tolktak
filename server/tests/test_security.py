@@ -114,6 +114,23 @@ def test_outsider_cannot_announce_voice_presence(make_env):
     assert e.server.hub.voice_members(room) == []
 
 
+def test_member_cannot_announce_presence_in_a_missing_room(make_env):
+    e = make_env()
+    a, _ = e.user("alice")
+    _, body = e.do("POST", "/api/v1/groups", a, {"name": "G", "members": []})
+    gid = body["group"]["id"]
+    room = f"g{gid}r{body['group']['rooms'][0]['id']}"
+    with e.c.websocket_connect("/api/v1/ws") as sock:
+        sock.send_text(json.dumps({"type": "auth", "token": a}))
+        assert json.loads(sock.receive_text())["type"] == "hello"
+        sock.send_text(json.dumps({"type": "voice.joined", "room": f"g{gid}r999"}))
+        sock.send_text(json.dumps({"type": "voice.joined", "room": room}))
+        while (ev := json.loads(sock.receive_text()))["type"] != "voice.room":
+            pass
+    assert ev["data"]["room"] == room
+    assert e.server.hub.voice_rooms() == [room]
+
+
 def test_slow_websocket_is_dropped(make_env):
     e = make_env()
     a, a_id = e.user("alice")
@@ -244,7 +261,7 @@ def test_websocket_frames_are_rate_limited(make_env):
 def test_room_names_have_one_spelling():
     assert parse_room_name("g1r2") == ("group", 1, 2)
     assert parse_room_name("dm3") == ("dm", 3, 0)
-    for name in ("g+1r2", "g1r-2", "dm+3", "dm-3"):
+    for name in ("g+1r2", "g1r-2", "dm+3", "dm-3", "g01r2", "g1r02", "dm03", "g0r1"):
         assert parse_room_name(name) is None, name
 
 
