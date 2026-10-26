@@ -154,7 +154,7 @@ export function QuickSwitcher() {
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score);
     return scored.slice(0, 30).map((x) => x.it);
-  }, [q, groups.value, users.value, online.value, locale.value]);
+  }, [q, groups.value, users.value, online.value, channels.value, me.value, locale.value]);
 
   useEffect(() => setIdx(0), [q]);
   useEffect(() => {
