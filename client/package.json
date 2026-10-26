@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "electron-updater": "6.8.10",
-    "koffi": "2.16.2"
+    "koffi": "3.3.3"
   },
   "devDependencies": {
     "@jitsi/rnnoise-wasm": "0.2.1",
