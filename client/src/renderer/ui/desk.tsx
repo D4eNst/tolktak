@@ -1,5 +1,5 @@
-// The desk: windows described once each, a default layout per situation, a few rules, and
-// dockview as the engine that places them. A new window or situation is a new entry below.
+// The desk: one layout of windows that stays put. Each window is described once below; the main
+// window shows what the navigator picks, the voice window comes and goes with a call. dockview places them.
 import { effect, signal } from '@preact/signals';
 import { render, type VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -44,9 +44,8 @@ import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu } fro
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 
-type Kind = View['kind'];
-export type WindowId = 'dm' | 'channel' | 'room' | 'call' | 'people' | 'profile' | 'chat';
-/** `arg` is what a window is fixed to, from its id `type:arg`: `chat:12` is channel 12 wherever you are. */
+export type WindowId = 'main' | 'voice' | 'people' | 'profile' | 'chat';
+/** `arg` is what a window is fixed to, from its id `type:arg`: `chat:12` is channel 12. */
 type WinProps = { arg?: number };
 type Win = {
   name: () => string;
@@ -63,7 +62,11 @@ const parseId = (id: string) => {
 
 const viewGroup = () => {
   const v = view.value;
-  return v.kind === 'group' || v.kind === 'room' ? groups.value.get(v.groupId) : undefined;
+  return v.kind === 'group' ? groups.value.get(v.groupId) : undefined;
+};
+const viewPeer = () => {
+  const cid = view.value.kind === 'person' ? view.value.channelId : undefined;
+  return cid ? channels.value.get(cid)?.peer_id : undefined;
 };
 const groupChannelName = (g: Group, cid: number) => g.text_channels?.find((c) => c.id === cid)?.name ?? t().shell.group.defaultChannel;
 const inCallWith = (cid?: number) => !!cid && !!call.value && 'channel_id' in call.value.target && call.value.target.channel_id === cid;
@@ -72,13 +75,13 @@ function Empty({ text }: { text: string }) {
   return <div class="win-empty muted">{text}</div>;
 }
 
-function VoiceHead({ icon }: { icon: string }) {
+function VoiceHead() {
   const c = call.value;
   const tx = t().shell.stage;
   return (
     <>
-      <Icon name={icon} size={17} class="win-icon" />
-      <span class="win-title">{c?.label ?? t().desk.windows[icon === 'phone' ? 'call' : 'room']}</span>
+      <Icon name={c && 'channel_id' in c.target ? 'phone' : 'speaker'} size={17} class="win-icon" />
+      <span class="win-title">{c?.label ?? t().desk.windows.voice}</span>
       {c && c.status !== 'connected' && <span class="win-sub">{c.status === 'ringing' ? tx.ringing : c.status === 'reconnecting' ? tx.reconnecting : tx.connecting}</span>}
     </>
   );
@@ -95,7 +98,7 @@ function DmCallButton({ cid }: { cid: number }) {
   );
 }
 
-// A chat window, a person's or a group channel's, shared by the situation windows and the fixed `chat:` ones.
+// A chat, a person's or a group channel's: the main window and the fixed `chat:` ones.
 function ChatHead({ cid, name }: { cid?: number; name: string }) {
   const ch = cid ? channels.value.get(cid) : undefined;
   const g = ch?.group_id ? groups.value.get(ch.group_id) : undefined;
@@ -134,25 +137,14 @@ function ChatBody({ cid }: { cid?: number }) {
   if (cid && g) return <ChatView channelId={cid} title={groupChannelName(g, cid)} icon={<Icon name="hash" size={28} />} canModerate={canModerate(g)} />;
   return <Empty text={t().desk.empty.pickChat} />;
 }
-const situationChat = (kind: 'dm' | 'channel') => {
-  const v = view.value;
-  return (kind === 'dm') === (v.kind === 'person' || v.kind === 'call') ? viewChannel(v) : undefined;
-};
 
 export const WINDOWS: Record<WindowId, Win> = {
-  dm: {
-    name: () => t().desk.windows.dm,
+  main: {
+    name: () => t().desk.windows.main,
     minWidth: 320,
-    Head: () => <ChatHead cid={situationChat('dm')} name={t().desk.windows.dm} />,
-    Actions: () => <ChatHeadActions cid={situationChat('dm')} />,
-    Body: () => <ChatBody cid={situationChat('dm')} />,
-  },
-  channel: {
-    name: () => t().desk.windows.channel,
-    minWidth: 320,
-    Head: () => <ChatHead cid={situationChat('channel')} name={t().desk.windows.channel} />,
-    Actions: () => <ChatHeadActions cid={situationChat('channel')} />,
-    Body: () => <ChatBody cid={situationChat('channel')} />,
+    Head: () => <ChatHead cid={viewChannel(view.value)} name={t().desk.windows.main} />,
+    Actions: () => <ChatHeadActions cid={viewChannel(view.value)} />,
+    Body: () => <ChatBody cid={viewChannel(view.value)} />,
   },
   chat: {
     name: () => t().desk.windows.chat,
@@ -161,17 +153,10 @@ export const WINDOWS: Record<WindowId, Win> = {
     Actions: ({ arg }) => <ChatHeadActions cid={arg} />,
     Body: ({ arg }) => <ChatBody cid={arg} />,
   },
-  room: {
-    name: () => t().desk.windows.room,
+  voice: {
+    name: () => t().desk.windows.voice,
     minWidth: 420,
-    Head: () => <VoiceHead icon="speaker" />,
-    Actions: () => <RoomModeToggle />,
-    Body: () => (call.value ? <Stage /> : <Empty text={t().desk.empty.noVoice} />),
-  },
-  call: {
-    name: () => t().desk.windows.call,
-    minWidth: 320,
-    Head: () => <VoiceHead icon="phone" />,
+    Head: () => <VoiceHead />,
     Actions: () => <RoomModeToggle />,
     Body: () => (call.value ? <Stage /> : <Empty text={t().desk.empty.noVoice} />),
   },
@@ -190,7 +175,7 @@ export const WINDOWS: Record<WindowId, Win> = {
     },
     Body: () => {
       const g = viewGroup();
-      return g ? <MembersPanel g={g} /> : <Empty text={t().desk.empty.pickChat} />;
+      return g ? <MembersPanel g={g} /> : <Empty text={t().desk.empty.pickGroup} />;
     },
   },
   profile: {
@@ -203,41 +188,35 @@ export const WINDOWS: Record<WindowId, Win> = {
       </>
     ),
     Body: () => {
-      const cid = situationChat('dm');
-      const peer = cid ? channels.value.get(cid)?.peer_id : undefined;
+      const peer = viewPeer();
       return peer ? (
         <div class="win-scroll">
           <ProfileCard id={peer} onClose={() => {}} />
         </div>
       ) : (
-        <Empty text={t().desk.empty.pickChat} />
+        <Empty text={t().desk.empty.pickPerson} />
       );
     },
   },
 };
-
-/** Per situation: the window it is about, the windows it may show, and its default columns, left to right. */
-export const SITUATIONS: Record<Kind, { main: WindowId; windows: WindowId[]; layout: WindowId[] }> = {
-  person: { main: 'dm', windows: ['dm', 'profile'], layout: ['dm'] },
-  group: { main: 'channel', windows: ['channel', 'people'], layout: ['channel'] },
-  room: { main: 'room', windows: ['room', 'channel', 'people'], layout: ['room', 'channel'] },
-  call: { main: 'call', windows: ['call', 'dm', 'profile'], layout: ['call', 'dm'] },
-};
+/** Windows a person adds from the avatar menu; the main one is always there, the voice one with a call. */
+export const EXTRA_WINDOWS: WindowId[] = ['people', 'profile'];
 
 // ---------- storage: per server and account, on this device ----------
 
+/** Where the voice window stood when the last call ended. */
+type VoicePlace = { position?: AddPanelPositionOptions; width?: number; floating?: { x: number; y: number; width: number; height: number } };
 type Saved = {
-  layouts?: Partial<Record<Kind, SerializedDockview>>;
-  /** Windows put away on each situation's shelf. */
-  shelf?: Partial<Record<Kind, string[]>>;
-  /** Windows kept on the desk in every situation. */
-  pinned?: string[];
+  layout?: SerializedDockview;
+  /** Windows put away on the shelf. */
+  shelf?: string[];
   opacity?: Record<string, number>;
+  voice?: VoicePlace;
   nav?: number;
   last?: View;
 };
 // Bump the version when the stored shape changes: older layouts are then ignored.
-const storeKey = () => `tolktak.desk.v1.${session.value?.api.base}.${session.value?.me.id}`;
+const storeKey = () => `tolktak.desk.v2.${session.value?.api.base}.${session.value?.me.id}`;
 export function loadDesk(): Saved {
   try {
     const s = JSON.parse(localStorage.getItem(storeKey()) || '{}');
@@ -254,87 +233,36 @@ export function saveDesk(patch: Saved) {
   }
 }
 
-// ---------- navigation and rules ----------
-
-const isVoice = (v: View) => v.kind === 'room' || v.kind === 'call';
-const groupOfRoom = (roomId: number) => [...groups.value.values()].find((g) => g.rooms.some((r) => r.id === roomId));
-/** A room or call situation whose call is over: history skips it. */
-const deadVoice = (v: View) => {
-  const c = call.value?.target;
-  if (v.kind === 'room') return !c || !('room_id' in c) || groupOfRoom(c.room_id)?.id !== v.groupId;
-  return v.kind === 'call' && !inCallWith(v.channelId);
-};
-const chatOf = (groupId: number) => {
-  const v = view.value;
-  return (v.kind === 'group' || v.kind === 'room') && v.groupId === groupId ? v.channelId : undefined;
-};
+// ---------- navigation ----------
 
 export function enterRoom(g: Group, r: Room) {
-  const here = call.value && 'room_id' in call.value.target && call.value.target.room_id === r.id;
-  if (here && view.value.kind === 'room' && view.value.groupId === g.id) return bringForward('room');
-  go({ kind: 'room', groupId: g.id, channelId: chatOf(g.id) });
-  if (!here)
-    joinVoice({ room_id: r.id }, `${r.name} · ${g.name}`).catch((e) => {
-      toast(errorText(e), 'error');
-      goBy(-1, deadVoice);
-    });
+  if (call.value && 'room_id' in call.value.target && call.value.target.room_id === r.id) return bringForward('voice');
+  joinVoice({ room_id: r.id }, `${r.name} · ${g.name}`).catch((e) => toast(errorText(e), 'error'));
 }
 
 export function callPerson(channelId: number, join: boolean) {
   const peer = channels.value.get(channelId)?.peer_id;
   const label = peer ? userName(peer) : '';
-  go({ kind: 'call', channelId });
-  (join ? joinVoice({ channel_id: channelId }, label) : startCall(channelId, label)).catch((e) => {
-    toast(errorText(e), 'error');
-    goBy(-1, deadVoice);
-  });
+  (join ? joinVoice({ channel_id: channelId }, label) : startCall(channelId, label)).catch((e) => toast(errorText(e), 'error'));
 }
 
-/** Back to the situation of the call you are in. */
-export function openVoice() {
-  const c = call.value?.target;
-  if (!c) return;
-  const v = view.value;
-  if ('channel_id' in c) {
-    if (v.kind === 'call' && v.channelId === c.channel_id) return bringForward('call');
-    return go({ kind: 'call', channelId: c.channel_id });
-  }
-  const g = groupOfRoom(c.room_id);
-  if (g && v.kind === 'room' && v.groupId === g.id) return bringForward('room');
-  if (g) go({ kind: 'room', groupId: g.id, channelId: chatOf(g.id) });
-}
+/** The call's window, back on screen. */
+export const openVoice = () => call.value && bringForward('voice');
 
-/** A person: their call if you are in it, else the chat with them. */
 export function openPerson(userId: number) {
-  const c = [...channels.value.values()].find((x) => x.kind === 'dm' && x.peer_id === userId);
-  if (c && inCallWith(c.id)) return go({ kind: 'call', channelId: c.id });
   openDM(userId).catch((e) => toast(errorText(e), 'error'));
 }
-
-// Rule: the call ended → leave its situation for the one you came from (a call stays in its chat).
-let hadCall = false;
-effect(() => {
-  const c = call.value;
-  if (c) hadCall = true;
-  if (c || !hadCall) return;
-  hadCall = false;
-  const v = view.peek();
-  if (v.kind === 'call') go({ kind: 'person', channelId: v.channelId });
-  else if (v.kind === 'room' && !goBy(-1, (x) => isVoice(x) || deadVoice(x))) go({ kind: 'group', groupId: v.groupId, channelId: v.channelId });
-});
 
 // ---------- the engine ----------
 
 let dock: DockviewApi | null = null;
 let host: HTMLElement | null = null;
-let shownKind: Kind | null = null;
 let saveTimer = 0;
 /** Each fold while folded: the desk's minimum width before it, and the windows that became tabs with their width. */
 let folds: { min: number; ids: string[]; width: number }[] = [];
 let fitQueued = 0;
 const hintsShown: Record<string, number> = {};
 export const shelf = signal<string[]>([]);
-export const pinned = signal<string[]>([]);
 const opacities = signal<Record<string, number>>({});
 export const CHAT_DRAG = 'application/x-tolktak-chat';
 const DIRECTION = { top: 'above', bottom: 'below', left: 'left', right: 'right', center: 'within' } as const;
@@ -356,32 +284,31 @@ function hint(key: keyof Messages['desk']['hints'], times = Infinity) {
 
 function saveLayout() {
   clearTimeout(saveTimer);
-  if (dock && shownKind) saveDesk({ layouts: { ...loadDesk().layouts, [shownKind]: dock.toJSON() } });
+  if (dock) saveDesk({ layout: dock.toJSON() });
 }
 
-function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOptions) {
+function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOptions, width = 360) {
   const { w } = parseId(id);
   return dock!.addPanel({
     id,
     component: id.split(':')[0],
     title: w?.name() ?? id,
     minimumWidth: w?.minWidth,
-    ...(position && dock!.panels.length ? { position: typeof position === 'string' ? { direction: position } : position, initialWidth: 360 } : {}),
+    ...(position && dock!.panels.length ? { position: typeof position === 'string' ? { direction: position } : position, initialWidth: width } : {}),
   });
 }
 
 function setShelf(list: string[]) {
   shelf.value = list;
-  if (shownKind) saveDesk({ shelf: { ...loadDesk().shelf, [shownKind]: list } });
+  saveDesk({ shelf: list });
 }
 
-/** The situation's own window is always there and in front. */
+/** The main window is always on the desk and shows what was just picked. */
 function ensureMain() {
-  const id = SITUATIONS[view.value.kind].main;
-  if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
-  const p = dock?.getPanel(id);
+  if (shelf.value.includes('main')) setShelf(shelf.value.filter((x) => x !== 'main'));
+  const p = dock?.getPanel('main');
   if (p) return p.api.setActive();
-  addWindow(id, 'left');
+  addWindow('main', 'left');
   hint('mainBack');
 }
 
@@ -410,7 +337,6 @@ function fit(byUser = false) {
     last.api.moveTo({ group: into, position: 'center' });
     folded = true;
   }
-  if (folded) d.getPanel(SITUATIONS[view.value.kind].main)?.api.setActive();
   if (folded && byUser) hint('folded');
 }
 const queueFit = () => {
@@ -421,56 +347,97 @@ const queueFit = () => {
     });
 };
 
-function arrange(kind: Kind) {
-  saveLayout();
-  folds = [];
-  shownKind = kind;
+function load() {
   const saved = loadDesk();
-  shelf.value = saved.shelf?.[kind] ?? [];
+  shelf.value = saved.shelf ?? [];
+  folds = [];
   try {
-    if (!saved.layouts?.[kind]) throw new Error('no saved layout');
-    dock!.fromJSON(saved.layouts[kind]!);
+    if (!saved.layout) throw new Error('no saved layout');
+    dock!.fromJSON(saved.layout);
   } catch {
     dock!.clear();
-    SITUATIONS[kind].layout.forEach((id, i) => addWindow(id, i ? 'right' : undefined));
+    addWindow('main');
   }
-  for (const id of pinned.value) if (!dock!.getPanel(id) && !shelf.value.includes(id)) addWindow(id, 'right');
+  // The voice window lives only as long as a call.
+  if (!call.value) dock!.getPanel('voice')?.api.close();
+  else if (!dock!.getPanel('voice')) showVoice();
   ensureMain();
   fit();
-  if (isVoice(view.value)) hint(view.value.kind as 'room' | 'call', 2);
 }
+
+/** Where the voice window stands now, to put it back there with the next call. */
+function voicePlace(p: IDockviewPanel): VoicePlace {
+  const g = p.group;
+  if (g.api.location.type === 'floating') {
+    const r = g.element.closest('.dv-resize-container')?.getBoundingClientRect();
+    const h = host!.getBoundingClientRect();
+    return r ? { floating: { x: r.left - h.left, y: r.top - h.top, width: r.width, height: r.height } } : {};
+  }
+  const other = g.panels.find((x) => x !== p);
+  if (other) return { position: { referencePanel: other.id, direction: 'within' } };
+  for (const [dir, place] of [['left', 'right'], ['right', 'left'], ['up', 'below'], ['down', 'above']] as const) {
+    const n = dock!.adjacentGroupInDirection(g, dir)?.activePanel;
+    if (n) return { position: { referencePanel: n.id, direction: place }, width: g.api.width };
+  }
+  return { width: g.api.width };
+}
+
+function showVoice() {
+  const d = dock!;
+  const place = loadDesk().voice ?? {};
+  const ref = place.position && 'referencePanel' in place.position ? place.position.referencePanel : undefined;
+  // The window it stood by is gone: the voice window comes in as a new one, on the right.
+  const fits = !ref || !!d.getPanel(typeof ref === 'string' ? ref : ref.id);
+  const p = addWindow('voice', fits ? (place.position ?? 'right') : 'right', place.width ?? 520);
+  if (place.floating) d.addFloatingGroup(p, place.floating);
+  p.api.setActive();
+}
+
+// The voice window comes with a call and goes when it ends, keeping its place.
+let hadCall = false;
+effect(() => {
+  const c = call.value;
+  if (!dock || !!c === hadCall) return;
+  hadCall = !!c;
+  const p = dock.getPanel('voice');
+  if (c && !p) {
+    if (shelf.value.includes('voice')) setShelf(shelf.value.filter((x) => x !== 'voice'));
+    showVoice();
+    fit(true);
+  } else if (!c && p) {
+    saveDesk({ voice: voicePlace(p) });
+    p.api.close();
+  }
+});
 
 function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions = 'right') {
   if (!dock) return;
+  if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
   (dock.getPanel(id) ?? addWindow(id, position)).api.setActive();
   fit(true);
 }
-/** Shows a window of the situation on screen, as a new one if it was closed. */
-export const bringForward = (id: WindowId) => show(id);
+/** Shows a window on screen, as a new one if it was closed. */
+export function bringForward(id: WindowId) {
+  if (id !== 'voice' || dock?.getPanel('voice')) return show(id);
+  if (shelf.value.includes('voice')) setShelf(shelf.value.filter((x) => x !== 'voice'));
+  showVoice();
+  fit(true);
+}
 export function toggleWindow(id: WindowId) {
   const p = dock?.getPanel(id);
   if (p) p.api.close();
   else show(id);
 }
 export function resetLayout() {
-  if (!dock || !shownKind) return;
-  saveDesk({ layouts: { ...loadDesk().layouts, [shownKind]: undefined }, shelf: { ...loadDesk().shelf, [shownKind]: [] } });
-  shownKind = null;
-  arrange(view.value.kind);
+  if (!dock) return;
+  saveDesk({ layout: undefined, shelf: [], voice: undefined });
+  load();
 }
 export const windowShown = (id: WindowId) => !!dock?.getPanel(id);
 
-export function togglePin(id: string) {
-  const on = !pinned.value.includes(id);
-  pinned.value = on ? [...pinned.value, id] : pinned.value.filter((x) => x !== id);
-  saveDesk({ pinned: pinned.value });
-  if (on) hint('pinned', 2);
-}
-/** A chat in its own window next to the situation; pinned, it stays in every situation. */
-export function openBeside(cid: number, pin = false) {
-  const id = 'chat:' + cid;
-  if (pin && !pinned.value.includes(id)) togglePin(id);
-  show(id);
+/** A chat in its own window next to the main one. */
+export function openBeside(cid: number) {
+  show('chat:' + cid);
 }
 function shelve(id: string) {
   setShelf([...shelf.value.filter((x) => x !== id), id]);
@@ -478,12 +445,8 @@ function shelve(id: string) {
   hint('shelf', 2);
 }
 function unshelve(id: string) {
-  setShelf(shelf.value.filter((x) => x !== id));
-  show(id);
-}
-function closeWindow(p: IDockviewPanel) {
-  if (pinned.value.includes(p.id)) togglePin(p.id);
-  p.api.close();
+  if (id === 'voice' && !call.value) return setShelf(shelf.value.filter((x) => x !== id));
+  bringForward(id as WindowId);
 }
 function float(p: IDockviewPanel) {
   const r = host!.getBoundingClientRect();
@@ -493,7 +456,7 @@ function float(p: IDockviewPanel) {
 function dockBack(p: IDockviewPanel) {
   const into = dock!.groups.find((g) => g.api.location.type === 'grid' && g !== p.group);
   if (into) p.api.moveTo({ group: into, position: 'right' });
-  fit();
+  fit(true);
 }
 function setOpacity(id: string, v: number) {
   opacities.value = { ...opacities.value, [id]: v };
@@ -527,20 +490,18 @@ function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
       }}
       onDblClick={() => toggleMax(api.group)}
     >
-      {SITUATIONS[view.value.kind].main === id && (
+      {id === 'main' && (
         <span class="win-main" title={tx.main}>
           <Icon name="navigation" size={13} />
         </span>
       )}
-      {pinned.value.includes(id) && <Icon name="pin" size={14} class="win-icon" />}
       {w ? <w.Head arg={arg} /> : id}
       <button
         class="win-close"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
-          const p = dock?.getPanel(id);
-          if (p) closeWindow(p);
+          dock?.getPanel(id)?.api.close();
         }}
         title={tx.closeTab}
         aria-label={tx.closeTab}
@@ -568,15 +529,14 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
   const tx = t().desk.menu;
   const floating = group.api.location.type === 'floating';
   const max = group.api.isMaximized();
-  // shortcut: a room or call floats only once it has a compact view (spec «Режимы окна»).
-  const canFloat = p.id !== 'room' && p.id !== 'call';
+  // shortcut: the voice window floats only once it has a compact view (spec «Режимы окна»).
+  const canFloat = p.id !== 'voice';
   return [
     ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => toggleMax(group) } as MenuItem]),
     ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
-    ...(p.id.startsWith('chat:') ? [{ label: pinned.value.includes(p.id) ? tx.unpin : tx.pin, icon: 'pin', run: () => togglePin(p.id) } as MenuItem] : []),
     'sep',
-    { label: tx.close, icon: 'x', run: () => closeWindow(p) },
+    { label: tx.close, icon: 'x', run: () => p.api.close() },
   ];
 }
 
@@ -653,9 +613,7 @@ export function Workspace() {
 
   useEffect(() => {
     host = ref.current!;
-    const saved = loadDesk();
-    pinned.value = saved.pinned ?? [];
-    opacities.value = saved.opacity ?? {};
+    opacities.value = loadDesk().opacity ?? {};
     const d = createDockview(host, {
       theme: { name: 'blue', className: 'dockview-theme-blue', gap: 10, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
       singleTabMode: 'fullwidth',
@@ -670,7 +628,10 @@ export function Workspace() {
       createRightHeaderActionComponent: (group) => mount(div('win-actions'), () => <GroupActions group={group} />),
     });
     dock = d;
+    hadCall = !!call.value;
+    load();
     const track = () => (shownWindows.value = new Set(d.groups.map((g) => g.activePanel?.id).filter((x): x is string => !!x)));
+    track();
     const subs = [
       d.onDidLayoutChange(() => {
         track();
@@ -706,20 +667,13 @@ export function Workspace() {
       d.dispose();
       dock = null;
       host = null;
-      shownKind = null;
       started = false;
     };
   }, []);
 
-  const prev = useRef(v);
   useEffect(() => {
-    const p = prev.current;
-    prev.current = v;
-    if (v.kind !== shownKind) arrange(v.kind);
-    // In a room a picked channel shows in the chat beside it.
-    else if (v.kind === 'room' && p.kind === 'room' && v.channelId !== p.channelId) show('channel');
-    else ensureMain();
-    if (started && !isVoice(v)) saveDesk({ last: v });
+    ensureMain();
+    if (started) saveDesk({ last: v });
   }, [v]);
 
   // Groups arrive just after the session starts.
@@ -735,11 +689,11 @@ export function Workspace() {
       const wordJump = platform === 'darwin' && typing(e) && !!(e.target as HTMLInputElement).value;
       if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !wordJump) {
         e.preventDefault();
-        goBy(e.key === 'ArrowLeft' ? -1 : 1, deadVoice);
+        goBy(e.key === 'ArrowLeft' ? -1 : 1);
       }
-      if (e.code === 'KeyF' && !e.altKey && !e.ctrlKey && !e.metaKey && !typing(e) && isVoice(view.value)) toggleRoomMode();
+      if (e.code === 'KeyF' && !e.altKey && !e.ctrlKey && !e.metaKey && !typing(e) && call.value) toggleRoomMode();
     };
-    const mouse = (e: MouseEvent) => (e.button === 3 || e.button === 4) && goBy(e.button === 3 ? -1 : 1, deadVoice);
+    const mouse = (e: MouseEvent) => (e.button === 3 || e.button === 4) && goBy(e.button === 3 ? -1 : 1);
     window.addEventListener('keydown', keys);
     window.addEventListener('mouseup', mouse);
     return () => {

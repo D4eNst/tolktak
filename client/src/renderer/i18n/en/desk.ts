@@ -20,15 +20,15 @@ export default {
     resize: 'Navigator width',
   },
   windows: {
+    main: 'Main chat',
+    voice: 'Voice',
     chat: 'Chat',
-    dm: 'Direct chat',
-    channel: 'Channel',
-    room: 'Room',
-    call: 'Call',
     people: 'Group members',
     profile: 'Profile',
   },
   empty: {
+    pickGroup: 'Pick a group on the left',
+    pickPerson: 'Pick a person on the left',
     pickChat: 'Pick a conversation on the left',
     noVoice: 'You are not in voice',
   },
@@ -39,8 +39,6 @@ export default {
     float: 'Float over the desk',
     dock: 'Back to the grid',
     shelve: 'Put on the shelf',
-    pin: 'Keep on the desk always',
-    unpin: 'Stop keeping on the desk',
     opacity: 'Opacity',
     shelf: 'Shelf',
     openBeside: 'Open beside',
@@ -57,19 +55,7 @@ export default {
     },
     mainBack: {
       text: 'The main window is back',
-      more: 'The main window (the arrow in its title) shows what you pick in the navigator: a channel, a person or a room. It cannot be removed for good: it comes back with your next pick. Other windows can be closed, put on the shelf or set floating.',
-    },
-    room: {
-      text: 'A room has its own layout of windows',
-      more: 'Each situation has its own desk: a group, a person, a room and a call. A room shows the room and the group chat beside it; what you change here is kept for every room. Opening another group or person changes the desk while the voice goes on, shown at the top right. Back to the room: click its name there or press Alt+←.',
-    },
-    call: {
-      text: 'A call has its own layout of windows',
-      more: 'A call shows the call and your chat with the person beside it; what you change here is kept for every call. Opening something else changes the desk while the call goes on, shown at the top right. Back to the call: click its name there or press Alt+←.',
-    },
-    pinned: {
-      text: 'This window stays on the desk everywhere',
-      more: 'A pinned window is added to the group, person, room and call desks. To remove it: “…” in its title → “Stop keeping on the desk” or “Close window”.',
+      more: 'The main window (the arrow in its title) shows what you pick in the navigator: a channel or a person. It cannot be removed for good: it comes back with your next pick. Other windows can be closed, put on the shelf or set floating.',
     },
     shelf: {
       text: 'The window is on the shelf below',

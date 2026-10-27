@@ -6,12 +6,8 @@ import { Realtime } from './realtime';
 
 export type Pending = { nonce: string; channel_id: number; text: string; created_at: number; status: 'sending' | 'failed'; reply_to?: number; attachments: FileMeta[] };
 export type ChannelMessages = { items: Message[]; pending: Pending[]; hasOlder: boolean; loading: boolean; loaded: boolean };
-/** The situation: what the desk is arranged for. channelId of a group or room is the chat shown with it. */
-export type View =
-  | { kind: 'person'; channelId?: number }
-  | { kind: 'group'; groupId: number; channelId?: number }
-  | { kind: 'room'; groupId: number; channelId?: number }
-  | { kind: 'call'; channelId: number };
+/** What the main window shows: a person's chat, or a group's channel (its first one when none is picked). */
+export type View = { kind: 'person'; channelId?: number } | { kind: 'group'; groupId: number; channelId?: number };
 export type Toast = { id: number; text: string; kind: 'info' | 'error'; ms: number; more?: string };
 export type IncomingCall = { channelId: number; from: number };
 
@@ -31,7 +27,7 @@ export const typing = signal<Map<number, Map<number, number>>>(new Map());
 export const view = signal<View>({ kind: 'person' });
 const trail: View[] = [];
 let trailAt = -1;
-/** Changes the situation and remembers it for Alt+← / Alt+→. */
+/** Opens a chat in the main window and remembers it for Alt+← / Alt+→. */
 export function go(v: View) {
   if (JSON.stringify(v) === JSON.stringify(view.value)) return;
   trail.splice(trailAt + 1, trail.length, v);
@@ -39,19 +35,14 @@ export function go(v: View) {
   trailAt = trail.length - 1;
   view.value = v;
 }
-/** Steps through visited situations, skipping those `skip` rules out (a room you are no longer in). */
-export function goBy(step: -1 | 1, skip: (v: View) => boolean = () => false) {
-  for (let i = trailAt + step; i >= 0 && i < trail.length; i += step) {
-    if (skip(trail[i])) continue;
-    trailAt = i;
-    view.value = trail[i];
-    return true;
-  }
-  return false;
+export function goBy(step: -1 | 1) {
+  const i = trailAt + step;
+  if (i < 0 || i >= trail.length) return;
+  trailAt = i;
+  view.value = trail[i];
 }
-/** The chat a situation shows: its DM, or the chosen (else first) channel of its group. */
 export function viewChannel(v: View): number | undefined {
-  if (v.kind === 'person' || v.kind === 'call') return v.channelId;
+  if (v.kind === 'person') return v.channelId;
   const g = groups.value.get(v.groupId);
   return g && (v.channelId ?? g.channel_id);
 }
@@ -384,7 +375,7 @@ function handleEvent(ev: Ev) {
       delIn(channels, d.id);
       forgetChannels([d.id]);
       const v = view.value;
-      if ((v.kind === 'group' || v.kind === 'room') && v.channelId === d.id) view.value = { ...v, channelId: undefined };
+      if (v.kind === 'group' && v.channelId === d.id) view.value = { ...v, channelId: undefined };
       break;
     }
     case 'channel.read': {
@@ -415,7 +406,7 @@ function handleEvent(ev: Ev) {
         forgetChannels(ids);
       }
       const v = view.value;
-      if ((v.kind === 'group' || v.kind === 'room') && v.groupId === d.id) view.value = { kind: 'person' };
+      if (v.kind === 'group' && v.groupId === d.id) view.value = { kind: 'person' };
       break;
     }
     case 'voice.room':
@@ -486,7 +477,7 @@ function bumpChannel(m: Message) {
 
 function isChannelVisible(cid: number) {
   const v = view.value;
-  const own = viewChannel(v) === cid && shownWindows.value.has(v.kind === 'person' || v.kind === 'call' ? 'dm' : 'channel');
+  const own = viewChannel(v) === cid && shownWindows.value.has('main');
   return document.hasFocus() && (own || shownWindows.value.has('chat:' + cid));
 }
 

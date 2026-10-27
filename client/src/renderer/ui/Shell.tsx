@@ -33,7 +33,7 @@ import {
 import { call, deafened, leaveVoice, micOn, sharing, speaking, stopShare, toggleDeafen, toggleMic } from '../voice';
 import { AddMembersDialog, CreateGroupDialog } from './Dialogs';
 import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, openMenuAt, Popover } from './common';
-import { CHAT_DRAG, enterRoom, loadDesk, openBeside, openPerson, openVoice, resetLayout, saveDesk, SITUATIONS, toggleWindow, WINDOWS, windowShown, Workspace } from './desk';
+import { CHAT_DRAG, enterRoom, EXTRA_WINDOWS, loadDesk, openBeside, openPerson, openVoice, resetLayout, saveDesk, toggleWindow, WINDOWS, windowShown, Workspace } from './desk';
 import { createRoom, createTextChannel, deleteRoom, deleteTextChannel, GroupSettingsDialog, renameRoom, renameTextChannel } from './GroupSettings';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { SharePicker } from './SharePicker';
@@ -43,7 +43,6 @@ const groupTextChannels = (g: Group): TextChannel[] => (g.text_channels?.length 
 const inRoom = (r: Room) => !!call.value && 'room_id' in call.value.target && call.value.target.room_id === r.id;
 const besideItems = (cid: number): MenuItem[] => [
   { label: t().desk.menu.openBeside, icon: 'copy', run: () => openBeside(cid) },
-  { label: t().desk.menu.pin, icon: 'pin', run: () => openBeside(cid, true) },
   'sep',
 ];
 const dragChat = (cid: number) => (e: DragEvent) => e.dataTransfer?.setData(CHAT_DRAG, String(cid));
@@ -94,7 +93,6 @@ function AvatarMenu() {
   const tx = t().shell.self;
   const td = t().desk;
   const close = () => setPop(null);
-  const sit = SITUATIONS[view.value.kind];
   const conn = connection.value;
   return (
     <>
@@ -107,8 +105,8 @@ function AvatarMenu() {
           <ProfileCard id={u.id} onClose={close} />
           <div class="self-menu">
             <div class="self-menu-label">{td.menu.view}</div>
-            {sit.windows.map((id) => (
-              <button key={id} disabled={id === sit.main} onClick={() => (toggleWindow(id), close())}>
+            {EXTRA_WINDOWS.map((id) => (
+              <button key={id} onClick={() => (toggleWindow(id), close())}>
                 <Icon name={windowShown(id) ? 'check' : 'plus'} size={16} /> {WINDOWS[id].name()}
               </button>
             ))}
@@ -227,7 +225,7 @@ function RoomItem({ g, r, mod }: { g: Group; r: Room; mod: boolean }) {
     ]);
   return (
     <>
-      <button class={'nav-row' + (here && view.value.kind === 'room' ? ' active' : '')} onClick={() => enterRoom(g, r)} onContextMenu={menu} title={here ? tx.openRoom : tx.joinRoom}>
+      <button class={'nav-row' + (here ? ' active' : '')} onClick={() => enterRoom(g, r)} onContextMenu={menu} title={here ? tx.openRoom : tx.joinRoom}>
         <Icon name="speaker" size={17} class={members.length ? 'talk' : 'quiet'} />
         <span class="ellipsis">{r.name}</span>
         {here ? <span class="nav-note">{t().desk.nav.youAreHere}</span> : members.length > 0 && <span class="nav-note">{members.length}</span>}
@@ -252,13 +250,13 @@ function ChannelItem({ g, c, mod }: { g: Group; c: TextChannel; mod: boolean }) 
   const v = view.value;
   const unread = channels.value.get(c.id)?.unread ?? 0;
   const muted = isMuted('c' + c.id) || isMuted('g' + g.id);
-  const active = (v.kind === 'group' || v.kind === 'room') && v.groupId === g.id && viewChannel(v) === c.id;
+  const active = v.kind === 'group' && v.groupId === g.id && viewChannel(v) === c.id;
   const tx = t().shell.group;
   const tc = t().groups.channels;
   return (
     <button
       class={'nav-row' + (active ? ' active' : '') + (unread && !muted ? ' unread' : '') + (muted ? ' muted' : '')}
-      onClick={() => go({ kind: v.kind === 'room' && v.groupId === g.id ? 'room' : 'group', groupId: g.id, channelId: c.id })}
+      onClick={() => go({ kind: 'group', groupId: g.id, channelId: c.id })}
       draggable
       onDragStart={dragChat(c.id)}
       onContextMenu={(e) =>
@@ -289,7 +287,7 @@ const setExpanded = (id: number, on: boolean) => (expanded.value = new Map(expan
 
 function NavGroup({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'settings' | 'add') => void }) {
   const v = view.value;
-  const current = (v.kind === 'group' || v.kind === 'room') && v.groupId === g.id;
+  const current = v.kind === 'group' && v.groupId === g.id;
   const open = expanded.value.get(g.id) ?? current;
   const mod = canModerate(g);
   const textChannels = groupTextChannels(g);
@@ -309,7 +307,7 @@ function NavGroup({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'settings
           class="nav-group-name"
           onClick={() => {
             setExpanded(g.id, true);
-            go({ kind: 'group', groupId: g.id, channelId: (v.kind === 'group' || v.kind === 'room') && v.groupId === g.id ? v.channelId : undefined });
+            go({ kind: 'group', groupId: g.id, channelId: current ? v.channelId : undefined });
           }}
         >
           <GroupAvatar id={g.id} size={24} />
@@ -353,7 +351,7 @@ function NavPeople() {
     <>
       {people.map((u) => {
         const ch = dms.get(u.id);
-        const active = (v.kind === 'person' || v.kind === 'call') && !!ch && v.channelId === ch.id;
+        const active = v.kind === 'person' && !!ch && v.channelId === ch.id;
         const inCall = ch && (voiceRooms.value.get('dm' + ch.id) ?? []).length > 0;
         const muted = !!ch && channelMuted(ch);
         return (
