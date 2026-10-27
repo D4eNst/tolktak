@@ -696,22 +696,28 @@ function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
       subs.forEach((d) => d.dispose());
     };
   }, []);
-  const bare = sharedGroup(api.group) !== undefined;
+  // Tabs of one group in a row show its avatar once, on the first of them; a new group starts after a divider.
+  const tabs = api.group.panels.map((p) => p.id);
+  const at = tabs.indexOf(id);
+  const mine = groupOfWindow(id);
+  const prev = at > 0 ? groupOfWindow(tabs[at - 1]) : undefined;
+  const bare = sharedGroup(api.group) !== undefined || (mine !== undefined && mine === prev);
+  const runStart = at > 0 && (mine === undefined || mine !== prev);
   return (
     <div
-      class="win-head"
+      class={'win-head' + (runStart ? ' run-start' : '')}
       onContextMenu={(e) => {
         api.setActive();
         openWindowMenu(e, api.group);
       }}
       onDblClick={() => toggleMax(api.group)}
     >
+      {w ? <w.Head arg={arg} bare={bare} /> : id}
       {id === 'main' && (
         <span class="win-main" title={tx.main}>
           <Icon name="navigation" size={12} />
         </span>
       )}
-      {w ? <w.Head arg={arg} bare={bare} /> : id}
       <button
         class="win-close"
         onMouseDown={(e) => e.stopPropagation()}
@@ -722,7 +728,7 @@ function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
         title={tx.closeTab}
         aria-label={tx.closeTab}
       >
-        <Icon name="x" size={14} />
+        <Icon name="x" size={12} />
       </button>
     </div>
   );
