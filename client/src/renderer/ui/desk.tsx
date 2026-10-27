@@ -215,8 +215,9 @@ type Saved = {
   /** Where windows put on the shelf from floating were floating. */
   shelfFloat?: Record<string, Rect>;
   opacity?: Record<string, number>;
-  /** Windows drawn as one card, their title inside instead of a capsule above; only while alone in their frame. */
+  /** Windows drawn as one card, their title inside instead of a capsule above, only while alone in their frame: chosen by hand either way; the rest follow the default. */
   plain?: string[];
+  capsule?: string[];
   voice?: VoicePlace;
   nav?: number;
   last?: View;
@@ -276,6 +277,17 @@ const hintsShown: Record<string, number> = {};
 export const shelf = signal<string[]>([]);
 const opacities = signal<Record<string, number>>({});
 const plain = signal<string[]>([]);
+const capsule = signal<string[]>([]);
+/** Bumped on every layout change: whether a window is in a lower row depends on where it stands. */
+const layoutTick = signal(0);
+/** By default the voice window and windows below the top row carry their title inside. */
+function isPlain(group: DockviewGroupPanel, id: string) {
+  if (group.panels.length !== 1 || group.api.location.type !== 'grid') return false;
+  if (plain.value.includes(id)) return true;
+  if (capsule.value.includes(id)) return false;
+  void layoutTick.value;
+  return id === 'voice' || group.element.getBoundingClientRect().top - host!.getBoundingClientRect().top > 8;
+}
 export const CHAT_DRAG = 'application/x-tolktak-chat';
 const DIRECTION = { top: 'above', bottom: 'below', left: 'left', right: 'right', center: 'within' } as const;
 
@@ -630,8 +642,10 @@ function dockBack(p: IDockviewPanel) {
 }
 function togglePlain(group: DockviewGroupPanel, id: string) {
   if (group.panels.length > 1) return hint('plainTabs');
-  plain.value = plain.value.includes(id) ? plain.value.filter((x) => x !== id) : [...plain.value, id];
-  saveDesk({ plain: plain.value });
+  const on = !isPlain(group, id);
+  plain.value = on ? [...plain.value.filter((x) => x !== id), id] : plain.value.filter((x) => x !== id);
+  capsule.value = on ? capsule.value.filter((x) => x !== id) : [...capsule.value.filter((x) => x !== id), id];
+  saveDesk({ plain: plain.value, capsule: capsule.value });
 }
 function setOpacity(id: string, v: number) {
   opacities.value = { ...opacities.value, [id]: v };
@@ -765,7 +779,7 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
     ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => toggleMax(group) } as MenuItem]),
     ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
-    { label: plain.value.includes(p.id) && group.panels.length === 1 ? tx.capsule : tx.plain, icon: 'maximize', run: () => togglePlain(group, p.id) },
+    ...(floating ? [] : [isPlain(group, p.id) ? { label: tx.capsule, icon: 'tabAbove', run: () => togglePlain(group, p.id) } : { label: tx.plain, icon: 'tabInside', run: () => togglePlain(group, p.id) }]),
     'sep',
     { label: tx.close, icon: 'x', run: () => closeWindow(p.id) },
   ];
@@ -785,11 +799,11 @@ function GroupActions({ group }: { group: DockviewGroupPanel }) {
   const floating = group.api.location.type === 'floating';
   const opacity = (id && opacities.value[id]) || 1;
   // A second tab brings the capsule back: tabs need it.
-  const isPlain = !!id && group.panels.length === 1 && plain.value.includes(id);
+  const inside = !!id && isPlain(group, id);
   useEffect(() => {
     const box = group.element.closest<HTMLElement>('.dv-resize-container');
     if (box) box.style.opacity = floating ? String(opacity) : '';
-    (group.element.closest('.dv-groupview') ?? group.element.querySelector('.dv-groupview'))?.classList.toggle('win-plain', isPlain);
+    (group.element.closest('.dv-groupview') ?? group.element.querySelector('.dv-groupview'))?.classList.toggle('win-plain', inside);
   });
   return (
     <>
@@ -849,6 +863,7 @@ export function Workspace() {
     host = ref.current!;
     opacities.value = loadDesk().opacity ?? {};
     plain.value = loadDesk().plain ?? [];
+    capsule.value = loadDesk().capsule ?? [];
     const d = createDockview(host, {
       theme: { name: 'blue', className: 'dockview-theme-blue', gap: 0, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
       singleTabMode: 'fullwidth',
@@ -871,6 +886,7 @@ export function Workspace() {
     track();
     const subs = [
       d.onDidLayoutChange(() => {
+        layoutTick.value++;
         // Changed by hand while folded: what is on screen is now the desk.
         if (!fitting && intended && shape(d.toJSON()) !== foldedShape) intended = null;
         track();

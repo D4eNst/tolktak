@@ -26,6 +26,8 @@ const paths: Record<string, string> = {
   x: 'M18 6 6 18M6 6l12 12',
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
   navigation: 'M3 11l19-9-9 19-2-8z',
+  tabInside: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 9h18',
+  tabAbove: 'M6 3h12a2 2 0 0 1 0 4H6a2 2 0 0 1 0-4zM5 10h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',

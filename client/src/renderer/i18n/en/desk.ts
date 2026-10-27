@@ -33,8 +33,8 @@ export default {
     noVoice: 'You are not in voice',
   },
   menu: {
-    capsule: 'Title in a capsule',
-    plain: 'Title inside the window',
+    capsule: 'Tab above the window',
+    plain: 'Tab inside the window',
     main: 'Main window: shows what you pick in the navigator',
     closeTab: 'Close',
     unmaximize: 'Normal size',
