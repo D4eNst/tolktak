@@ -33,6 +33,8 @@ export default {
     noVoice: 'You are not in voice',
   },
   menu: {
+    capsule: 'Title in a capsule',
+    plain: 'Title inside the window',
     main: 'Main window: shows what you pick in the navigator',
     closeTab: 'Close',
     unmaximize: 'Normal size',
@@ -49,6 +51,10 @@ export default {
     reset: 'Default layout',
   },
   hints: {
+    plainTabs: {
+      text: 'Only a window without tabs can drop its capsule',
+      more: 'A window with several tabs needs its capsule to show them. Move the extra tabs out, or close them, and try again.',
+    },
     folded: {
       text: 'Not enough room: a window became a tab',
       more: 'Windows on the desk cannot get narrower than their minimum (a room 420, a chat 320). When they do not all fit, the right ones become tabs of their neighbour. Widen the app or narrow the navigator and they spread out again by themselves.',

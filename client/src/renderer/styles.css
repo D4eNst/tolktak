@@ -1079,6 +1079,22 @@ code {
   background: var(--bg-active);
   color: var(--text);
 }
+/* A plain window is one card: the title row sits inside it instead of a capsule above. */
+.workspace .dv-groupview.win-plain {
+  gap: 0;
+}
+.workspace .dv-groupview.win-plain > .dv-tabs-and-actions-container {
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.05),
+    inset -1px 0 0 rgba(255, 255, 255, 0.05);
+}
+.workspace .dv-groupview.win-plain > .dv-content-container {
+  border-radius: 0 0 var(--r-xl) var(--r-xl);
+  box-shadow:
+    inset 1px -1px 0 rgba(255, 255, 255, 0.05),
+    inset -1px 0 0 rgba(255, 255, 255, 0.05);
+}
 /* A single window's title is not a tab. */
 .workspace .dv-single-tab .dv-tab {
   background: none !important;

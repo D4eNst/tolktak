@@ -215,6 +215,8 @@ type Saved = {
   /** Where windows put on the shelf from floating were floating. */
   shelfFloat?: Record<string, Rect>;
   opacity?: Record<string, number>;
+  /** Windows drawn as one card, their title inside instead of a capsule above; only while alone in their frame. */
+  plain?: string[];
   voice?: VoicePlace;
   nav?: number;
   last?: View;
@@ -273,6 +275,7 @@ let fitQueued = 0;
 const hintsShown: Record<string, number> = {};
 export const shelf = signal<string[]>([]);
 const opacities = signal<Record<string, number>>({});
+const plain = signal<string[]>([]);
 export const CHAT_DRAG = 'application/x-tolktak-chat';
 const DIRECTION = { top: 'above', bottom: 'below', left: 'left', right: 'right', center: 'within' } as const;
 
@@ -625,6 +628,11 @@ function dockBack(p: IDockviewPanel) {
   if (into) p.api.moveTo({ group: into, position: 'right' });
   fit(true);
 }
+function togglePlain(group: DockviewGroupPanel, id: string) {
+  if (group.panels.length > 1) return hint('plainTabs');
+  plain.value = plain.value.includes(id) ? plain.value.filter((x) => x !== id) : [...plain.value, id];
+  saveDesk({ plain: plain.value });
+}
 function setOpacity(id: string, v: number) {
   opacities.value = { ...opacities.value, [id]: v };
   saveDesk({ opacity: opacities.value });
@@ -757,6 +765,7 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
     ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => toggleMax(group) } as MenuItem]),
     ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
+    { label: plain.value.includes(p.id) && group.panels.length === 1 ? tx.capsule : tx.plain, icon: 'maximize', run: () => togglePlain(group, p.id) },
     'sep',
     { label: tx.close, icon: 'x', run: () => closeWindow(p.id) },
   ];
@@ -775,9 +784,12 @@ function GroupActions({ group }: { group: DockviewGroupPanel }) {
   const { w, arg } = id ? parseId(id) : { w: undefined, arg: undefined };
   const floating = group.api.location.type === 'floating';
   const opacity = (id && opacities.value[id]) || 1;
+  // A second tab brings the capsule back: tabs need it.
+  const isPlain = !!id && group.panels.length === 1 && plain.value.includes(id);
   useEffect(() => {
     const box = group.element.closest<HTMLElement>('.dv-resize-container');
     if (box) box.style.opacity = floating ? String(opacity) : '';
+    (group.element.closest('.dv-groupview') ?? group.element.querySelector('.dv-groupview'))?.classList.toggle('win-plain', isPlain);
   });
   return (
     <>
@@ -836,6 +848,7 @@ export function Workspace() {
   useEffect(() => {
     host = ref.current!;
     opacities.value = loadDesk().opacity ?? {};
+    plain.value = loadDesk().plain ?? [];
     const d = createDockview(host, {
       theme: { name: 'blue', className: 'dockview-theme-blue', gap: 0, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
       singleTabMode: 'fullwidth',
