@@ -106,18 +106,16 @@ function ChatHead({ cid, name, bare }: { cid?: number; name: string; bare?: bool
   if (ch?.peer_id)
     return (
       <>
-        <Avatar id={ch.peer_id} size={22} showPresence />
+        <Avatar id={ch.peer_id} size={20} showPresence />
         <span class="win-title">{userName(ch.peer_id)}</span>
-        <span class="win-sub">{users.value.get(ch.peer_id)?.status || (online.value.has(ch.peer_id) ? t().shell.dm.online : t().shell.dm.offline)}</span>
       </>
     );
   if (g && cid)
     return (
       <>
-        {!bare && <GroupAvatar id={g.id} size={22} />}
+        {!bare && <GroupAvatar id={g.id} size={20} />}
         <Icon name="hash" size={17} class="win-icon" />
         <span class="win-title">{groupChannelName(g, cid)}</span>
-        <span class="win-sub">{g.name}</span>
       </>
     );
   return <span class="win-title">{name}</span>;
@@ -168,16 +166,12 @@ export const WINDOWS: Record<WindowId, Win> = {
     name: () => t().desk.windows.people,
     minWidth: 240,
     minHeight: 160,
-    Head: () => {
-      const g = viewGroup();
-      return (
-        <>
-          <Icon name="users" size={17} class="win-icon" />
-          <span class="win-title">{t().desk.windows.people}</span>
-          {g && <span class="win-sub">{t().shell.home.onlineCount(g.members.filter((id) => online.value.has(id)).length)}</span>}
-        </>
-      );
-    },
+    Head: () => (
+      <>
+        <Icon name="users" size={17} class="win-icon" />
+        <span class="win-title">{t().desk.windows.people}</span>
+      </>
+    ),
     Body: () => {
       const g = viewGroup();
       return g ? <MembersPanel g={g} /> : <Empty text={t().desk.empty.pickGroup} />;
@@ -655,6 +649,32 @@ const groupOfWindow = (id: string) => {
   const cid = id === 'main' ? viewChannel(view.value) : id.startsWith('chat:') ? Number(id.slice(5)) : undefined;
   return cid ? channels.value.get(cid)?.group_id : undefined;
 };
+/** The group all of a frame's windows belong to: its avatar then heads the frame once instead of each tab. */
+const sharedGroup = (group: DockviewGroupPanel) => {
+  const owners = group.panels.map((p) => groupOfWindow(p.id));
+  return owners.length && owners.every((g) => g !== undefined && g === owners[0]) ? owners[0] : undefined;
+};
+
+/** Re-renders a frame's part when its windows come, go or change place. */
+function useFrame(group: DockviewGroupPanel) {
+  const [, rerender] = useState(0);
+  useEffect(() => {
+    const m = group.model;
+    const subs = [m.onDidActivePanelChange, m.onDidAddPanel, m.onDidRemovePanel].map((ev) => ev(() => rerender((n) => n + 1)));
+    rerender((n) => n + 1);
+    return () => subs.forEach((d) => d.dispose());
+  }, []);
+}
+
+function FrameGroup({ group }: { group: DockviewGroupPanel }) {
+  useFrame(group);
+  const g = sharedGroup(group);
+  return g === undefined ? null : (
+    <span class="win-group" title={groups.value.get(g)?.name}>
+      <GroupAvatar id={g} size={22} />
+    </span>
+  );
+}
 
 function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
   const { w, arg } = parseId(id);
@@ -676,9 +696,7 @@ function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
       subs.forEach((d) => d.dispose());
     };
   }, []);
-  const tabs = api.group.panels.map((p) => p.id);
-  const owners = tabs.map(groupOfWindow);
-  const bare = tabs.length > 1 && tabs[0] !== id && owners.every((g) => g !== undefined && g === owners[0]);
+  const bare = sharedGroup(api.group) !== undefined;
   return (
     <div
       class="win-head"
@@ -690,7 +708,7 @@ function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
     >
       {id === 'main' && (
         <span class="win-main" title={tx.main}>
-          <Icon name="navigation" size={13} />
+          <Icon name="navigation" size={12} />
         </span>
       )}
       {w ? <w.Head arg={arg} bare={bare} /> : id}
@@ -825,6 +843,7 @@ export function Workspace() {
       defaultTabComponent: 'win',
       createTabComponent: ({ id }) => mount(div('win-tab'), (p: { api: DockviewPanelApi }) => <Tab id={id} api={p.api} />),
       createRightHeaderActionComponent: (group) => mount(div('win-actions'), () => <GroupActions group={group} />),
+      createPrefixHeaderActionComponent: (group) => mount(div('win-prefix'), () => <FrameGroup group={group} />),
     });
     dock = d;
     hadCall = !!call.value;

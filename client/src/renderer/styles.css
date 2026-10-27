@@ -1091,19 +1091,23 @@ code {
   background: var(--bg-hover);
 }
 .win-main {
-  width: 22px;
-  height: 22px;
   display: grid;
-  place-items: center;
   flex: none;
-  border-radius: 50%;
-  background: var(--accent-soft);
   color: var(--accent);
+}
+.win-prefix {
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.win-group {
+  display: grid;
+  margin: 0 4px 0 6px;
 }
 .win-close {
   width: 22px;
   height: 22px;
-  display: grid;
+  display: none;
   place-items: center;
   flex: none;
   margin-left: 2px;
@@ -1114,6 +1118,7 @@ code {
 .win-head:hover .win-close,
 .win-close:focus-visible,
 .dv-tabs-and-actions-container:not(.dv-single-tab) .dv-active-tab .win-close {
+  display: grid;
   opacity: 1;
 }
 .win-close:hover {
