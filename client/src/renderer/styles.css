@@ -1373,6 +1373,10 @@ code {
 .dv-tabs-and-actions-container:not(.dv-single-tab) .dv-active-tab .win-close {
   visibility: visible;
 }
+.win-close.win-pin {
+  visibility: visible;
+  color: var(--accent);
+}
 .win-close:hover {
   background: var(--bg-hover);
   color: var(--text);

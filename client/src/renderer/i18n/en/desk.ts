@@ -93,6 +93,8 @@ export default {
     callBeside: 'Beside the chat',
     callFull: 'Full screen',
     callHint: 'This is where a call opens the first time. Once you move it, it opens where you left it.',
+    autoPin: 'Keep room windows put on the desk from the navigator',
+    autoPinHint: 'A room you drag onto the desk or open beside stays after the call ends. The pin on its tab lets it go.',
     keepCall: 'Keep the room window after leaving',
     keepCallHint: 'The window stays and shows who is in the room. To keep just one window, use its «…» menu → «Keep this window».',
     resetHint: 'Every window goes back to the start: only the main chat stays.',

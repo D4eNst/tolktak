@@ -29,6 +29,7 @@ import {
   online,
   openDM,
   session,
+  reopen,
   shownWindows,
   toast,
   userName,
@@ -204,7 +205,9 @@ function PopOut({ id, close }: { id: WindowId; close: () => void }) {
       class="icon-btn"
       onClick={() => {
         close();
-        show(id, { referencePanel: 'main', direction: 'right' });
+        // Next to the main window in the grid; a floating one takes no tabs.
+        const main = dock?.getPanel('main');
+        show(id, main?.group.api.location.type === 'grid' ? { referencePanel: 'main', direction: 'right' } : 'right');
       }}
       title={label}
       aria-label={label}
@@ -359,7 +362,7 @@ export function saveDesk(patch: Saved) {
 
 // ---------- behaviour: settings «Окна», per device ----------
 
-type DeskPrefs = { call: 'replace' | 'beside' | 'full'; keepCall?: boolean };
+type DeskPrefs = { call: 'replace' | 'beside' | 'full'; keepCall?: boolean; autoPin?: boolean };
 const PREFS_KEY = 'tolktak.deskPrefs';
 export const deskPrefs = signal<DeskPrefs>({
   call: 'replace',
@@ -400,7 +403,7 @@ export const openVoice = () => call.value && bringForward(callWindow());
 
 /** A room's window put on the desk by hand: it stays there, in the call or not. */
 export function openRoom(rid: number, position?: AddPanelPositionOptions) {
-  if (!pinned.value.includes('room:' + rid)) setPinned([...pinned.value, 'room:' + rid]);
+  if (deskPrefs.value.autoPin !== false && !pinned.value.includes('room:' + rid)) setPinned([...pinned.value, 'room:' + rid]);
   show('room:' + rid, position);
 }
 
@@ -800,7 +803,9 @@ function float(p: IDockviewPanel) {
 }
 function dockBack(p: IDockviewPanel) {
   const into = dock!.groups.find((g) => g.api.location.type === 'grid' && g !== p.group);
+  // Nothing left in the grid: the window becomes its first one.
   if (into) p.api.moveTo({ group: into, position: 'right' });
+  else p.api.moveTo({ group: dock!.addGroup(), position: 'center' });
   fit(true);
 }
 function togglePlain(group: DockviewGroupPanel, id: string) {
@@ -916,18 +921,34 @@ function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
           <Icon name="navigation" size={12} />
         </span>
       )}
-      <button
-        class="win-close"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          closeWindow(id);
-        }}
-        title={tx.closeTab}
-        aria-label={tx.closeTab}
-      >
-        <Icon name="x" size={12} />
-      </button>
+      {pinned.value.includes(id) ? (
+        // A kept window closes only from its menu; the pin lets it go.
+        <button
+          class="win-close win-pin"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setPinned(pinned.value.filter((x) => x !== id));
+          }}
+          title={tx.unpin}
+          aria-label={tx.unpin}
+        >
+          <Icon name="pin" size={12} />
+        </button>
+      ) : (
+        <button
+          class="win-close"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            closeWindow(id);
+          }}
+          title={tx.closeTab}
+          aria-label={tx.closeTab}
+        >
+          <Icon name="x" size={12} />
+        </button>
+      )}
     </div>
   );
 }
@@ -1149,7 +1170,7 @@ export function Workspace() {
   useEffect(() => {
     ensureMain();
     if (started) saveDesk({ last: v });
-  }, [v]);
+  }, [v, reopen.value]);
 
   // Groups arrive just after the session starts.
   useEffect(() => {
@@ -1309,6 +1330,9 @@ export function WindowsSettings() {
         ))}
       </div>
       <p class="hint">{tx.callHint}</p>
+      <Toggle checked={p.autoPin !== false} onChange={(autoPin) => setDeskPrefs({ autoPin })} hint={tx.autoPinHint}>
+        {tx.autoPin}
+      </Toggle>
       <Toggle checked={!!p.keepCall} onChange={(keepCall) => setDeskPrefs({ keepCall })} hint={tx.keepCallHint}>
         {tx.keepCall}
       </Toggle>

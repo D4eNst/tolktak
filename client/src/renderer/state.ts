@@ -28,8 +28,10 @@ export const view = signal<View>({ kind: 'person' });
 const trail: View[] = [];
 let trailAt = -1;
 /** Opens a chat in the main window and remembers it for Alt+← / Alt+→. */
+/** Bumped by a click on what is already shown: its window comes back if it was closed. */
+export const reopen = signal(0);
 export function go(v: View) {
-  if (JSON.stringify(v) === JSON.stringify(view.value)) return;
+  if (JSON.stringify(v) === JSON.stringify(view.value)) return void reopen.value++;
   trail.splice(trailAt + 1, trail.length, v);
   if (trail.length > 50) trail.shift();
   trailAt = trail.length - 1;
