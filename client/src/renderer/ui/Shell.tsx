@@ -281,72 +281,95 @@ function ChannelItem({ g, c, mod }: { g: Group; c: TextChannel; mod: boolean }) 
   );
 }
 
-// Opened or closed by hand; otherwise a group is open while its situation is shown.
-const expanded = signal<ReadonlyMap<number, boolean>>(new Map());
-const setExpanded = (id: number, on: boolean) => (expanded.value = new Map(expanded.value).set(id, on));
-
-function NavGroup({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'settings' | 'add') => void }) {
-  const v = view.value;
-  const current = v.kind === 'group' && v.groupId === g.id;
-  const open = expanded.value.get(g.id) ?? current;
-  const mod = canModerate(g);
-  const textChannels = groupTextChannels(g);
-  const unread = textChannels.reduce((n, c) => {
+const groupUnread = (g: Group) =>
+  groupTextChannels(g).reduce((n, c) => {
     const ch = channels.value.get(c.id);
     return n + (ch && !channelMuted(ch) ? ch.unread : 0);
   }, 0);
-  const live = g.rooms.some((r) => (voiceRooms.value.get(roomKey(r)) ?? []).length > 0);
-  const tx = t().desk.nav;
+const groupLive = (g: Group) => g.rooms.some((r) => (voiceRooms.value.get(roomKey(r)) ?? []).length > 0);
+
+const navTab = signal<'groups' | 'people'>('groups');
+// The group whose page the navigator shows: null is the list of groups, undefined follows the open chat.
+const navGroup = signal<number | null | undefined>(undefined);
+const shownGroup = () => {
+  const v = view.value;
+  return navGroup.value !== undefined ? navGroup.value : v.kind === 'group' ? v.groupId : null;
+};
+function openGroup(g: Group) {
+  navGroup.value = g.id;
+  const v = view.value;
+  go({ kind: 'group', groupId: g.id, channelId: v.kind === 'group' && v.groupId === g.id ? v.channelId : undefined });
+}
+
+function GroupRow({ g }: { g: Group }) {
+  const unread = groupUnread(g);
   return (
-    <div class={'nav-group' + (current ? ' current' : '')}>
-      <div class="nav-group-head">
-        <button class="nav-chevron" onClick={() => setExpanded(g.id, !open)} aria-expanded={open} aria-label={open ? tx.collapse : tx.expand}>
-          <Icon name={open ? 'chevronDown' : 'chevronRight'} size={15} />
+    <button class={'nav-grouprow' + (unread ? ' unread' : '')} onClick={() => openGroup(g)}>
+      <GroupAvatar id={g.id} size={34} />
+      <span class="ellipsis nav-person-name">{g.name}</span>
+      {groupLive(g) && <Icon name="speaker" size={15} class="talk" />}
+      {unread > 0 && <span class="badge inline">{unread}</span>}
+    </button>
+  );
+}
+
+function GroupStrip({ list, current }: { list: Group[]; current: number }) {
+  return (
+    <div class="nav-strip">
+      {list.map((g) => (
+        <button key={g.id} class={'nav-strip-item' + (g.id === current ? ' active' : '')} onClick={() => openGroup(g)} title={g.name} aria-label={g.name}>
+          <GroupAvatar id={g.id} size={36} />
+          {groupUnread(g) > 0 && <span class="nav-strip-dot unread" />}
+          {groupLive(g) && <span class="nav-strip-dot live" />}
         </button>
-        <button
-          class="nav-group-name"
-          onClick={() => {
-            setExpanded(g.id, true);
-            go({ kind: 'group', groupId: g.id, channelId: current ? v.channelId : undefined });
-          }}
-        >
-          <GroupAvatar id={g.id} size={24} />
-          <span class="ellipsis">{g.name}</span>
-          {!open && live && <Icon name="speaker" size={14} class="talk" />}
-          {!open && unread > 0 && <span class="badge inline">{unread}</span>}
-        </button>
-        <button class="icon-btn tiny" onClick={(e) => openMenuAt(e.currentTarget, groupMenuItems(g, (d) => onDialog(g, d)))} title={t().desk.menu.label} aria-label={t().desk.menu.label}>
-          <Icon name="more" size={16} />
-        </button>
-      </div>
-      {open && (
-        <div class="nav-group-body">
-          {g.rooms.map((r) => (
-            <RoomItem key={r.id} g={g} r={r} mod={mod} />
-          ))}
-          {textChannels.map((c) => (
-            <ChannelItem key={c.id} g={g} c={c} mod={mod} />
-          ))}
-        </div>
-      )}
+      ))}
     </div>
   );
 }
 
-function NavPeople() {
+function GroupPage({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'settings' | 'add') => void }) {
+  const mod = canModerate(g);
+  const tx = t().desk.nav;
+  return (
+    <div class="nav-page">
+      <div class="nav-page-head">
+        <button class="icon-btn tiny nav-back" onClick={() => (navGroup.value = null)} title={tx.back} aria-label={tx.back}>
+          <Icon name="chevronRight" size={16} />
+        </button>
+        <span class="ellipsis nav-page-name">{g.name}</span>
+        <button class="icon-btn tiny" onClick={(e) => openMenuAt(e.currentTarget, groupMenuItems(g, (d) => onDialog(g, d)))} title={t().desk.menu.label} aria-label={t().desk.menu.label}>
+          <Icon name="more" size={16} />
+        </button>
+      </div>
+      <div class="nav-scroll">
+        <div class="nav-sec">{tx.rooms}</div>
+        {g.rooms.map((r) => (
+          <RoomItem key={r.id} g={g} r={r} mod={mod} />
+        ))}
+        <div class="nav-sec">{tx.channels}</div>
+        {groupTextChannels(g).map((c) => (
+          <ChannelItem key={c.id} g={g} c={c} mod={mod} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NavPeople({ query }: { query: string }) {
   const v = view.value;
   const myId = me.value?.id;
   const tx = t().shell.home;
+  const q = query.trim().toLowerCase();
   const dms = new Map([...channels.value.values()].filter((c) => c.kind === 'dm').map((c) => [c.peer_id, c]));
   const people = [...users.value.values()]
-    .filter((u) => u.id !== myId)
+    .filter((u) => u.id !== myId && (!q || u.display_name.toLowerCase().includes(q) || u.username.includes(q)))
     .sort((a, b) => {
       const ca = dms.get(a.id)?.last_message?.id ?? 0;
       const cb = dms.get(b.id)?.last_message?.id ?? 0;
       if (ca !== cb) return cb - ca;
       return Number(online.value.has(b.id)) - Number(online.value.has(a.id)) || a.display_name.localeCompare(b.display_name);
     });
-  if (!people.length) return <div class="nav-empty muted small">{tx.noUsers}</div>;
+  if (!people.length) return <div class="nav-empty muted small">{q ? t().desk.nav.noMatch : tx.noUsers}</div>;
   return (
     <>
       {people.map((u) => {
@@ -388,30 +411,53 @@ function NavPeople() {
 function Navigator() {
   const [creating, setCreating] = useState(false);
   const [dialog, setDialog] = useState<{ g: Group; d: 'settings' | 'add' } | null>(null);
+  const [query, setQuery] = useState('');
   const tx = t().desk.nav;
-  const list = [...groups.value.values()];
+  const tab = navTab.value;
+  const all = [...groups.value.values()];
+  const q = query.trim().toLowerCase();
+  const list = q ? all.filter((g) => g.name.toLowerCase().includes(q)) : all;
+  const open = !q && tab === 'groups' ? groups.value.get(shownGroup() ?? -1) : undefined;
+  const peopleUnread = [...channels.value.values()].some((c) => c.kind === 'dm' && c.unread && !channelMuted(c));
+  const groupsUnread = all.some((g) => groupUnread(g) > 0);
   return (
     <nav class="win navigator" aria-label={tx.label}>
-      <div class="nav-scroll">
-        <div class="nav-sec">
-          <span>{tx.groups}</span>
-          <button class="icon-btn tiny" onClick={() => setCreating(true)} title={tx.newGroup} aria-label={tx.newGroup}>
-            <Icon name="plus" size={15} />
-          </button>
+      <div class="nav-top">
+        <div class="seg-toggle nav-tabs" role="tablist">
+          {(['groups', 'people'] as const).map((x) => (
+            <button key={x} role="tab" aria-selected={tab === x} class={tab === x ? 'on' : ''} onClick={() => (navTab.value = x)}>
+              {x === 'groups' ? tx.groups : tx.direct}
+              {(x === 'groups' ? groupsUnread : peopleUnread) && tab !== x && <span class="nav-tab-dot" />}
+            </button>
+          ))}
         </div>
-        {list.map((g) => (
-          <NavGroup key={g.id} g={g} onDialog={(g, d) => setDialog({ g, d })} />
-        ))}
-        {list.length === 0 && (
-          <button class="nav-create" onClick={() => setCreating(true)}>
-            <Icon name="plus" size={16} /> {tx.createFirst}
-          </button>
-        )}
-        <div class="nav-sec">
-          <span>{tx.direct}</span>
+        <div class="nav-search">
+          <Icon name="search" size={15} />
+          <input value={query} onInput={(e) => setQuery(e.currentTarget.value)} placeholder={tab === 'groups' ? tx.findGroup : tx.findPerson} aria-label={tab === 'groups' ? tx.findGroup : tx.findPerson} />
         </div>
-        <NavPeople />
       </div>
+      {tab === 'people' ? (
+        <div class="nav-scroll">
+          <NavPeople query={query} />
+        </div>
+      ) : open ? (
+        <div class="nav-split">
+          <GroupStrip list={all} current={open.id} />
+          <GroupPage g={open} onDialog={(g, d) => setDialog({ g, d })} />
+        </div>
+      ) : (
+        <div class="nav-scroll">
+          {list.map((g) => (
+            <GroupRow key={g.id} g={g} />
+          ))}
+          {q && list.length === 0 && <div class="nav-empty muted small">{tx.noMatch}</div>}
+          {!q && (
+            <button class={all.length ? 'nav-newgroup' : 'nav-create'} onClick={() => setCreating(true)}>
+              <Icon name="plus" size={16} /> {all.length ? tx.newGroup : tx.createFirst}
+            </button>
+          )}
+        </div>
+      )}
       {creating && <CreateGroupDialog onClose={() => setCreating(false)} />}
       {dialog?.d === 'settings' && groups.value.get(dialog.g.id) && <GroupSettingsDialog group={groups.value.get(dialog.g.id)!} onClose={() => setDialog(null)} />}
       {dialog?.d === 'add' && groups.value.get(dialog.g.id) && <AddMembersDialog group={groups.value.get(dialog.g.id)!} onClose={() => setDialog(null)} />}

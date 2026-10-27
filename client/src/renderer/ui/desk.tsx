@@ -867,7 +867,6 @@ export function Workspace() {
     const d = createDockview(host, {
       theme: { name: 'blue', className: 'dockview-theme-blue', gap: 0, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
       singleTabMode: 'fullwidth',
-      disableTabsOverflowList: true,
       floatingGroupBounds: 'boundedWithinViewport',
       createComponent: ({ id }) =>
         mount(div('win-body'), () => {
@@ -912,6 +911,30 @@ export function Workspace() {
       }),
     ];
     // After dockview has laid itself out for the new size.
+    // A mouse wheel scrolls a row of tabs sideways, as a trackpad does.
+    const wheel = (e: WheelEvent) => {
+      const row = (e.target as HTMLElement).closest<HTMLElement>('.dv-tabs-container');
+      if (!row || Math.abs(e.deltaY) <= Math.abs(e.deltaX) || row.scrollWidth <= row.clientWidth) return;
+      row.scrollLeft += e.deltaY;
+      e.preventDefault();
+    };
+    host.addEventListener('wheel', wheel, { passive: false });
+    // Tabs that do not fit: the count opens our menu of all the frame's tabs instead of dockview's list, which the capsule clips.
+    const more = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('.dv-tabs-overflow-dropdown-default');
+      const group = btn && d.groups.find((g) => g.element.contains(btn));
+      if (!btn || !group) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const r = btn.getBoundingClientRect();
+      const name = (id: string) => group.element.querySelector(`.dv-tab[data-tab-panel-id="${CSS.escape(id)}"]`)?.textContent?.trim() || parseId(id).w?.name() || id;
+      openMenu(
+        { clientX: r.left, clientY: r.bottom + 4 },
+        group.panels.map((p) => ({ label: name(p.id), icon: p === group.activePanel ? 'check' : undefined, run: () => p.api.setActive() })),
+      );
+    };
+    host.addEventListener('pointerdown', more, true);
+    host.addEventListener('click', more, true);
     const resize = new ResizeObserver(() => requestAnimationFrame(onResize));
     resize.observe(host);
     window.addEventListener('beforeunload', saveLayout);
@@ -920,6 +943,9 @@ export function Workspace() {
       window.removeEventListener('beforeunload', saveLayout);
       subs.forEach((s) => s.dispose());
       resize.disconnect();
+      host?.removeEventListener('wheel', wheel);
+      host?.removeEventListener('pointerdown', more, true);
+      host?.removeEventListener('click', more, true);
       d.dispose();
       dock = null;
       host = null;

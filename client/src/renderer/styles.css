@@ -895,7 +895,8 @@ code {
 .nav-row {
   height: 34px;
   margin: 0 8px;
-  padding: 0 10px 0 30px;
+  width: calc(100% - 16px);
+  padding: 0 10px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -941,7 +942,8 @@ code {
 .nav-sub {
   height: 28px;
   margin: 0 8px;
-  padding: 0 10px 0 56px;
+  width: calc(100% - 16px);
+  padding: 0 10px 0 36px;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1002,6 +1004,152 @@ code {
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
+}
+
+/* navigator: groups or people, a group's page beside a strip of the other groups */
+.nav-top {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 10px 6px;
+}
+.nav-tabs {
+  margin: 0;
+}
+.nav-tabs button {
+  flex: 1;
+  position: relative;
+}
+.nav-tab-dot {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.nav-search {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  color: var(--muted);
+}
+.nav-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13.5px;
+}
+.nav-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.nav-strip {
+  flex: none;
+  width: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 10px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  border-right: 1px solid var(--line);
+}
+.nav-strip-item {
+  position: relative;
+  border-radius: 12px;
+  padding: 2px;
+  opacity: 0.65;
+}
+.nav-strip-item:hover,
+.nav-strip-item.active {
+  opacity: 1;
+}
+.nav-strip-item.active {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.nav-strip-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--bg-island);
+}
+.nav-strip-dot.unread {
+  top: -1px;
+  right: -1px;
+  background: var(--accent);
+}
+.nav-strip-dot.live {
+  bottom: -1px;
+  right: -1px;
+  background: var(--ok);
+}
+.nav-page {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.nav-page-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 2px 4px;
+}
+.nav-back svg {
+  transform: rotate(180deg);
+}
+.nav-page-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+}
+.nav-grouprow {
+  height: 48px;
+  margin: 0 8px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border-radius: var(--r-lg);
+  text-align: left;
+  width: calc(100% - 16px);
+}
+.nav-grouprow > .ellipsis {
+  flex: 1;
+}
+.nav-grouprow:hover {
+  background: var(--bg-hover);
+}
+.nav-grouprow.unread .nav-person-name {
+  font-weight: 700;
+}
+.nav-newgroup {
+  height: 40px;
+  margin: 4px 8px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--r);
+  color: var(--muted);
+  width: calc(100% - 16px);
+}
+.nav-newgroup:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 /* windows: dockview groups are the window frames */
@@ -1094,6 +1242,49 @@ code {
   box-shadow:
     inset 1px -1px 0 rgba(255, 255, 255, 0.05),
     inset -1px 0 0 rgba(255, 255, 255, 0.05);
+}
+/* Tabs that do not fit: a count at the end opens a list of all of them. */
+.workspace .dv-tabs-container {
+  scrollbar-width: none;
+}
+.workspace .dv-tabs-overflow-dropdown-root,
+.workspace .dv-tabs-overflow-dropdown-root * {
+  background-color: transparent !important;
+}
+.workspace .dv-tabs-overflow-dropdown-root {
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+.workspace .dv-tabs-overflow-dropdown-default {
+  height: 32px;
+  background: none;
+  margin: 7px 2px;
+  padding: 0 10px;
+  border-radius: 16px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  gap: 4px;
+}
+.workspace .dv-tabs-overflow-dropdown-default:hover {
+  background-color: var(--bg-hover) !important;
+  color: var(--text);
+}
+.dv-tabs-overflow-container {
+  padding: 6px;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 14px;
+  background: var(--bg-raised) !important;
+  box-shadow: var(--shadow);
+}
+.dv-tabs-overflow-container .dv-tab {
+  height: 38px;
+  border-radius: 10px;
+}
+.dv-tabs-overflow-container .dv-tab:hover {
+  background: var(--bg-hover);
 }
 /* A single window's title is not a tab. */
 .workspace .dv-single-tab .dv-tab {
