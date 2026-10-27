@@ -572,6 +572,9 @@ export function SettingsDialog() {
               <Toggle checked={p.startMuted} onChange={(on) => setPrefs({ startMuted: on })}>
                 {v.startMuted}
               </Toggle>
+              <Toggle checked={p.quietBigRooms} onChange={(on) => setPrefs({ quietBigRooms: on })}>
+                {v.quietBigRooms}
+              </Toggle>
               <Toggle checked={p.sounds} onChange={(on) => setPrefs({ sounds: on })} hint={v.soundsHint}>
                 {v.sounds}
               </Toggle>

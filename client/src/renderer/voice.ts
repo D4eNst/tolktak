@@ -18,7 +18,7 @@ import {
 import { VoiceChain, type ChainSettings, type ChainStats, type Denoise } from './audio/chain';
 import { bridge, platform, type AudioMode } from './bridge';
 import { t } from './i18n';
-import { api, appActive, callEvents, errorText, me, sendRealtime, session, toast, userName, windowHidden } from './state';
+import { api, appActive, callEvents, errorText, me, sendRealtime, session, toast, userName, voiceRooms, windowHidden } from './state';
 import { STREAM_REACTIONS } from './ui/emoji';
 
 export type Prefs = {
@@ -40,6 +40,7 @@ export type Prefs = {
   sounds: boolean;
   micMuted: boolean;
   deafened: boolean;
+  quietBigRooms: boolean; // join rooms of 10+ people muted
   micMode: 'voice' | 'ptt';
   vadAuto: boolean; // false: open the mic only above vadThreshold
   vadThreshold: number; // dBFS, -80..0
@@ -70,6 +71,7 @@ const defaultPrefs: Prefs = {
   sounds: true,
   micMuted: false,
   deafened: false,
+  quietBigRooms: true,
   micMode: 'voice',
   vadAuto: true,
   vadThreshold: -50,
@@ -127,6 +129,8 @@ export type PeerView = {
   screen?: Track;
   shared: boolean;
   screenAudio: boolean;
+  /** How the author wants the stream watched, from its track name. */
+  shareView?: 'kino' | 'work';
   quality: string;
 };
 export type ShareMode = 'motion' | 'detail';
@@ -160,6 +164,8 @@ export const floaters = signal<Floater[]>([]);
 export const cameraOn = signal(false);
 export const sharing = signal<(ShareOptions & { audioInfo: string }) | null>(null);
 export const watching = signal<string | null>(null);
+/** A stream preview under the mouse: its sound plays quietly meanwhile. */
+export const previewing = signal<string | null>(null);
 export const speakingRemote = signal(false);
 export const speaking = signal<ReadonlySet<string>>(new Set());
 
@@ -191,6 +197,10 @@ export async function joinVoice(target: CallTarget, label: string, opts: { ringi
   }
   leaving = false;
   const { url, token, room: roomName } = await api().joinVoice(target);
+  if (prefs.value.quietBigRooms && (voiceRooms.value.get(roomName)?.length ?? 0) >= 10 && !prefs.value.micMuted) {
+    setPrefs({ micMuted: true });
+    toast(t().core.voice.quietBigRoom);
+  }
   call.value = { room: roomName, label, target, status: opts.ringing ? 'ringing' : 'connecting' };
   bridge.setInCall(true);
   try {
@@ -296,7 +306,7 @@ effect(() => {
 });
 
 function wantSubscribed(source: Track.Source, identity: string) {
-  return source !== Track.Source.ScreenShareAudio || watching.value === identity;
+  return source !== Track.Source.ScreenShareAudio || watching.value === identity || previewing.value === identity;
 }
 
 /** The SFU stops forwarding voices: resubscribing brought them back silent. */
@@ -461,6 +471,7 @@ function viewOf(p: Participant, isLocal: boolean): PeerView {
     screen: scr?.track,
     shared: !!scr,
     screenAudio: !!scrA,
+    shareView: scr?.trackName === 'screen:work' ? 'work' : scr?.trackName === 'screen:kino' ? 'kino' : undefined,
     quality: p.connectionQuality,
   };
 }
@@ -854,7 +865,8 @@ function applyVolumeFor(p: RemoteParticipant) {
   const deaf = deafened.value;
   const user = pr.userVolume[p.identity] ?? 1;
   p.setVolume(deaf ? 0 : pr.voiceVolume * user, Track.Source.Microphone);
-  p.setVolume(deaf ? 0 : pr.streamVolume * duckFactor, Track.Source.ScreenShareAudio);
+  const quiet = p.identity === watching.value ? 1 : 0.3;
+  p.setVolume(deaf ? 0 : pr.streamVolume * duckFactor * quiet, Track.Source.ScreenShareAudio);
 }
 
 export function applyVolumes() {
@@ -869,12 +881,18 @@ export function setUserVolume(identity: string, v: number) {
 export function watch(identity: string | null) {
   const r = room;
   watching.value = identity;
+  previewing.value = null;
   if (!r) return;
-  for (const p of r.remoteParticipants.values()) {
-    const a = p.getTrackPublication(Track.Source.ScreenShareAudio) as RemoteTrackPublication | undefined;
-    a?.setSubscribed(p.identity === identity);
-  }
+  syncSubscriptions(r);
   applyVideoPolicy();
+  applyVolumes();
+}
+
+export function preview(identity: string | null) {
+  if (previewing.value === identity) return;
+  previewing.value = identity;
+  if (!room) return;
+  syncSubscriptions(room);
   applyVolumes();
 }
 
@@ -1099,7 +1117,8 @@ async function publishScreen(r: Room, o: ShareOptions, video: LocalVideoTrack, a
   const single = o.singleLayer || o.quality === 'source60' || layers.length === 0;
   await r.localParticipant.publishTrack(video, {
     source: Track.Source.ScreenShare,
-    name: 'screen',
+    // The author's view for viewers on «Как у автора»: a moving picture is for Кино, a still one for Работа.
+    name: o.mode === 'motion' ? 'screen:kino' : 'screen:work',
     videoCodec: VIDEO_CODEC,
     // A backup codec is a second software encoder on the streamer's PC.
     backupCodec: false,

@@ -1494,6 +1494,11 @@ code {
   background: var(--bg-active);
   color: var(--text);
 }
+/* On «Авто»: the view the author picked, marked lightly. */
+.seg-toggle button.eff {
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
 
 .group-avatar {
   position: relative;
@@ -2859,6 +2864,105 @@ code {
 }
 .room-lobby .primary {
   margin-top: 6px;
+}
+
+/* «Работа»: one screen made bigger spans the row */
+.work-grid.has-big .work-screen.big {
+  grid-column: 1 / -1;
+}
+.work-big {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  opacity: 0;
+  transition: opacity var(--t);
+}
+.work-screen:hover .work-big,
+.work-big:focus-visible {
+  opacity: 1;
+}
+
+/* rooms over 8 people: a compact list */
+.tiles.tiles-list {
+  display: flex;
+  flex-direction: column;
+  place-items: stretch;
+  gap: 4px;
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+}
+.tile.row {
+  aspect-ratio: auto;
+  flex: none;
+  justify-content: flex-start;
+  gap: 10px;
+  height: 44px;
+  padding: 0 10px;
+  overflow: visible;
+}
+.tile.row .tile-name {
+  position: static;
+  max-width: none;
+  padding: 0;
+  background: none;
+}
+.tile.row .tile-pop {
+  top: 40px;
+}
+
+/* «Кино»: cameras as bubbles along the edge, clear of the middle */
+.cam-bubbles {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  max-height: calc(100% - 28px);
+  overflow: hidden;
+}
+.cam-bubble {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-raised);
+  box-shadow: 0 0 0 2px rgba(11, 19, 39, 0.8), 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.cam-bubble.own {
+  width: 72px;
+  height: 72px;
+  align-self: flex-end;
+}
+.cam-bubble.speaking {
+  box-shadow: 0 0 0 3px var(--ok);
+}
+.cam-bubble video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.cam-hide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(11, 19, 39, 0.75);
+  color: #fff;
+  opacity: 0;
+}
+.cam-bubble:hover .cam-hide,
+.cam-hide:focus-visible {
+  opacity: 1;
 }
 
 /* ---------- stage ---------- */

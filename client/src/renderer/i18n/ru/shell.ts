@@ -87,6 +87,7 @@ const ru: typeof en = {
     encoderStats: (impl: string, hw: boolean) => `Кодировщик: ${impl}${hw ? ' (видеокарта)' : ' (процессор)'}`,
     limitStats: (reason: string) => `Ограничено: ${({ bandwidth: 'скоростью отдачи', cpu: 'процессором', other: 'другое' } as Record<string, string>)[reason] ?? reason}`,
     uplinkStats: (mbps: string) => `Доступно на отдачу: ${mbps} Мбит/с`,
+    hideOwnCam: 'Скрыть свою камеру у себя',
     duckHint: 'Звук трансляции приглушён во время разговора',
     streamVolume: 'Трансляция',
     voiceVolume: 'Голоса',

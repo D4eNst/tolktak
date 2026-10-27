@@ -25,6 +25,7 @@ export default {
     streamStarted: (name: string) => `${name} started streaming`,
     streamEnded: 'Stream ended',
     reconnected: 'Connection restored',
+    quietBigRoom: 'Ten or more people in the room: your microphone is off',
     removed: 'You were disconnected from the room',
     rejoined: 'Back in the room',
     joinRoomFirst: 'Join a voice room first',
