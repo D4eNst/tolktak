@@ -33,7 +33,7 @@ import {
 import { call, deafened, leaveVoice, micOn, sharing, speaking, stopShare, toggleDeafen, toggleMic } from '../voice';
 import { AddMembersDialog, CreateGroupDialog } from './Dialogs';
 import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, openMenuAt, Popover } from './common';
-import { CHAT_DRAG, enterRoom, loadDesk, openBeside, openPerson, openVoice, saveDesk, Workspace } from './desk';
+import { CHAT_DRAG, enterRoom, loadDesk, openBeside, openPerson, openRoom, openVoice, ROOM_DRAG, saveDesk, Workspace } from './desk';
 import { createRoom, createTextChannel, deleteRoom, deleteTextChannel, GroupSettingsDialog, renameRoom, renameTextChannel } from './GroupSettings';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { SharePicker } from './SharePicker';
@@ -224,6 +224,7 @@ function RoomItem({ g, r, mod }: { g: Group; r: Room; mod: boolean }) {
   const menu = (e: MouseEvent) =>
     openMenu(e, [
       here ? { label: t().desk.voice.leave, icon: 'phoneOff', danger: true, run: leaveVoice } : { label: tx.joinRoom, icon: 'speaker', run: () => enterRoom(g, r) },
+      { label: t().desk.menu.openBeside, icon: 'copy', run: () => openRoom(r.id) },
       ...(mod
         ? ([
             'sep',
@@ -234,7 +235,7 @@ function RoomItem({ g, r, mod }: { g: Group; r: Room; mod: boolean }) {
     ]);
   return (
     <>
-      <button class={'nav-row' + (here ? ' active' : '')} onClick={() => enterRoom(g, r)} onContextMenu={menu} title={here ? tx.openRoom : tx.joinRoom}>
+      <button class={'nav-row' + (here ? ' active' : '')} onClick={() => enterRoom(g, r)} onContextMenu={menu} title={here ? tx.openRoom : tx.joinRoom} draggable onDragStart={(e) => e.dataTransfer?.setData(ROOM_DRAG, String(r.id))}>
         <Icon name="speaker" size={17} class={members.length ? 'talk' : 'quiet'} />
         <span class="ellipsis">{r.name}</span>
         {here ? <span class="nav-note">{t().desk.nav.youAreHere}</span> : members.length > 0 && <span class="nav-note">{members.length}</span>}
@@ -339,6 +340,7 @@ function GroupStrip({ list, current }: { list: Group[]; current: number }) {
 function GroupPage({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'settings' | 'add') => void }) {
   const mod = canModerate(g);
   const tx = t().desk.nav;
+  const tc = t().groups.channels;
   return (
     <div class="nav-page">
       <div class="nav-page-head">
@@ -351,13 +353,27 @@ function GroupPage({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'setting
         </button>
       </div>
       <div class="nav-scroll">
-        <div class="nav-sec">{tx.rooms}</div>
-        {g.rooms.map((r) => (
-          <RoomItem key={r.id} g={g} r={r} mod={mod} />
-        ))}
-        <div class="nav-sec">{tx.channels}</div>
+        <div class="nav-sec">
+          {tx.channels}
+          {mod && (
+            <button class="icon-btn tiny" onClick={() => createTextChannel(g)} title={tc.newTextChannel} aria-label={tc.newTextChannel}>
+              <Icon name="plus" size={15} />
+            </button>
+          )}
+        </div>
         {groupTextChannels(g).map((c) => (
           <ChannelItem key={c.id} g={g} c={c} mod={mod} />
+        ))}
+        <div class="nav-sec">
+          {tx.rooms}
+          {mod && (
+            <button class="icon-btn tiny" onClick={() => createRoom(g)} title={tc.newVoiceRoom} aria-label={tc.newVoiceRoom}>
+              <Icon name="plus" size={15} />
+            </button>
+          )}
+        </div>
+        {g.rooms.map((r) => (
+          <RoomItem key={r.id} g={g} r={r} mod={mod} />
         ))}
       </div>
     </div>

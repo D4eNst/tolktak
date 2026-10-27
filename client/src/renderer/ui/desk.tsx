@@ -40,11 +40,11 @@ import {
 } from '../state';
 import { call, joinVoice, startCall } from '../voice';
 import { addChatPanel, ChatActions, ChatView, openPanel, setPanel, SidePanel } from './Chat';
-import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu } from './common';
+import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, Toggle } from './common';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 
-export type WindowId = 'main' | 'voice' | 'people' | 'profile' | 'chat';
+export type WindowId = 'main' | 'voice' | 'room' | 'people' | 'profile' | 'chat';
 /** `arg` is what a window is fixed to, from its id `type:arg`: `chat:12` is channel 12. */
 type WinProps = { arg?: number; bare?: boolean };
 type Win = {
@@ -70,6 +70,21 @@ const viewPeer = () => {
   return cid ? channels.value.get(cid)?.peer_id : undefined;
 };
 const groupChannelName = (g: Group, cid: number) => g.text_channels?.find((c) => c.id === cid)?.name ?? t().shell.group.defaultChannel;
+export const findRoom = (rid: number) => {
+  for (const g of groups.value.values()) {
+    const r = g.rooms.find((x) => x.id === rid);
+    if (r) return { g, r };
+  }
+};
+const callRoom = () => {
+  const c = call.value;
+  return c && 'room_id' in c.target ? c.target.room_id : undefined;
+};
+/** The window a call lives in: its room's, or `voice` for a call with a person. */
+const callWindow = () => {
+  const rid = callRoom();
+  return rid ? 'room:' + rid : 'voice';
+};
 const inCallWith = (cid?: number) => !!cid && !!call.value && 'channel_id' in call.value.target && call.value.target.channel_id === cid;
 
 function Empty({ text }: { text: string }) {
@@ -85,6 +100,46 @@ function VoiceHead() {
       <span class="win-title">{c?.label ?? t().desk.windows.voice}</span>
       {c && c.status !== 'connected' && <span class="win-sub">{c.status === 'ringing' ? tx.ringing : c.status === 'reconnecting' ? tx.reconnecting : tx.connecting}</span>}
     </>
+  );
+}
+
+function RoomHead({ rid, bare }: { rid: number; bare?: boolean }) {
+  const f = findRoom(rid);
+  const c = call.value;
+  const tx = t().shell.stage;
+  return (
+    <>
+      {!bare && f && <GroupAvatar id={f.g.id} size={20} />}
+      <Icon name="speaker" size={17} class="win-icon" />
+      <span class="win-title">{f?.r.name ?? t().desk.windows.room}</span>
+      {c && callRoom() === rid && c.status !== 'connected' && <span class="win-sub">{c.status === 'reconnecting' ? tx.reconnecting : tx.connecting}</span>}
+    </>
+  );
+}
+
+/** A room you are not in: who is there and a way in, without joining by just looking. */
+function RoomLobby({ rid }: { rid: number }) {
+  const f = findRoom(rid);
+  const tx = t().desk.room;
+  if (!f) return <Empty text={t().desk.empty.noRoom} />;
+  const members = voiceRooms.value.get(`g${f.g.id}r${rid}`) ?? [];
+  return (
+    <div class="room-lobby">
+      {members.some((m) => m.screen) && <span class="live">{tx.live}</span>}
+      {members.length > 0 && (
+        <div class="lobby-faces">
+          {members.slice(0, 6).map((m) => (
+            <Avatar key={m.user_id} id={m.user_id} size={52} />
+          ))}
+          {members.length > 6 && <span class="lobby-more">+{members.length - 6}</span>}
+        </div>
+      )}
+      <p class="lobby-who">{members.length ? tx.inside(members.length) : tx.nobody}</p>
+      {members.length > 0 && <p class="muted small">{members.slice(0, 3).map((m) => userName(m.user_id)).join(', ') + (members.length > 3 ? '…' : '')}</p>}
+      <button class="primary" onClick={() => enterRoom(f.g, f.r)}>
+        <Icon name="speaker" size={16} /> {tx.join}
+      </button>
+    </div>
   );
 }
 
@@ -133,10 +188,11 @@ function ChatHeadActions({ cid }: { cid?: number }) {
 }
 /** Group members or a person's profile: a panel over the chat's right edge first, a window of its own on request. */
 function SideToggle({ cid, panel, icon }: { cid: number; panel: 'people' | 'profile'; icon: string }) {
-  const on = openPanel(cid) === panel;
+  const own = shownWindows.value.has(panel);
+  const on = own || openPanel(cid) === panel;
   const name = WINDOWS[panel].name();
   return (
-    <button class={'icon-btn' + (on ? ' active' : '')} onClick={() => setPanel(cid, on ? undefined : panel)} title={name} aria-label={name} aria-pressed={on}>
+    <button class={'icon-btn' + (on ? ' active' : '')} onClick={() => (own ? closeWindow(panel) : setPanel(cid, on ? undefined : panel))} title={name} aria-label={name} aria-pressed={on}>
       <Icon name={icon} size={18} />
     </button>
   );
@@ -214,6 +270,14 @@ export const WINDOWS: Record<WindowId, Win> = {
     Actions: () => <RoomModeToggle />,
     Body: () => (call.value ? <Stage /> : <Empty text={t().desk.empty.noVoice} />),
   },
+  room: {
+    name: () => t().desk.windows.room,
+    minWidth: 420,
+    minHeight: 320,
+    Head: ({ arg, bare }) => <RoomHead rid={arg!} bare={bare} />,
+    Actions: ({ arg }) => (callRoom() === arg ? <RoomModeToggle /> : null),
+    Body: ({ arg }) => (callRoom() === arg ? <Stage /> : <RoomLobby rid={arg!} />),
+  },
   people: {
     name: () => t().desk.windows.people,
     minWidth: 240,
@@ -269,6 +333,8 @@ type Saved = {
   plain?: string[];
   capsule?: string[];
   voice?: VoicePlace;
+  /** Room windows kept on the desk after the call in them ends. */
+  pinned?: string[];
   nav?: number;
   navFolded?: boolean;
   last?: View;
@@ -293,7 +359,7 @@ export function saveDesk(patch: Saved) {
 
 // ---------- behaviour: settings «Окна», per device ----------
 
-type DeskPrefs = { call: 'replace' | 'beside' | 'full' };
+type DeskPrefs = { call: 'replace' | 'beside' | 'full'; keepCall?: boolean };
 const PREFS_KEY = 'tolktak.deskPrefs';
 export const deskPrefs = signal<DeskPrefs>({
   call: 'replace',
@@ -319,8 +385,8 @@ export function setDeskPrefs(patch: Partial<DeskPrefs>) {
 // ---------- navigation ----------
 
 export function enterRoom(g: Group, r: Room) {
-  if (call.value && 'room_id' in call.value.target && call.value.target.room_id === r.id) return bringForward('voice');
-  joinVoice({ room_id: r.id }, `${r.name} · ${g.name}`).catch((e) => toast(errorText(e), 'error'));
+  if (callRoom() === r.id) return bringForward(callWindow());
+  joinVoice({ room_id: r.id }, r.name).catch((e) => toast(errorText(e), 'error'));
 }
 
 export function callPerson(channelId: number, join: boolean) {
@@ -330,7 +396,13 @@ export function callPerson(channelId: number, join: boolean) {
 }
 
 /** The call's window, back on screen. */
-export const openVoice = () => call.value && bringForward('voice');
+export const openVoice = () => call.value && bringForward(callWindow());
+
+/** A room's window put on the desk by hand: it stays there, in the call or not. */
+export function openRoom(rid: number, position?: AddPanelPositionOptions) {
+  if (!pinned.value.includes('room:' + rid)) setPinned([...pinned.value, 'room:' + rid]);
+  show('room:' + rid, position);
+}
 
 export function openPerson(userId: number) {
   openDM(userId).catch((e) => toast(errorText(e), 'error'));
@@ -353,6 +425,11 @@ const hintsShown: Record<string, number> = {};
 export const shelf = signal<string[]>([]);
 const opacities = signal<Record<string, number>>({});
 const plain = signal<string[]>([]);
+const pinned = signal<string[]>([]);
+function setPinned(v: string[]) {
+  pinned.value = v;
+  saveDesk({ pinned: v });
+}
 const capsule = signal<string[]>([]);
 /** Bumped on every layout change: whether a window is in a lower row depends on where it stands. */
 const layoutTick = signal(0);
@@ -362,9 +439,10 @@ function isPlain(group: DockviewGroupPanel, id: string) {
   if (plain.value.includes(id)) return true;
   if (capsule.value.includes(id)) return false;
   void layoutTick.value;
-  return id === 'voice' || group.element.getBoundingClientRect().top - host!.getBoundingClientRect().top > 8;
+  return id === 'voice' || id.startsWith('room:') || group.element.getBoundingClientRect().top - host!.getBoundingClientRect().top > 8;
 }
 export const CHAT_DRAG = 'application/x-tolktak-chat';
+export const ROOM_DRAG = 'application/x-tolktak-room';
 const DIRECTION = { top: 'above', bottom: 'below', left: 'left', right: 'right', center: 'within' } as const;
 
 /** A short note on what just happened, at most `times` per device and once in 10 s; a click opens the details. */
@@ -580,9 +658,10 @@ function load() {
     dock!.clear();
     addWindow('main');
   }
-  // The voice window lives only as long as a call.
-  if (!call.value) dock!.getPanel('voice')?.api.close();
-  else if (!dock!.getPanel('voice')) showVoice();
+  // The call's window lives only as long as the call, unless kept.
+  for (const p of [...dock!.panels]) if (!call.value && (p.id === 'voice' || (p.id.startsWith('room:') && !kept(p.id)))) p.api.close();
+  if (call.value && !dock!.getPanel(callWindow())) showVoice(callWindow());
+  callWin = call.value ? callWindow() : null;
   ensureMain();
   fit();
 }
@@ -616,15 +695,17 @@ function voicePlace(p: IDockviewPanel): VoicePlace {
   return { width: g.api.width };
 }
 
-function showVoice() {
+const kept = (id: string) => id !== 'voice' && (pinned.value.includes(id) || !!deskPrefs.value.keepCall);
+
+function showVoice(id: string) {
   const d = dock!;
   const place = loadDesk().voice ?? {};
   // Nothing moved since the call ended: the desk comes back exactly as it was with the call.
-  if (place.desk && place.shape === shape(d.toJSON())) {
+  if (place.desk?.panels[id] && place.shape === shape(d.toJSON())) {
     try {
       intended = null;
       restore(place.desk);
-      d.getPanel('voice')?.api.setActive();
+      d.getPanel(id)?.api.setActive();
       return;
     } catch {
       /* place it by its neighbour instead */
@@ -634,40 +715,36 @@ function showVoice() {
   // The window it stood by is gone: the voice window comes in as a new one, where the settings put it.
   const fits = !ref || !!d.getPanel(typeof ref === 'string' ? ref : ref.id);
   if (fits && (place.position || place.floating)) {
-    const p = addWindow('voice', place.position ?? 'right', { width: place.width ?? 520, height: place.height });
+    const p = addWindow(id, place.position ?? 'right', { width: place.width ?? 520, height: place.height });
     if (place.floating) d.addFloatingGroup(p, place.floating);
     return p.api.setActive();
   }
   const how = deskPrefs.value.call;
   const p =
     how === 'replace' && d.getPanel('main')
-      ? addWindow('voice', { referencePanel: 'main', direction: 'left' }, { width: Math.round(host!.clientWidth * 0.6) })
-      : addWindow('voice', 'right', { width: 520 });
+      ? addWindow(id, { referencePanel: 'main', direction: 'left' }, { width: Math.round(host!.clientWidth * 0.6) })
+      : addWindow(id, 'right', { width: 520 });
   p.api.setActive();
   if (how === 'full') p.group.api.maximize();
 }
 
-// The voice window comes with a call and goes when it ends, keeping its place.
-let hadCall = false;
+// The call's window comes with a call and goes when it ends, keeping its place; a kept room window stays and shows who is in.
+let callWin: string | null = null;
 effect(() => {
-  const c = call.value;
-  if (!dock || !!c === hadCall) return;
-  hadCall = !!c;
-  const p = dock.getPanel('voice');
-  if (c && !p) {
-    if (shelf.value.includes('voice')) setShelf(shelf.value.filter((x) => x !== 'voice'));
-    unfoldNow();
-    showVoice();
-    fit(true);
-  } else if (!c && p) {
+  const id = call.value ? callWindow() : null;
+  if (!dock || id === callWin) return;
+  const was = callWin;
+  callWin = id;
+  if (was && !kept(was) && dock.getPanel(was)) {
     // Folded for lack of room: remember the call's place in the desk as intended.
     unfoldNow();
-    const v = dock.getPanel('voice')!;
+    const v = dock.getPanel(was)!;
     const place = { ...voicePlace(v), desk: dock.toJSON() };
     v.api.close();
     fit();
     saveDesk({ voice: { ...place, shape: shape(dock.toJSON()) } });
   }
+  if (id) bringForward(id);
 });
 
 function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions = 'right') {
@@ -678,10 +755,11 @@ function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions =
   fit(true);
 }
 /** Shows a window on screen, as a new one if it was closed. */
-export function bringForward(id: WindowId) {
-  if (id !== 'voice' || dock?.getPanel('voice')) return show(id);
-  if (shelf.value.includes('voice')) setShelf(shelf.value.filter((x) => x !== 'voice'));
-  showVoice();
+export function bringForward(id: string) {
+  if (!call.value || id !== callWindow() || dock?.getPanel(id)) return show(id);
+  if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
+  unfoldNow();
+  showVoice(id);
   fit(true);
 }
 export function resetLayout() {
@@ -710,7 +788,7 @@ function shelve(id: string) {
 }
 function unshelve(id: string) {
   if (id === 'voice' && !call.value) return setShelf(shelf.value.filter((x) => x !== id));
-  bringForward(id as WindowId);
+  bringForward(id);
   const rect = loadDesk().shelfFloat?.[id];
   const p = dock?.getPanel(id);
   if (rect && p) dock!.addFloatingGroup(p, rect);
@@ -761,9 +839,11 @@ function windowLabel(id: string): string {
   const g = ch?.group_id ? groups.value.get(ch.group_id) : undefined;
   if (g && cid) return groupChannelName(g, cid);
   if (id === 'voice' && call.value) return call.value.label;
+  if (id.startsWith('room:')) return findRoom(arg!)?.r.name ?? w!.name();
   return w?.name() ?? id;
 }
 const groupOfWindow = (id: string) => {
+  if (id.startsWith('room:')) return findRoom(Number(id.slice(5)))?.g.id;
   const cid = id === 'main' ? viewChannel(view.value) : id.startsWith('chat:') ? Number(id.slice(5)) : undefined;
   return cid ? channels.value.get(cid)?.group_id : undefined;
 };
@@ -875,6 +955,13 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
     ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => toggleMax(group) } as MenuItem]),
     ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
+    ...(p.id.startsWith('room:')
+      ? [
+          pinned.value.includes(p.id)
+            ? { label: tx.unpin, icon: 'pin', run: () => setPinned(pinned.value.filter((x) => x !== p.id)) }
+            : { label: tx.pin, icon: 'pin', run: () => setPinned([...pinned.value, p.id]) },
+        ]
+      : []),
     ...(floating ? [] : [isPlain(group, p.id) ? { label: tx.capsule, icon: 'tabAbove', run: () => togglePlain(group, p.id) } : { label: tx.plain, icon: 'tabInside', run: () => togglePlain(group, p.id) }]),
     'sep',
     { label: tx.reset, icon: 'home', run: confirmReset },
@@ -961,6 +1048,7 @@ export function Workspace() {
     opacities.value = loadDesk().opacity ?? {};
     plain.value = loadDesk().plain ?? [];
     capsule.value = loadDesk().capsule ?? [];
+    pinned.value = loadDesk().pinned ?? [];
     const d = createDockview(host, {
       theme: { name: 'blue', className: 'dockview-theme-blue', gap: 0, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
       singleTabMode: 'fullwidth',
@@ -976,7 +1064,6 @@ export function Workspace() {
       createPrefixHeaderActionComponent: (group) => mount(div('win-prefix'), () => <FrameGroup group={group} />),
     });
     dock = d;
-    hadCall = !!call.value;
     load();
     const track = () => (shownWindows.value = new Set(d.groups.map((g) => g.activePanel?.id).filter((x): x is string => !!x)));
     track();
@@ -996,15 +1083,20 @@ export function Workspace() {
         if (e.group?.api.location.type === 'floating') e.preventDefault();
       }),
       d.onUnhandledDragOver((e) => {
-        if (e.nativeEvent instanceof DragEvent && e.nativeEvent.dataTransfer?.types.includes(CHAT_DRAG)) e.accept();
+        const types = e.nativeEvent instanceof DragEvent ? e.nativeEvent.dataTransfer?.types : undefined;
+        if (types?.includes(CHAT_DRAG) || types?.includes(ROOM_DRAG)) e.accept();
       }),
       d.onDidDrop((e) => {
-        const cid = e.nativeEvent instanceof DragEvent ? Number(e.nativeEvent.dataTransfer?.getData(CHAT_DRAG)) : 0;
-        if (!cid) return;
-        const id = 'chat:' + cid;
+        const data = e.nativeEvent instanceof DragEvent ? e.nativeEvent.dataTransfer : null;
+        const cid = Number(data?.getData(CHAT_DRAG));
+        const rid = Number(data?.getData(ROOM_DRAG));
+        if (!cid && !rid) return;
+        const id = cid ? 'chat:' + cid : 'room:' + rid;
         d.getPanel(id)?.api.close();
         const direction = DIRECTION[e.position];
-        show(id, e.group ? { referenceGroup: e.group, direction } : { direction: direction === 'within' ? 'right' : direction });
+        const position = e.group ? { referenceGroup: e.group, direction } : { direction: direction === 'within' ? ('right' as const) : direction };
+        if (rid) openRoom(rid, position);
+        else show(id, position);
       }),
     ];
     // After dockview has laid itself out for the new size.
@@ -1217,6 +1309,9 @@ export function WindowsSettings() {
         ))}
       </div>
       <p class="hint">{tx.callHint}</p>
+      <Toggle checked={!!p.keepCall} onChange={(keepCall) => setDeskPrefs({ keepCall })} hint={tx.keepCallHint}>
+        {tx.keepCall}
+      </Toggle>
       <div>
         <button class="secondary" onClick={() => confirmReset()}>
           <Icon name="home" size={16} /> {t().desk.menu.reset}

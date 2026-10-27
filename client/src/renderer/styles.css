@@ -680,6 +680,7 @@ code {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 132px;
   min-width: 0;
   margin-right: 6px;
   font-weight: 600;
@@ -2818,6 +2819,42 @@ code {
   .scheme-card:hover .scheme .sc-call {
     animation: none;
   }
+}
+
+/* a room you are not in */
+.room-lobby {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  text-align: center;
+}
+.lobby-faces {
+  display: flex;
+  align-items: center;
+}
+.lobby-faces > * + * {
+  margin-left: -10px;
+}
+.lobby-faces .avatar {
+  box-shadow: 0 0 0 3px var(--bg-island);
+}
+.lobby-more {
+  margin-left: 8px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.lobby-who {
+  font-weight: 600;
+}
+.room-lobby .live {
+  font-size: 11px;
+}
+.room-lobby .primary {
+  margin-top: 6px;
 }
 
 /* ---------- stage ---------- */

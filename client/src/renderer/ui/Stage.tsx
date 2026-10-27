@@ -70,7 +70,7 @@ function Tiles({ peers }: { peers: PeerView[] }) {
     return () => ro.disconnect();
   }, []);
   const { cols, width } = fitTiles(peers.length, box.w, box.h);
-  const avatar = Math.round(Math.min(160, Math.max(28, (width / 1.6) * 0.5)));
+  const avatar = Math.round(Math.max(28, (width / 1.6) * 0.6));
   return (
     <div ref={ref} class="tiles">
       <div class="tiles-grid" style={{ gridTemplateColumns: `repeat(${cols}, ${width}px)` }}>
