@@ -556,7 +556,8 @@ const relayout = () => dock!.layout(host!.clientWidth, host!.clientHeight, true)
 /** Too small for the windows' minimum sizes: the rightmost (or lowest, or squeezed) become tabs of their neighbour. */
 function fit(byUser = false) {
   const d = dock;
-  if (!d || !host) return;
+  // A window across the whole desk hides the rest; they are not squeezed.
+  if (!d || !host || d.hasMaximizedGroup()) return;
   fitting = true;
   let folded = false;
   try {

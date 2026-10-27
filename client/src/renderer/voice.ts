@@ -183,6 +183,11 @@ let screenTracks: { video?: LocalVideoTrack; audio?: LocalAudioTrack } = {};
     return room;
   },
   stats: () => collectStats(),
+  // Layout checks without a real room: a call and its people as given.
+  mock: (c: typeof call.value, list: PeerView[]) => {
+    call.value = c;
+    peers.value = list;
+  },
   share: (o: ShareOptions) => startShare(o),
   stopShare: () => stopShare(),
   setPrefs: (p: Partial<Prefs>) => setPrefs(p),

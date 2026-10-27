@@ -2909,13 +2909,11 @@ code {
 
 /* rooms over 8 people: a compact list */
 .tiles.tiles-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  align-content: start;
   place-items: stretch;
-  gap: 4px;
-  max-width: 520px;
-  width: 100%;
-  margin: 0 auto;
+  gap: 6px;
 }
 .tile.row {
   aspect-ratio: auto;
@@ -2949,17 +2947,25 @@ code {
 }
 .cam-bubble {
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: min(96px, 17cqh);
+  height: min(96px, 17cqh);
   flex: none;
   border-radius: 50%;
   overflow: hidden;
   background: var(--bg-raised);
   box-shadow: 0 0 0 2px rgba(11, 19, 39, 0.8), 0 6px 18px rgba(0, 0, 0, 0.4);
 }
+.cam-bubble.more {
+  width: min(56px, 11cqh);
+  height: min(56px, 11cqh);
+  align-self: flex-end;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
 .cam-bubble.own {
-  width: 72px;
-  height: 72px;
+  width: min(72px, 13cqh);
+  height: min(72px, 13cqh);
   align-self: flex-end;
 }
 .cam-bubble.speaking {
@@ -3003,16 +3009,14 @@ code {
   background: none;
 }
 .work-grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  place-items: center;
 }
-.work-grid.n1 {
-  grid-template-columns: 1fr;
-}
-.work-grid.n2,
-.work-grid.n4 {
-  grid-template-columns: 1fr 1fr;
+.work-grid-in {
+  display: grid;
+  gap: 12px;
 }
 .work-screen {
   position: relative;
@@ -3308,6 +3312,7 @@ video.mirror {
 }
 .theater-video {
   position: relative;
+  container-type: size;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -4606,3 +4611,6 @@ label.radio .muted {
   font-size: 13px;
 }
 .update-bar button { padding: 6px 12px; }
+.tile.row .tile-glow {
+  display: none;
+}
