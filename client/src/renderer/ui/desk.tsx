@@ -50,6 +50,7 @@ type WinProps = { arg?: number };
 type Win = {
   name: () => string;
   minWidth: number;
+  minHeight: number;
   /** Title in the window frame: icon, name, a muted detail. */
   Head: (p: WinProps) => VNode | null;
   Actions?: (p: WinProps) => VNode | null;
@@ -142,6 +143,7 @@ export const WINDOWS: Record<WindowId, Win> = {
   main: {
     name: () => t().desk.windows.main,
     minWidth: 320,
+    minHeight: 220,
     Head: () => <ChatHead cid={viewChannel(view.value)} name={t().desk.windows.main} />,
     Actions: () => <ChatHeadActions cid={viewChannel(view.value)} />,
     Body: () => <ChatBody cid={viewChannel(view.value)} />,
@@ -149,6 +151,7 @@ export const WINDOWS: Record<WindowId, Win> = {
   chat: {
     name: () => t().desk.windows.chat,
     minWidth: 320,
+    minHeight: 220,
     Head: ({ arg }) => <ChatHead cid={arg} name={t().desk.windows.chat} />,
     Actions: ({ arg }) => <ChatHeadActions cid={arg} />,
     Body: ({ arg }) => <ChatBody cid={arg} />,
@@ -156,6 +159,7 @@ export const WINDOWS: Record<WindowId, Win> = {
   voice: {
     name: () => t().desk.windows.voice,
     minWidth: 420,
+    minHeight: 320,
     Head: () => <VoiceHead />,
     Actions: () => <RoomModeToggle />,
     Body: () => (call.value ? <Stage /> : <Empty text={t().desk.empty.noVoice} />),
@@ -163,6 +167,7 @@ export const WINDOWS: Record<WindowId, Win> = {
   people: {
     name: () => t().desk.windows.people,
     minWidth: 240,
+    minHeight: 160,
     Head: () => {
       const g = viewGroup();
       return (
@@ -181,6 +186,7 @@ export const WINDOWS: Record<WindowId, Win> = {
   profile: {
     name: () => t().desk.windows.profile,
     minWidth: 260,
+    minHeight: 200,
     Head: () => (
       <>
         <Icon name="user" size={17} class="win-icon" />
@@ -205,11 +211,15 @@ export const EXTRA_WINDOWS: WindowId[] = ['people', 'profile'];
 // ---------- storage: per server and account, on this device ----------
 
 /** Where the voice window stood when the last call ended. */
-type VoicePlace = { position?: AddPanelPositionOptions; width?: number; floating?: { x: number; y: number; width: number; height: number } };
+type Rect = { x: number; y: number; width: number; height: number };
+/** Where the voice window stood when the last call ended: the whole desk then, the shape of the desk without it, and a neighbour to stand by if the desk changed since. */
+type VoicePlace = { desk?: SerializedDockview; shape?: string; position?: AddPanelPositionOptions; width?: number; floating?: Rect };
 type Saved = {
   layout?: SerializedDockview;
   /** Windows put away on the shelf. */
   shelf?: string[];
+  /** Where windows put on the shelf from floating were floating. */
+  shelfFloat?: Record<string, Rect>;
   opacity?: Record<string, number>;
   voice?: VoicePlace;
   nav?: number;
@@ -258,8 +268,8 @@ export function openPerson(userId: number) {
 let dock: DockviewApi | null = null;
 let host: HTMLElement | null = null;
 let saveTimer = 0;
-/** Each fold while folded: the desk's minimum width before it, and the windows that became tabs with their width. */
-let folds: { min: number; ids: string[]; width: number }[] = [];
+/** Each fold while folded: along which side, the desk's minimum size before it, and the windows that became tabs with their size. */
+let folds: { wide: boolean; min: number; ids: string[]; size: number }[] = [];
 let fitQueued = 0;
 const hintsShown: Record<string, number> = {};
 export const shelf = signal<string[]>([]);
@@ -294,6 +304,7 @@ function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOpt
     component: id.split(':')[0],
     title: w?.name() ?? id,
     minimumWidth: w?.minWidth,
+    minimumHeight: w?.minHeight,
     ...(position && dock!.panels.length ? { position: typeof position === 'string' ? { direction: position } : position, initialWidth: width } : {}),
   });
 }
@@ -312,30 +323,32 @@ function ensureMain() {
   hint('mainBack');
 }
 
-/** Too narrow for the windows' minimum widths: the rightmost become tabs of their neighbour, and come back once there is room. */
+/** Too small for the windows' minimum sizes: the rightmost (or lowest) become tabs of their neighbour, and come back once there is room. */
 function fit(byUser = false) {
   const d = dock;
   if (!d || !host) return;
-  const width = host.clientWidth;
+  const room = (wide: boolean) => (wide ? host!.clientWidth : host!.clientHeight);
   // Moved back rather than reloaded: a reload rebuilds every window and flickers.
-  while (folds.length && width >= folds[folds.length - 1].min) {
+  while (folds.length && room(folds[folds.length - 1].wide) >= folds[folds.length - 1].min) {
     const f = folds.pop()!;
     const [first, ...rest] = f.ids.map((id) => d.getPanel(id)).filter((p): p is IDockviewPanel => !!p);
     if (!first) continue;
-    first.api.moveTo({ group: first.group, position: 'right' });
+    first.api.moveTo({ group: first.group, position: f.wide ? 'right' : 'bottom' });
     for (const p of rest) p.api.moveTo({ group: first.group, position: 'center' });
-    first.group.api.setSize({ width: f.width });
+    first.group.api.setSize(f.wide ? { width: f.size } : { height: f.size });
   }
   let folded = false;
-  while (d.minimumWidth > width) {
-    const grid = d.groups.filter((g) => g.api.location.type === 'grid');
-    if (grid.length < 2) break;
-    const right = (g: DockviewGroupPanel) => g.element.getBoundingClientRect().right;
-    const last = grid.reduce((a, b) => (right(b) > right(a) ? b : a));
-    const into = (d.adjacentGroupInDirection(last, 'left') ?? grid.find((g) => g !== last)!) as DockviewGroupPanel;
-    folds.push({ min: d.minimumWidth, ids: last.panels.map((p) => p.id), width: last.api.width });
-    last.api.moveTo({ group: into, position: 'center' });
-    folded = true;
+  for (const wide of [true, false]) {
+    while ((wide ? d.minimumWidth : d.minimumHeight) > room(wide)) {
+      const grid = d.groups.filter((g) => g.api.location.type === 'grid');
+      if (grid.length < 2) break;
+      const edge = (g: DockviewGroupPanel) => (wide ? g.element.getBoundingClientRect().right : g.element.getBoundingClientRect().bottom);
+      const last = grid.reduce((a, b) => (edge(b) > edge(a) ? b : a));
+      const into = (d.adjacentGroupInDirection(last, wide ? 'left' : 'up') ?? grid.find((g) => g !== last)!) as DockviewGroupPanel;
+      folds.push({ wide, min: wide ? d.minimumWidth : d.minimumHeight, ids: last.panels.map((p) => p.id), size: wide ? last.api.width : last.api.height });
+      last.api.moveTo({ group: into, position: 'center' });
+      folded = true;
+    }
   }
   if (folded && byUser) hint('folded');
 }
@@ -366,13 +379,17 @@ function load() {
 }
 
 /** Where the voice window stands now, to put it back there with the next call. */
+function floatRect(g: DockviewGroupPanel): Rect | undefined {
+  const r = g.element.closest('.dv-resize-container')?.getBoundingClientRect();
+  const h = host!.getBoundingClientRect();
+  return r && { x: r.left - h.left, y: r.top - h.top, width: r.width, height: r.height };
+}
+const shape = (j: SerializedDockview) =>
+  JSON.stringify([j.grid.orientation, j.grid.root, j.floatingGroups?.map((f) => f.data?.views)], (k, v) => (k === 'size' || k === 'id' || k === 'activeView' ? undefined : v));
+
 function voicePlace(p: IDockviewPanel): VoicePlace {
   const g = p.group;
-  if (g.api.location.type === 'floating') {
-    const r = g.element.closest('.dv-resize-container')?.getBoundingClientRect();
-    const h = host!.getBoundingClientRect();
-    return r ? { floating: { x: r.left - h.left, y: r.top - h.top, width: r.width, height: r.height } } : {};
-  }
+  if (g.api.location.type === 'floating') return { floating: floatRect(g) };
   const other = g.panels.find((x) => x !== p);
   if (other) return { position: { referencePanel: other.id, direction: 'within' } };
   for (const [dir, place] of [['left', 'right'], ['right', 'left'], ['up', 'below'], ['down', 'above']] as const) {
@@ -385,6 +402,16 @@ function voicePlace(p: IDockviewPanel): VoicePlace {
 function showVoice() {
   const d = dock!;
   const place = loadDesk().voice ?? {};
+  // Nothing moved since the call ended: the desk comes back exactly as it was with the call.
+  if (place.desk && place.shape === shape(d.toJSON())) {
+    try {
+      d.fromJSON(place.desk);
+      d.getPanel('voice')?.api.setActive();
+      return;
+    } catch {
+      /* place it by its neighbour instead */
+    }
+  }
   const ref = place.position && 'referencePanel' in place.position ? place.position.referencePanel : undefined;
   // The window it stood by is gone: the voice window comes in as a new one, on the right.
   const fits = !ref || !!d.getPanel(typeof ref === 'string' ? ref : ref.id);
@@ -405,8 +432,9 @@ effect(() => {
     showVoice();
     fit(true);
   } else if (!c && p) {
-    saveDesk({ voice: voicePlace(p) });
+    const place = { ...voicePlace(p), desk: dock.toJSON() };
     p.api.close();
+    saveDesk({ voice: { ...place, shape: shape(dock.toJSON()) } });
   }
 });
 
@@ -440,6 +468,9 @@ export function openBeside(cid: number) {
   show('chat:' + cid);
 }
 function shelve(id: string) {
+  const g = dock?.getPanel(id)?.group;
+  const rect = g?.api.location.type === 'floating' ? floatRect(g) : undefined;
+  saveDesk({ shelfFloat: { ...loadDesk().shelfFloat, [id]: rect! } });
   setShelf([...shelf.value.filter((x) => x !== id), id]);
   dock?.getPanel(id)?.api.close();
   hint('shelf', 2);
@@ -447,6 +478,9 @@ function shelve(id: string) {
 function unshelve(id: string) {
   if (id === 'voice' && !call.value) return setShelf(shelf.value.filter((x) => x !== id));
   bringForward(id as WindowId);
+  const rect = loadDesk().shelfFloat?.[id];
+  const p = dock?.getPanel(id);
+  if (rect && p) dock!.addFloatingGroup(p, rect);
 }
 function float(p: IDockviewPanel) {
   const r = host!.getBoundingClientRect();
@@ -618,6 +652,7 @@ export function Workspace() {
       theme: { name: 'blue', className: 'dockview-theme-blue', gap: 10, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
       singleTabMode: 'fullwidth',
       disableTabsOverflowList: true,
+      floatingGroupBounds: 'boundedWithinViewport',
       createComponent: ({ id }) =>
         mount(div('win-body'), () => {
           const { w, arg } = parseId(id);
