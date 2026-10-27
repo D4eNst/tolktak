@@ -21,7 +21,6 @@ import {
   sharing,
   speakingRemote,
   stopShare,
-  sendFloater,
   streams,
   toggleDeafen,
   toggleMic,
@@ -30,7 +29,6 @@ import {
   type PeerView,
 } from '../voice';
 import { Avatar, Icon, Slider } from './common';
-import { STREAM_REACTIONS } from './emoji';
 import { SharePicker } from './SharePicker';
 
 export function VideoView({ track, cover, muted = true, mirror, onEl }: { track?: Track; cover?: boolean; muted?: boolean; mirror?: boolean; onEl?: (v: HTMLVideoElement | null) => void }) {
@@ -218,30 +216,6 @@ export function Floaters() {
   );
 }
 
-const reactionsOpen = signal(localStorage.getItem('tolktak.reactions') === '1');
-
-function ReactionBar() {
-  const open = reactionsOpen.value;
-  const tx = t().shell.stage;
-  const toggle = () => {
-    reactionsOpen.value = !open;
-    localStorage.setItem('tolktak.reactions', open ? '0' : '1');
-  };
-  return (
-    <div class={'reaction-bar' + (open ? ' open' : '')}>
-      {open &&
-        STREAM_REACTIONS.map((e) => (
-          <button key={e} onClick={() => sendFloater(e)} title={tx.sendToAll}>
-            {e}
-          </button>
-        ))}
-      <button class="reaction-toggle" onClick={toggle} title={open ? tx.hideReactions : tx.reactions} aria-label={tx.reactions}>
-        <Icon name={open ? 'x' : 'smile'} size={18} />
-      </button>
-    </div>
-  );
-}
-
 function Theater({ p }: { p: PeerView }) {
   const ref = useRef<HTMLDivElement>(null);
   const [stats, setStats] = useState(false);
@@ -263,7 +237,6 @@ function Theater({ p }: { p: PeerView }) {
         {stats && <StatsOverlay identity={p.identity} />}
         {speakingRemote.value && pr.ducking && <div class="duck-hint">{tx.duckHint}</div>}
         <Floaters />
-        <ReactionBar />
       </div>
       <div class="theater-bar">
         <span class="live">LIVE</span>
@@ -321,7 +294,6 @@ export function CallControls() {
           <Icon name="stop" size={14} /> {tx.stopShare}
         </button>
       )}
-      {!watching.value && <ReactionBar />}
       <button class="round danger" onClick={leaveVoice} title={tx.leave} aria-label={tx.leaveRoom}>
         <Icon name="phoneOff" />
       </button>

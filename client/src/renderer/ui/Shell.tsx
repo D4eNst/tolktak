@@ -34,7 +34,7 @@ import {
 import { call, deafened, leaveVoice, lowPower, micOn, peers, sharing, speaking, stopShare, toggleDeafen, toggleMic, watching } from '../voice';
 import { AddMembersDialog, CreateGroupDialog } from './Dialogs';
 import { Avatar, confirmDialog, Icon, type MenuItem, openMenu, openMenuAt, Popover } from './common';
-import { enterRoom, groupColor, loadDesk, openPerson, openVoice, resetLayout, saveDesk, SITUATIONS, toggleWindow, WINDOWS, windowShown, Workspace } from './desk';
+import { CHAT_DRAG, enterRoom, groupColor, loadDesk, openBeside, openPerson, openVoice, resetLayout, saveDesk, SITUATIONS, toggleWindow, WINDOWS, windowShown, Workspace } from './desk';
 import { createRoom, createTextChannel, deleteRoom, deleteTextChannel, GroupSettingsDialog, renameRoom, renameTextChannel } from './GroupSettings';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { SharePicker } from './SharePicker';
@@ -43,6 +43,12 @@ import { VideoView } from './Stage';
 const roomKey = (r: Room) => `g${r.group_id}r${r.id}`;
 const groupTextChannels = (g: Group): TextChannel[] => (g.text_channels?.length ? g.text_channels : [{ id: g.channel_id, name: t().shell.group.defaultChannel, position: 0 }]);
 const inRoom = (r: Room) => !!call.value && 'room_id' in call.value.target && call.value.target.room_id === r.id;
+const besideItems = (cid: number): MenuItem[] => [
+  { label: t().desk.menu.openBeside, icon: 'copy', run: () => openBeside(cid) },
+  { label: t().desk.menu.pin, icon: 'pin', run: () => openBeside(cid, true) },
+  'sep',
+];
+const dragChat = (cid: number) => (e: DragEvent) => e.dataTransfer?.setData(CHAT_DRAG, String(cid));
 
 // ---------- top bar ----------
 
@@ -255,8 +261,11 @@ function ChannelItem({ g, c, mod }: { g: Group; c: TextChannel; mod: boolean }) 
     <button
       class={'nav-row' + (active ? ' active' : '') + (unread && !muted ? ' unread' : '') + (muted ? ' muted' : '')}
       onClick={() => go({ kind: v.kind === 'room' && v.groupId === g.id ? 'room' : 'group', groupId: g.id, channelId: c.id })}
+      draggable
+      onDragStart={dragChat(c.id)}
       onContextMenu={(e) =>
         openMenu(e, [
+          ...besideItems(c.id),
           ...muteMenuItems('c' + c.id),
           ...(mod
             ? ([
@@ -276,19 +285,14 @@ function ChannelItem({ g, c, mod }: { g: Group; c: TextChannel; mod: boolean }) 
   );
 }
 
-// Groups the person opened in the navigator, or whose situation is shown.
-const expanded = signal<ReadonlySet<number>>(new Set());
-const setExpanded = (id: number, on: boolean) => {
-  const s = new Set(expanded.value);
-  if (on) s.add(id);
-  else s.delete(id);
-  expanded.value = s;
-};
+// Opened or closed by hand; otherwise a group is open while its situation is shown.
+const expanded = signal<ReadonlyMap<number, boolean>>(new Map());
+const setExpanded = (id: number, on: boolean) => (expanded.value = new Map(expanded.value).set(id, on));
 
 function NavGroup({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'settings' | 'add') => void }) {
   const v = view.value;
   const current = (v.kind === 'group' || v.kind === 'room') && v.groupId === g.id;
-  const open = expanded.value.has(g.id) || current;
+  const open = expanded.value.get(g.id) ?? current;
   const mod = canModerate(g);
   const textChannels = groupTextChannels(g);
   const unread = textChannels.reduce((n, c) => {
@@ -359,8 +363,11 @@ function NavPeople() {
             key={u.id}
             class={'nav-person' + (active ? ' active' : '') + (ch?.unread && !muted ? ' unread' : '') + (muted ? ' muted' : '')}
             onClick={() => openPerson(u.id)}
+            draggable={!!ch}
+            onDragStart={ch && dragChat(ch.id)}
             onContextMenu={(e) =>
               openMenu(e, [
+                ...(ch ? besideItems(ch.id) : []),
                 { label: tx.profile, icon: 'user', run: () => openProfile(u.id, e.clientX, e.clientY) },
                 { label: t().shell.self.copyUsername, icon: 'copy', run: () => copyText(u.username, t().shell.self.usernameCopied) },
                 ...(ch ? (['sep', ...muteMenuItems('c' + ch.id)] as MenuItem[]) : []),

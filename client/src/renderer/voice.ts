@@ -752,13 +752,6 @@ function showFloater(emoji: string, from: number) {
   floaters.value = [...floaters.value.slice(-30), f];
   setTimeout(() => (floaters.value = floaters.value.filter((x) => x.id !== f.id)), 3200);
 }
-export function sendFloater(emoji: string) {
-  if (!room) return;
-  showFloater(emoji, me.value?.id ?? 0);
-  const data = new TextEncoder().encode(JSON.stringify({ t: 'react', e: emoji.slice(0, 16) }));
-  room.localParticipant.publishData(data, { reliable: false, topic: 'react' }).catch(() => {});
-}
-
 function reportState() {
   if (call.value) sendRealtime({ type: 'voice.state', room: call.value.room, muted: !micOn.value, deafened: deafened.value });
 }

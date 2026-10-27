@@ -605,7 +605,10 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
   }, [edit?.id]);
 
   useEffect(() => {
-    const h = (e: Event) => addFiles((e as CustomEvent<File[]>).detail);
+    const h = (e: Event) => {
+      const d = (e as CustomEvent<{ channelId: number; files: File[] }>).detail;
+      if (d.channelId === channelId) addFiles(d.files);
+    };
     window.addEventListener('tolktak:files', h);
     return () => window.removeEventListener('tolktak:files', h);
   });
@@ -671,7 +674,7 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
     setUploads([]);
     setText('');
     setReply(channelId, null);
-    window.dispatchEvent(new CustomEvent('tolktak:sent'));
+    window.dispatchEvent(new CustomEvent('tolktak:sent', { detail: channelId }));
   };
 
   const insert = (s: string) => {
@@ -1017,14 +1020,15 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
   // Where reading stopped when the channel opened: the divider stays there while new messages are read.
   const readMark = useMemo(() => channels.value.get(channelId)?.last_read_id ?? 0, [channelId]);
   useEffect(() => {
-    const sent = () => {
+    const sent = (e: Event) => {
+      if ((e as CustomEvent<number>).detail !== channelId) return;
       stickToBottom.current = true;
       const el = listRef.current;
       if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     };
     window.addEventListener('tolktak:sent', sent);
     return () => window.removeEventListener('tolktak:sent', sent);
-  }, []);
+  }, [channelId]);
 
   const items = cm?.items ?? [];
   const pending = cm?.pending ?? [];
@@ -1098,7 +1102,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
         dragDepth.current = 0;
         setDrag(false);
         const files = [...(e.dataTransfer?.files ?? [])];
-        if (files.length) window.dispatchEvent(new CustomEvent('tolktak:files', { detail: files }));
+        if (files.length) window.dispatchEvent(new CustomEvent('tolktak:files', { detail: { channelId, files } }));
       }}
     >
       <div class="chat-body">

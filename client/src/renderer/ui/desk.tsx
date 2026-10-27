@@ -1,10 +1,10 @@
 // The desk: windows described once each, a default layout per situation, a few rules, and
 // dockview as the engine that places them. A new window or situation is a new entry below.
-import { effect } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { render, type VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 // The ESM build of dockview-core 8 ships no CSS; this build injects its own.
-import { createDockview, type DockviewApi, type DockviewGroupPanel, type SerializedDockview } from 'dockview-core/dist/dockview-core.js';
+import { type AddPanelPositionOptions, createDockview, type DockviewApi, type DockviewGroupPanel, type IDockviewPanel, type SerializedDockview } from 'dockview-core/dist/dockview-core.js';
 import type { Group, Room } from '../api';
 import { platform } from '../bridge';
 import { t } from '../i18n';
@@ -37,20 +37,22 @@ import { copyText, openProfile, ProfileCard } from './Profile';
 import { RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 
 type Kind = View['kind'];
-export type WindowId = 'dm' | 'channel' | 'room' | 'call' | 'people' | 'profile';
+export type WindowId = 'dm' | 'channel' | 'room' | 'call' | 'people' | 'profile' | 'chat';
+/** `arg` is what a window is fixed to, from its id `type:arg`: `chat:12` is channel 12 wherever you are. */
+type WinProps = { arg?: number };
 type Win = {
   name: () => string;
   minWidth: number;
   /** Title in the window frame: icon, name, a muted detail. */
-  Head: () => VNode | null;
-  Actions?: () => VNode | null;
-  Body: () => VNode | null;
+  Head: (p: WinProps) => VNode | null;
+  Actions?: (p: WinProps) => VNode | null;
+  Body: (p: WinProps) => VNode | null;
+};
+const parseId = (id: string) => {
+  const [type, arg] = id.split(':');
+  return { w: WINDOWS[type as WindowId] as Win | undefined, arg: arg ? Number(arg) : undefined };
 };
 
-const dmPeer = () => {
-  const cid = viewChannel(view.value);
-  return cid ? channels.value.get(cid)?.peer_id : undefined;
-};
 const viewGroup = () => {
   const v = view.value;
   return v.kind === 'group' || v.kind === 'room' ? groups.value.get(v.groupId) : undefined;
@@ -75,10 +77,8 @@ function VoiceHead({ icon }: { icon: string }) {
   );
 }
 
-function DmCallButton() {
-  const cid = viewChannel(view.value);
-  const peer = dmPeer();
-  if (!cid || !peer || inCallWith(cid)) return null;
+function DmCallButton({ cid }: { cid: number }) {
+  if (inCallWith(cid)) return null;
   const others = (voiceRooms.value.get('dm' + cid) ?? []).filter((m) => m.user_id !== me.value?.id);
   const tx = t().shell.dm;
   return (
@@ -88,63 +88,71 @@ function DmCallButton() {
   );
 }
 
+// A chat window, a person's or a group channel's, shared by the situation windows and the fixed `chat:` ones.
+function ChatHead({ cid, name }: { cid?: number; name: string }) {
+  const ch = cid ? channels.value.get(cid) : undefined;
+  const g = ch?.group_id ? groups.value.get(ch.group_id) : undefined;
+  if (ch?.peer_id)
+    return (
+      <>
+        <Avatar id={ch.peer_id} size={22} showPresence />
+        <span class="win-title">{userName(ch.peer_id)}</span>
+        <span class="win-sub">{users.value.get(ch.peer_id)?.status || (online.value.has(ch.peer_id) ? t().shell.dm.online : t().shell.dm.offline)}</span>
+      </>
+    );
+  if (g && cid)
+    return (
+      <>
+        <span class="group-dot" style={{ background: groupColor(g.id) }} />
+        <Icon name="hash" size={17} class="win-icon" />
+        <span class="win-title">{groupChannelName(g, cid)}</span>
+        <span class="win-sub">{g.name}</span>
+      </>
+    );
+  return <span class="win-title">{name}</span>;
+}
+function ChatHeadActions({ cid }: { cid?: number }) {
+  if (!cid) return null;
+  return (
+    <>
+      {channels.value.get(cid)?.peer_id && <DmCallButton cid={cid} />}
+      <ChatActions channelId={cid} />
+    </>
+  );
+}
+function ChatBody({ cid }: { cid?: number }) {
+  const ch = cid ? channels.value.get(cid) : undefined;
+  const g = ch?.group_id ? groups.value.get(ch.group_id) : undefined;
+  if (cid && ch?.peer_id) return <ChatView channelId={cid} title={userName(ch.peer_id)} icon={<Avatar id={ch.peer_id} size={34} showPresence />} />;
+  if (cid && g) return <ChatView channelId={cid} title={groupChannelName(g, cid)} icon={<Icon name="hash" size={28} />} canModerate={canModerate(g)} />;
+  return <Empty text={t().desk.empty.pickChat} />;
+}
+const situationChat = (kind: 'dm' | 'channel') => {
+  const v = view.value;
+  return (kind === 'dm') === (v.kind === 'person' || v.kind === 'call') ? viewChannel(v) : undefined;
+};
+
 export const WINDOWS: Record<WindowId, Win> = {
   dm: {
     name: () => t().desk.windows.dm,
     minWidth: 320,
-    Head: () => {
-      const peer = dmPeer();
-      if (!peer) return <span class="win-title">{t().desk.windows.dm}</span>;
-      return (
-        <>
-          <Avatar id={peer} size={22} showPresence />
-          <span class="win-title">{userName(peer)}</span>
-          <span class="win-sub">{users.value.get(peer)?.status || (online.value.has(peer) ? t().shell.dm.online : t().shell.dm.offline)}</span>
-        </>
-      );
-    },
-    Actions: () => {
-      const cid = viewChannel(view.value);
-      return cid ? (
-        <>
-          <DmCallButton />
-          <ChatActions channelId={cid} />
-        </>
-      ) : null;
-    },
-    Body: () => {
-      const cid = viewChannel(view.value);
-      const peer = dmPeer();
-      if (!cid || !peer) return <Empty text={t().desk.empty.pickChat} />;
-      return <ChatView channelId={cid} title={userName(peer)} icon={<Avatar id={peer} size={34} showPresence />} />;
-    },
+    Head: () => <ChatHead cid={situationChat('dm')} name={t().desk.windows.dm} />,
+    Actions: () => <ChatHeadActions cid={situationChat('dm')} />,
+    Body: () => <ChatBody cid={situationChat('dm')} />,
   },
   channel: {
     name: () => t().desk.windows.channel,
     minWidth: 320,
-    Head: () => {
-      const g = viewGroup();
-      const cid = viewChannel(view.value);
-      if (!g || !cid) return <span class="win-title">{t().desk.windows.channel}</span>;
-      return (
-        <>
-          <span class="group-dot" style={{ background: groupColor(g.id) }} />
-          <Icon name="hash" size={17} class="win-icon" />
-          <span class="win-title">{groupChannelName(g, cid)}</span>
-          <span class="win-sub">{g.name}</span>
-        </>
-      );
-    },
-    Actions: () => {
-      const cid = viewChannel(view.value);
-      return cid ? <ChatActions channelId={cid} /> : null;
-    },
-    Body: () => {
-      const g = viewGroup();
-      const cid = viewChannel(view.value);
-      if (!g || !cid) return <Empty text={t().desk.empty.pickChat} />;
-      return <ChatView channelId={cid} title={groupChannelName(g, cid)} icon={<Icon name="hash" size={28} />} canModerate={canModerate(g)} />;
-    },
+    Head: () => <ChatHead cid={situationChat('channel')} name={t().desk.windows.channel} />,
+    Actions: () => <ChatHeadActions cid={situationChat('channel')} />,
+    Body: () => <ChatBody cid={situationChat('channel')} />,
+  },
+  chat: {
+    name: () => t().desk.windows.chat,
+    minWidth: 320,
+    Head: ({ arg }) => <ChatHead cid={arg} name={t().desk.windows.chat} />,
+    Actions: ({ arg }) => <ChatHeadActions cid={arg} />,
+    Body: ({ arg }) => <ChatBody cid={arg} />,
   },
   room: {
     name: () => t().desk.windows.room,
@@ -188,7 +196,8 @@ export const WINDOWS: Record<WindowId, Win> = {
       </>
     ),
     Body: () => {
-      const peer = dmPeer();
+      const cid = situationChat('dm');
+      const peer = cid ? channels.value.get(cid)?.peer_id : undefined;
       return peer ? (
         <div class="win-scroll">
           <ProfileCard id={peer} onClose={() => {}} />
@@ -210,7 +219,16 @@ export const SITUATIONS: Record<Kind, { main: WindowId; windows: WindowId[]; lay
 
 // ---------- storage: per server and account, on this device ----------
 
-type Saved = { layouts?: Partial<Record<Kind, SerializedDockview>>; nav?: number; last?: View };
+type Saved = {
+  layouts?: Partial<Record<Kind, SerializedDockview>>;
+  /** Windows put away on each situation's shelf. */
+  shelf?: Partial<Record<Kind, string[]>>;
+  /** Windows kept on the desk in every situation. */
+  pinned?: string[];
+  opacity?: Record<string, number>;
+  nav?: number;
+  last?: View;
+};
 // Bump the version when the stored shape changes: older layouts are then ignored.
 const storeKey = () => `tolktak.desk.v1.${session.value?.api.base}.${session.value?.me.id}`;
 export function loadDesk(): Saved {
@@ -295,56 +313,146 @@ effect(() => {
 // ---------- the engine ----------
 
 let dock: DockviewApi | null = null;
+let host: HTMLElement | null = null;
 let shownKind: Kind | null = null;
 let saveTimer = 0;
+// shortcut: while the desk is too narrow, right windows sit as tabs and changes made then are not saved; keep them once someone misses it.
+/** The desk's minimum width before each fold, while folded. */
+let folds: number[] = [];
+export const shelf = signal<string[]>([]);
+export const pinned = signal<string[]>([]);
+const opacities = signal<Record<string, number>>({});
+export const CHAT_DRAG = 'application/x-tolktak-chat';
+const DIRECTION = { top: 'above', bottom: 'below', left: 'left', right: 'right', center: 'within' } as const;
 
 function saveLayout() {
   clearTimeout(saveTimer);
-  if (dock && shownKind) saveDesk({ layouts: { ...loadDesk().layouts, [shownKind]: dock.toJSON() } });
+  if (dock && shownKind && !folds.length) saveDesk({ layouts: { ...loadDesk().layouts, [shownKind]: dock.toJSON() } });
 }
 
-function addWindow(id: WindowId, direction?: 'left' | 'right') {
+function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOptions) {
+  const { w } = parseId(id);
   return dock!.addPanel({
     id,
-    component: id,
-    title: WINDOWS[id].name(),
-    minimumWidth: WINDOWS[id].minWidth,
-    ...(direction && dock!.panels.length ? { position: { direction }, initialWidth: 360 } : {}),
+    component: id.split(':')[0],
+    title: w?.name() ?? id,
+    minimumWidth: w?.minWidth,
+    ...(position && dock!.panels.length ? { position: typeof position === 'string' ? { direction: position } : position, initialWidth: 360 } : {}),
   });
+}
+
+function setShelf(list: string[]) {
+  shelf.value = list;
+  if (shownKind) saveDesk({ shelf: { ...loadDesk().shelf, [shownKind]: list } });
 }
 
 /** The situation's own window is always there and in front. */
 function ensureMain() {
   const id = SITUATIONS[view.value.kind].main;
+  if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
   (dock?.getPanel(id) ?? addWindow(id, 'left')).api.setActive();
+}
+
+/** Too narrow for the windows' minimum widths: the rightmost become tabs of their neighbour, and come back once there is room. */
+function fit() {
+  const d = dock;
+  if (!d || !host) return;
+  const width = host.clientWidth;
+  // Room for one more column: lay out the saved desk again and fold only what still does not fit.
+  if (folds.length && width >= folds[folds.length - 1]) {
+    folds = [];
+    const saved = loadDesk().layouts?.[shownKind!];
+    try {
+      if (saved) d.fromJSON(saved);
+    } catch {
+      /* keep the folded layout */
+    }
+    ensureMain();
+  }
+  while (d.minimumWidth > width) {
+    const grid = d.groups.filter((g) => g.api.location.type === 'grid');
+    if (grid.length < 2) break;
+    const right = (g: DockviewGroupPanel) => g.element.getBoundingClientRect().right;
+    const last = grid.reduce((a, b) => (right(b) > right(a) ? b : a));
+    const into = (d.adjacentGroupInDirection(last, 'left') ?? grid.find((g) => g !== last)!) as DockviewGroupPanel;
+    if (!folds.length) saveLayout();
+    folds.push(d.minimumWidth);
+    last.api.moveTo({ group: into, position: 'center' });
+  }
+  if (folds.length) d.getPanel(SITUATIONS[view.value.kind].main)?.api.setActive();
 }
 
 function arrange(kind: Kind) {
   saveLayout();
+  folds = [];
   shownKind = kind;
-  const saved = loadDesk().layouts?.[kind];
+  const saved = loadDesk();
+  shelf.value = saved.shelf?.[kind] ?? [];
   try {
-    if (!saved) throw new Error('no saved layout');
-    dock!.fromJSON(saved);
+    if (!saved.layouts?.[kind]) throw new Error('no saved layout');
+    dock!.fromJSON(saved.layouts[kind]!);
   } catch {
     dock!.clear();
     SITUATIONS[kind].layout.forEach((id, i) => addWindow(id, i ? 'right' : undefined));
   }
+  for (const id of pinned.value) if (!dock!.getPanel(id) && !shelf.value.includes(id)) addWindow(id, 'right');
   ensureMain();
+  fit();
 }
 
+function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions = 'right') {
+  if (!dock) return;
+  (dock.getPanel(id) ?? addWindow(id, position)).api.setActive();
+  fit();
+}
 export function toggleWindow(id: WindowId) {
   const p = dock?.getPanel(id);
   if (p) p.api.close();
-  else addWindow(id, 'right');
+  else show(id);
 }
 export function resetLayout() {
   if (!dock || !shownKind) return;
-  saveDesk({ layouts: { ...loadDesk().layouts, [shownKind]: undefined } });
+  saveDesk({ layouts: { ...loadDesk().layouts, [shownKind]: undefined }, shelf: { ...loadDesk().shelf, [shownKind]: [] } });
   shownKind = null;
   arrange(view.value.kind);
 }
 export const windowShown = (id: WindowId) => !!dock?.getPanel(id);
+
+export function togglePin(id: string) {
+  pinned.value = pinned.value.includes(id) ? pinned.value.filter((x) => x !== id) : [...pinned.value, id];
+  saveDesk({ pinned: pinned.value });
+}
+/** A chat in its own window next to the situation; pinned, it stays in every situation. */
+export function openBeside(cid: number, pin = false) {
+  const id = 'chat:' + cid;
+  if (pin && !pinned.value.includes(id)) togglePin(id);
+  show(id);
+}
+function shelve(id: string) {
+  setShelf([...shelf.value.filter((x) => x !== id), id]);
+  dock?.getPanel(id)?.api.close();
+}
+function unshelve(id: string) {
+  setShelf(shelf.value.filter((x) => x !== id));
+  show(id);
+}
+function closeWindow(p: IDockviewPanel) {
+  if (pinned.value.includes(p.id)) togglePin(p.id);
+  p.api.close();
+}
+function float(p: IDockviewPanel) {
+  const r = host!.getBoundingClientRect();
+  dock!.addFloatingGroup(p, { width: 380, height: Math.min(520, r.height - 90), x: r.width - 400, y: 70 });
+}
+function dockBack(p: IDockviewPanel) {
+  const into = dock!.groups.find((g) => g.api.location.type === 'grid' && g !== p.group);
+  if (into) p.api.moveTo({ group: into, position: 'right' });
+  fit();
+}
+function setOpacity(id: string, v: number) {
+  opacities.value = { ...opacities.value, [id]: v };
+  saveDesk({ opacity: opacities.value });
+}
 
 function mount(el: HTMLElement, node: () => VNode) {
   return { element: el, init: () => render(node(), el), dispose: () => render(null, el) };
@@ -356,17 +464,23 @@ function div(cls: string) {
 }
 
 function Tab({ id }: { id: string }) {
-  const w = WINDOWS[id as WindowId];
-  return <div class="win-head">{w ? <w.Head /> : id}</div>;
+  const { w, arg } = parseId(id);
+  return <div class="win-head">{w ? <w.Head arg={arg} /> : id}</div>;
 }
 
 function windowMenu(group: DockviewGroupPanel): MenuItem[] {
   const p = group.activePanel;
+  if (!p) return [];
   const tx = t().desk.menu;
+  const floating = group.api.location.type === 'floating';
   const max = group.api.isMaximized();
   return [
-    { label: max ? tx.restore : tx.maximize, icon: 'maximize', run: () => (max ? group.api.exitMaximized() : group.api.maximize()) },
-    ...(p ? [{ label: tx.close, icon: 'x', run: () => p.api.close() } as MenuItem] : []),
+    ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => (max ? group.api.exitMaximized() : group.api.maximize()) } as MenuItem]),
+    { label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) },
+    { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
+    ...(p.id.startsWith('chat:') ? [{ label: pinned.value.includes(p.id) ? tx.unpin : tx.pin, icon: 'pin', run: () => togglePin(p.id) } as MenuItem] : []),
+    'sep',
+    { label: tx.close, icon: 'x', run: () => closeWindow(p) },
   ];
 }
 
@@ -380,14 +494,51 @@ function GroupActions({ group }: { group: DockviewGroupPanel }) {
     return () => subs.forEach((d) => d.dispose());
   }, []);
   const id = group.activePanel?.id;
-  const w = id ? WINDOWS[id as WindowId] : undefined;
+  const { w, arg } = id ? parseId(id) : { w: undefined, arg: undefined };
+  const floating = group.api.location.type === 'floating';
+  const opacity = (id && opacities.value[id]) || 1;
+  useEffect(() => {
+    const box = group.element.closest<HTMLElement>('.dv-resize-container');
+    if (box) box.style.opacity = floating ? String(opacity) : '';
+  });
   return (
     <>
-      {w?.Actions && <w.Actions />}
+      {floating && (
+        <input
+          type="range"
+          class="win-opacity"
+          min="0.3"
+          max="1"
+          step="0.05"
+          value={opacity}
+          onInput={(e) => id && setOpacity(id, Number(e.currentTarget.value))}
+          title={t().desk.menu.opacity}
+          aria-label={t().desk.menu.opacity}
+        />
+      )}
+      {w?.Actions && <w.Actions arg={arg} />}
       <button class="icon-btn" onClick={(e) => openMenuAt(e.currentTarget, windowMenu(group))} title={t().desk.menu.label} aria-label={t().desk.menu.label}>
         <Icon name="more" size={18} />
       </button>
     </>
+  );
+}
+
+function Shelf() {
+  if (!shelf.value.length) return null;
+  return (
+    <div class="shelf" role="toolbar" aria-label={t().desk.menu.shelf}>
+      {shelf.value.map((id) => {
+        const { w, arg } = parseId(id);
+        return (
+          w && (
+            <button key={id} class="shelf-item" onClick={() => unshelve(id)}>
+              <w.Head arg={arg} />
+            </button>
+          )
+        );
+      })}
+    </div>
   );
 }
 
@@ -410,14 +561,19 @@ export function Workspace() {
   const v = view.value;
 
   useEffect(() => {
-    const d = createDockview(ref.current!, {
+    host = ref.current!;
+    const saved = loadDesk();
+    pinned.value = saved.pinned ?? [];
+    opacities.value = saved.opacity ?? {};
+    const d = createDockview(host, {
       theme: { name: 'blue', className: 'dockview-theme-blue', gap: 10, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
       singleTabMode: 'fullwidth',
       disableTabsOverflowList: true,
-      createComponent: ({ name }) => mount(div('win-body'), () => {
-        const W = WINDOWS[name as WindowId]?.Body;
-        return W ? <W /> : <Empty text="" />;
-      }),
+      createComponent: ({ id }) =>
+        mount(div('win-body'), () => {
+          const { w, arg } = parseId(id);
+          return w ? <w.Body arg={arg} /> : <Empty text="" />;
+        }),
       defaultTabComponent: 'win',
       createTabComponent: ({ id }) => mount(div('win-tab'), () => <Tab id={id} />),
       createRightHeaderActionComponent: (group) => mount(div('win-actions'), () => <GroupActions group={group} />),
@@ -431,14 +587,29 @@ export function Workspace() {
         saveTimer = window.setTimeout(saveLayout, 300);
       }),
       d.onDidActivePanelChange(track),
+      d.onUnhandledDragOver((e) => {
+        if (e.nativeEvent instanceof DragEvent && e.nativeEvent.dataTransfer?.types.includes(CHAT_DRAG)) e.accept();
+      }),
+      d.onDidDrop((e) => {
+        const cid = e.nativeEvent instanceof DragEvent ? Number(e.nativeEvent.dataTransfer?.getData(CHAT_DRAG)) : 0;
+        if (!cid) return;
+        const id = 'chat:' + cid;
+        d.getPanel(id)?.api.close();
+        const direction = DIRECTION[e.position];
+        show(id, e.group ? { referenceGroup: e.group, direction } : { direction: direction === 'within' ? 'right' : direction });
+      }),
     ];
+    const resize = new ResizeObserver(fit);
+    resize.observe(host);
     window.addEventListener('beforeunload', saveLayout);
     return () => {
       saveLayout();
       window.removeEventListener('beforeunload', saveLayout);
       subs.forEach((s) => s.dispose());
+      resize.disconnect();
       d.dispose();
       dock = null;
+      host = null;
       shownKind = null;
       started = false;
     };
@@ -476,7 +647,12 @@ export function Workspace() {
     };
   }, []);
 
-  return <div class="workspace dockview-theme-blue" ref={ref} />;
+  return (
+    <div class="workspace">
+      <div class="dock dockview-theme-blue" ref={ref} />
+      <Shelf />
+    </div>
+  );
 }
 
 // ---------- group people ----------

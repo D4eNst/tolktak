@@ -485,7 +485,8 @@ function bumpChannel(m: Message) {
 
 function isChannelVisible(cid: number) {
   const v = view.value;
-  return document.hasFocus() && viewChannel(v) === cid && shownWindows.value.has(v.kind === 'person' || v.kind === 'call' ? 'dm' : 'channel');
+  const own = viewChannel(v) === cid && shownWindows.value.has(v.kind === 'person' || v.kind === 'call' ? 'dm' : 'channel');
+  return document.hasFocus() && (own || shownWindows.value.has('chat:' + cid));
 }
 
 function onMessageCreated(m: Message) {
