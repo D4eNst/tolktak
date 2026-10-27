@@ -294,8 +294,13 @@ export function callPerson(channelId: number, join: boolean) {
 export function openVoice() {
   const c = call.value?.target;
   if (!c) return;
-  if ('channel_id' in c) return go({ kind: 'call', channelId: c.channel_id });
+  const v = view.value;
+  if ('channel_id' in c) {
+    if (v.kind === 'call' && v.channelId === c.channel_id) return bringForward('call');
+    return go({ kind: 'call', channelId: c.channel_id });
+  }
   const g = groupOfRoom(c.room_id);
+  if (g && v.kind === 'room' && v.groupId === g.id) return bringForward('room');
   if (g) go({ kind: 'room', groupId: g.id, channelId: chatOf(g.id) });
 }
 
@@ -324,7 +329,6 @@ let dock: DockviewApi | null = null;
 let host: HTMLElement | null = null;
 let shownKind: Kind | null = null;
 let saveTimer = 0;
-// shortcut: while the desk is too narrow, right windows sit as tabs and changes made then are not saved; keep them once someone misses it.
 /** Each fold while folded: the desk's minimum width before it, and the windows that became tabs with their width. */
 let folds: { min: number; ids: string[]; width: number }[] = [];
 let fitQueued = 0;
@@ -352,7 +356,7 @@ function hint(key: keyof Messages['desk']['hints'], times = Infinity) {
 
 function saveLayout() {
   clearTimeout(saveTimer);
-  if (dock && shownKind && !folds.length) saveDesk({ layouts: { ...loadDesk().layouts, [shownKind]: dock.toJSON() } });
+  if (dock && shownKind) saveDesk({ layouts: { ...loadDesk().layouts, [shownKind]: dock.toJSON() } });
 }
 
 function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOptions) {
@@ -402,7 +406,6 @@ function fit(byUser = false) {
     const right = (g: DockviewGroupPanel) => g.element.getBoundingClientRect().right;
     const last = grid.reduce((a, b) => (right(b) > right(a) ? b : a));
     const into = (d.adjacentGroupInDirection(last, 'left') ?? grid.find((g) => g !== last)!) as DockviewGroupPanel;
-    if (!folds.length) saveLayout();
     folds.push({ min: d.minimumWidth, ids: last.panels.map((p) => p.id), width: last.api.width });
     last.api.moveTo({ group: into, position: 'center' });
     folded = true;

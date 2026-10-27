@@ -53,7 +53,7 @@ export default {
   hints: {
     folded: {
       text: 'Not enough room: a window became a tab',
-      more: 'Windows on the desk cannot get narrower than their minimum (a room 420, a chat 320). When they do not all fit, the right ones become tabs of their neighbour. Widen the app or narrow the navigator and they spread out again by themselves. While folded, moving windows around is not remembered.',
+      more: 'Windows on the desk cannot get narrower than their minimum (a room 420, a chat 320). When they do not all fit, the right ones become tabs of their neighbour. Widen the app or narrow the navigator and they spread out again by themselves.',
     },
     mainBack: {
       text: 'The main window is back',
