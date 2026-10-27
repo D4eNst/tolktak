@@ -8,6 +8,7 @@ const ru: typeof en = {
     video: 'Видео',
     keys: 'Горячие клавиши',
     watch: 'Совместный просмотр',
+    windows: 'Окна',
     app: 'Приложение',
     server: 'Сервер',
   },

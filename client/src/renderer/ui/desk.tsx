@@ -29,6 +29,7 @@ import {
   online,
   openDM,
   session,
+  settingsOpen,
   shownWindows,
   toast,
   userName,
@@ -40,7 +41,7 @@ import {
 } from '../state';
 import { call, joinVoice, startCall } from '../voice';
 import { ChatActions, ChatView } from './Chat';
-import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu } from './common';
+import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, Select } from './common';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 
@@ -129,6 +130,18 @@ function ChatHeadActions({ cid }: { cid?: number }) {
     </>
   );
 }
+/** Opens or closes a window that belongs to the main one, beside it on the right. */
+function BesideToggle({ id, icon }: { id: WindowId; icon: string }) {
+  void layoutTick.value;
+  const on = windowShown(id);
+  const name = WINDOWS[id].name();
+  return (
+    <button class={'icon-btn' + (on ? ' active' : '')} onClick={() => (on ? closeWindow(id) : show(id, { referencePanel: 'main', direction: 'right' }))} title={name} aria-label={name} aria-pressed={on}>
+      <Icon name={icon} size={18} />
+    </button>
+  );
+}
+
 function ChatBody({ cid }: { cid?: number }) {
   const ch = cid ? channels.value.get(cid) : undefined;
   const g = ch?.group_id ? groups.value.get(ch.group_id) : undefined;
@@ -143,7 +156,12 @@ export const WINDOWS: Record<WindowId, Win> = {
     minWidth: 320,
     minHeight: 220,
     Head: ({ bare }) => <ChatHead cid={viewChannel(view.value)} name={t().desk.windows.main} bare={bare} />,
-    Actions: () => <ChatHeadActions cid={viewChannel(view.value)} />,
+    Actions: () => (
+      <>
+        <ChatHeadActions cid={viewChannel(view.value)} />
+        {view.value.kind === 'group' ? <BesideToggle id="people" icon="users" /> : viewPeer() && <BesideToggle id="profile" icon="user" />}
+      </>
+    ),
     Body: () => <ChatBody cid={viewChannel(view.value)} />,
   },
   chat: {
@@ -199,8 +217,6 @@ export const WINDOWS: Record<WindowId, Win> = {
     },
   },
 };
-/** Windows a person adds from the avatar menu; the main one is always there, the voice one with a call. */
-export const EXTRA_WINDOWS: WindowId[] = ['people', 'profile'];
 
 // ---------- storage: per server and account, on this device ----------
 
@@ -220,6 +236,7 @@ type Saved = {
   capsule?: string[];
   voice?: VoicePlace;
   nav?: number;
+  navFolded?: boolean;
   last?: View;
 };
 // Bump the version when the stored shape changes: older layouts are then ignored.
@@ -238,6 +255,32 @@ export function saveDesk(patch: Saved) {
   } catch {
     /* storage unavailable */
   }
+}
+
+// ---------- behaviour: settings «Окна», per device ----------
+
+type DeskPrefs = { people: 'button' | 'always'; call: 'replace' | 'beside' | 'full' };
+const PREFS_KEY = 'tolktak.deskPrefs';
+export const deskPrefs = signal<DeskPrefs>({
+  people: 'button',
+  call: 'replace',
+  ...(() => {
+    try {
+      return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  })(),
+});
+export function setDeskPrefs(patch: Partial<DeskPrefs>) {
+  deskPrefs.value = { ...deskPrefs.value, ...patch };
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(deskPrefs.value));
+  } catch {
+    /* storage unavailable */
+  }
+  // The call's remembered place would win over the new choice.
+  if (patch.call) saveDesk({ voice: undefined });
 }
 
 // ---------- navigation ----------
@@ -555,11 +598,20 @@ function showVoice() {
     }
   }
   const ref = place.position && 'referencePanel' in place.position ? place.position.referencePanel : undefined;
-  // The window it stood by is gone: the voice window comes in as a new one, on the right.
+  // The window it stood by is gone: the voice window comes in as a new one, where the settings put it.
   const fits = !ref || !!d.getPanel(typeof ref === 'string' ? ref : ref.id);
-  const p = addWindow('voice', fits ? (place.position ?? 'right') : 'right', { width: place.width ?? 520, height: place.height });
-  if (place.floating) d.addFloatingGroup(p, place.floating);
+  if (fits && (place.position || place.floating)) {
+    const p = addWindow('voice', place.position ?? 'right', { width: place.width ?? 520, height: place.height });
+    if (place.floating) d.addFloatingGroup(p, place.floating);
+    return p.api.setActive();
+  }
+  const how = deskPrefs.value.call;
+  const p =
+    how === 'replace' && d.getPanel('main')
+      ? addWindow('voice', { referencePanel: 'main', direction: 'left' }, { width: Math.round(host!.clientWidth * 0.6) })
+      : addWindow('voice', 'right', { width: 520 });
   p.api.setActive();
+  if (how === 'full') p.group.api.maximize();
 }
 
 // The voice window comes with a call and goes when it ends, keeping its place.
@@ -598,11 +650,6 @@ export function bringForward(id: WindowId) {
   if (shelf.value.includes('voice')) setShelf(shelf.value.filter((x) => x !== 'voice'));
   showVoice();
   fit(true);
-}
-export function toggleWindow(id: WindowId) {
-  const p = dock?.getPanel(id);
-  if (p) closeWindow(id);
-  else show(id);
 }
 export function resetLayout() {
   if (!dock) return;
@@ -792,6 +839,7 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
     ...(floating ? [] : [isPlain(group, p.id) ? { label: tx.capsule, icon: 'tabAbove', run: () => togglePlain(group, p.id) } : { label: tx.plain, icon: 'tabInside', run: () => togglePlain(group, p.id) }]),
     'sep',
+    { label: tx.reset, icon: 'home', run: resetLayout },
     { label: tx.close, icon: 'x', run: () => closeWindow(p.id) },
   ];
 }
@@ -970,6 +1018,7 @@ export function Workspace() {
 
   useEffect(() => {
     ensureMain();
+    if (v.kind === 'group' && deskPrefs.value.people === 'always' && !dock?.getPanel('people')) show('people', { referencePanel: 'main', direction: 'right' });
     if (started) saveDesk({ last: v });
   }, [v]);
 
@@ -989,6 +1038,20 @@ export function Workspace() {
         goBy(e.key === 'ArrowLeft' ? -1 : 1);
       }
       if (e.code === 'KeyF' && !e.altKey && !e.ctrlKey && !e.metaKey && !typing(e) && call.value) toggleRoomMode();
+      // F6: the next window, its text field focused when it has one.
+      if (e.key === 'F6' && dock?.groups.length) {
+        e.preventDefault();
+        const all = dock.groups;
+        const at = all.findIndex((g) => g.element.contains(document.activeElement));
+        const next = all[(at + (e.shiftKey ? all.length - 1 : 1) + all.length) % all.length];
+        next.activePanel?.api.setActive();
+        (next.element.querySelector<HTMLElement>('textarea') ?? next.element.querySelector<HTMLElement>('.dv-tab'))?.focus();
+      }
+      // Ctrl+W: close the window in front.
+      if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'KeyW' && dock?.activePanel) {
+        e.preventDefault();
+        closeWindow(dock.activePanel.id);
+      }
     };
     const mouse = (e: MouseEvent) => (e.button === 3 || e.button === 4) && goBy(e.button === 3 ? -1 : 1);
     window.addEventListener('keydown', keys);
@@ -1091,5 +1154,42 @@ function MembersPanel({ g }: { g: Group }) {
       )}
       {off.map(row)}
     </div>
+  );
+}
+
+// ---------- settings «Окна» ----------
+
+export function WindowsSettings() {
+  const tx = t().desk.settings;
+  const p = deskPrefs.value;
+  return (
+    <>
+      <Select<DeskPrefs['people']>
+        label={tx.people}
+        value={p.people}
+        options={[
+          { value: 'button', label: tx.peopleButton },
+          { value: 'always', label: tx.peopleAlways },
+        ]}
+        onChange={(people) => setDeskPrefs({ people })}
+      />
+      <Select<DeskPrefs['call']>
+        label={tx.call}
+        value={p.call}
+        options={[
+          { value: 'replace', label: tx.callReplace },
+          { value: 'beside', label: tx.callBeside },
+          { value: 'full', label: tx.callFull },
+        ]}
+        onChange={(call) => setDeskPrefs({ call })}
+      />
+      <p class="hint">{tx.callHint}</p>
+      <div>
+        <button class="secondary" onClick={() => (resetLayout(), (settingsOpen.value = false))}>
+          <Icon name="home" size={16} /> {t().desk.menu.reset}
+        </button>
+        <p class="hint">{tx.resetHint}</p>
+      </div>
+    </>
   );
 }

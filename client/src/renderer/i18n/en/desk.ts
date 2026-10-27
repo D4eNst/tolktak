@@ -9,6 +9,8 @@ export default {
     leave: 'Leave voice',
   },
   nav: {
+    fold: 'Fold the navigator (Ctrl+\\)',
+    unfold: 'Unfold the navigator (Ctrl+\\)',
     back: 'Back',
     findGroup: 'Find a group',
     findPerson: 'Find a person',
@@ -52,8 +54,7 @@ export default {
     label: 'Window menu',
     maximize: 'Fill the desk',
     close: 'Close window',
-    view: 'Windows here',
-    reset: 'Default layout',
+    reset: 'Reset the desk',
   },
   hints: {
     plainTabs: {
@@ -76,6 +77,17 @@ export default {
       text: 'The window floats over the desk',
       more: 'Drag it by the bar on top, resize it by its edges. Opacity and “Back to the grid” are in its “…” menu. You can also drag its title back into the grid.',
     },
+  },
+  settings: {
+    people: 'Group members',
+    peopleButton: 'By the button in the chat title',
+    peopleAlways: 'Right away when a group opens',
+    call: 'A call',
+    callReplace: 'Takes the chat’s place, the chat moves right',
+    callBeside: 'Beside the chat',
+    callFull: 'Fills the desk',
+    callHint: 'Where the call window comes the first time. Once you move it, it comes back to its own place.',
+    resetHint: 'Every window goes back to how the desk starts: the main chat alone.',
   },
   room: {
     mode: 'Stream view',

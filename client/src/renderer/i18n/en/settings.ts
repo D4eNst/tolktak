@@ -6,6 +6,7 @@ export default {
     video: 'Video',
     keys: 'Hotkeys',
     watch: 'Watch together',
+    windows: 'Windows',
     app: 'App',
     server: 'Server',
   },

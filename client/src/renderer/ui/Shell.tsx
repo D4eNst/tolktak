@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { Group, Room, TextChannel } from '../api';
 import { platform } from '../bridge';
 import { t } from '../i18n';
@@ -33,7 +33,7 @@ import {
 import { call, deafened, leaveVoice, micOn, sharing, speaking, stopShare, toggleDeafen, toggleMic } from '../voice';
 import { AddMembersDialog, CreateGroupDialog } from './Dialogs';
 import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, openMenuAt, Popover } from './common';
-import { CHAT_DRAG, enterRoom, EXTRA_WINDOWS, loadDesk, openBeside, openPerson, openVoice, resetLayout, saveDesk, toggleWindow, WINDOWS, windowShown, Workspace } from './desk';
+import { CHAT_DRAG, enterRoom, loadDesk, openBeside, openPerson, openVoice, saveDesk, Workspace } from './desk';
 import { createRoom, createTextChannel, deleteRoom, deleteTextChannel, GroupSettingsDialog, renameRoom, renameTextChannel } from './GroupSettings';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { SharePicker } from './SharePicker';
@@ -91,7 +91,6 @@ function AvatarMenu() {
   const [pop, setPop] = useState<{ x: number; y: number } | null>(null);
   if (!u) return null;
   const tx = t().shell.self;
-  const td = t().desk;
   const close = () => setPop(null);
   const conn = connection.value;
   return (
@@ -104,16 +103,6 @@ function AvatarMenu() {
         <Popover x={pop.x} y={pop.y} onClose={close} class="profile-pop">
           <ProfileCard id={u.id} onClose={close} />
           <div class="self-menu">
-            <div class="self-menu-label">{td.menu.view}</div>
-            {EXTRA_WINDOWS.map((id) => (
-              <button key={id} onClick={() => (toggleWindow(id), close())}>
-                <Icon name={windowShown(id) ? 'check' : 'plus'} size={16} /> {WINDOWS[id].name()}
-              </button>
-            ))}
-            <button onClick={() => (resetLayout(), close())}>
-              <Icon name="home" size={16} /> {td.menu.reset}
-            </button>
-            <div class="self-menu-sep" />
             <button onClick={() => (close(), copyText(u.username, tx.usernameCopied))}>
               <Icon name="copy" size={16} /> {tx.copyUsername}
             </button>
@@ -423,6 +412,7 @@ function Navigator() {
   return (
     <nav class="win navigator" aria-label={tx.label}>
       <div class="nav-top">
+        <div class="nav-top-row">
         <div class="seg-toggle nav-tabs" role="tablist">
           {(['groups', 'people'] as const).map((x) => (
             <button key={x} role="tab" aria-selected={tab === x} class={tab === x ? 'on' : ''} onClick={() => (navTab.value = x)}>
@@ -430,6 +420,10 @@ function Navigator() {
               {(x === 'groups' ? groupsUnread : peopleUnread) && tab !== x && <span class="nav-tab-dot" />}
             </button>
           ))}
+        </div>
+        <button class="icon-btn tiny" onClick={toggleNav} title={tx.fold} aria-label={tx.fold}>
+          <Icon name="chevronRight" size={16} class="flip" />
+        </button>
         </div>
         <div class="nav-search">
           <Icon name="search" size={15} />
@@ -470,8 +464,59 @@ function Navigator() {
 const NAV_MIN = 220;
 const NAV_MAX = 440;
 
+// Ctrl+\ folds the navigator into a strip of avatars and back.
+const navFolded = signal(false);
+const toggleNav = () => {
+  navFolded.value = !navFolded.value;
+  saveDesk({ navFolded: navFolded.value });
+};
+
+function NavRail() {
+  const v = view.value;
+  const tx = t().desk.nav;
+  const dms = [...channels.value.values()]
+    .filter((c) => c.kind === 'dm' && c.peer_id)
+    .sort((a, b) => (b.last_message?.id ?? 0) - (a.last_message?.id ?? 0))
+    .slice(0, 8);
+  return (
+    <nav class="win navigator nav-rail" aria-label={tx.label}>
+      <button class="icon-btn nav-unfold" onClick={toggleNav} title={tx.unfold} aria-label={tx.unfold}>
+        <Icon name="chevronRight" size={18} />
+      </button>
+      <div class="nav-rail-list">
+        {[...groups.value.values()].map((g) => (
+          <button key={g.id} class={'nav-strip-item' + (v.kind === 'group' && v.groupId === g.id ? ' active' : '')} onClick={() => openGroup(g)} title={g.name} aria-label={g.name}>
+            <GroupAvatar id={g.id} size={36} />
+            {groupUnread(g) > 0 && <span class="nav-strip-dot unread" />}
+            {groupLive(g) && <span class="nav-strip-dot live" />}
+          </button>
+        ))}
+        <span class="nav-rail-sep" />
+        {dms.map((c) => (
+          <button key={c.id} class={'nav-strip-item' + (v.kind === 'person' && v.channelId === c.id ? ' active' : '')} onClick={() => openPerson(c.peer_id!)} title={userName(c.peer_id!)} aria-label={userName(c.peer_id!)}>
+            <Avatar id={c.peer_id!} size={36} showPresence />
+            {c.unread > 0 && !channelMuted(c) && <span class="nav-strip-dot unread" />}
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
 export function Shell() {
   const [nav, setNav] = useState(() => loadDesk().nav ?? 300);
+  useEffect(() => {
+    navFolded.value = !!loadDesk().navFolded;
+    const keys = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === '\\') {
+        e.preventDefault();
+        toggleNav();
+      }
+    };
+    window.addEventListener('keydown', keys);
+    return () => window.removeEventListener('keydown', keys);
+  }, []);
+  const folded = navFolded.value;
   const set = (w: number) => {
     const n = Math.round(Math.min(NAV_MAX, Math.max(NAV_MIN, w)));
     setNav(n);
@@ -487,13 +532,12 @@ export function Shell() {
     el.addEventListener('pointerup', () => el.removeEventListener('pointermove', move), { once: true });
   };
   return (
-    <div class="shell" style={{ '--nav-w': nav + 'px' }}>
+    <div class="shell" style={{ '--nav-w': (folded ? 64 : nav) + 'px' }}>
       {connection.value === 'offline' && <div class="banner">{serverRestarting.value === null ? t().shell.offlineBanner : t().shell.restartingBanner(serverRestarting.value)}</div>}
       <div class="desk">
-        <div class="persistent">
-          <Navigator />
-        </div>
+        <div class="persistent">{folded ? <NavRail /> : <Navigator />}</div>
         <div
+          hidden={folded}
           class="nav-sash"
           role="separator"
           aria-orientation="vertical"

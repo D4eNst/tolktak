@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals';
+import { effect, signal, untracked } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Track } from 'livekit-client';
 import { t } from '../i18n';
@@ -325,6 +325,15 @@ function setRoomMode(m: RoomMode) {
   }
 }
 export const toggleRoomMode = () => setRoomMode(roomMode() === 'kino' ? 'work' : 'kino');
+
+// Кино: the stream started last becomes the one on screen, with sound (spec «Голос, показы и камеры»).
+let seenStreams = new Set<string>();
+effect(() => {
+  const ids = streams.value.filter((p) => !p.isLocal).map((p) => p.identity);
+  const fresh = ids.filter((id) => !seenStreams.has(id));
+  seenStreams = new Set(ids);
+  if (fresh.length && call.value && untracked(roomMode) === 'kino') watch(fresh[fresh.length - 1]);
+});
 
 export function RoomModeToggle() {
   const m = roomMode();

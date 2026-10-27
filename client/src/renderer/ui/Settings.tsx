@@ -5,6 +5,7 @@ import { api, errorText, logout, me, notificationsOn, serverUpdate, session, set
 import type { ChainStats, Denoise, VoiceChain } from '../audio/chain';
 import { call, micOn, toggleMic, chainSettings, createVoiceChain, micConstraints, micGain, micLevel, playTone, prefs, restartCamera, restartMic, setPrefs, switchDevices, applyGate, cameraOn } from '../voice';
 import { Avatar, confirmDialog, Icon, Modal, type Option, Select, Slider, Toggle } from './common';
+import { WindowsSettings } from './desk';
 import { pickImage } from './GroupSettings';
 import { intlLocale, LOCALES, locale, setLocale, t, type Locale } from '../i18n';
 
@@ -465,6 +466,7 @@ const TABS: { id: SettingsTab; icon: string }[] = [
   { id: 'video', icon: 'video' },
   { id: 'keys', icon: 'keyboard' },
   { id: 'watch', icon: 'monitorPlay' },
+  { id: 'windows', icon: 'tabInside' },
   { id: 'app', icon: 'settings' },
   { id: 'server', icon: 'shield' },
 ];
@@ -650,6 +652,7 @@ export function SettingsDialog() {
               </Toggle>
             </>
           )}
+          {tab === 'windows' && <WindowsSettings />}
           {tab === 'app' && desk && (
             <>
               <Select<Locale> label={tx.app.language} value={locale.value} options={LOCALES.map((l) => ({ value: l.id, label: l.name }))} onChange={setLocale} />
