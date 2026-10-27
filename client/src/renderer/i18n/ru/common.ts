@@ -6,6 +6,8 @@ const ru: typeof en = {
   close: 'Закрыть',
   cancel: 'Отмена',
   save: 'Сохранить',
+  ok: 'Понятно',
+  more: 'Подробнее',
   yes: 'Да',
   name: 'Название',
   copied: 'Скопировано',

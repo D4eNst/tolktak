@@ -33,6 +33,8 @@ export default {
     noVoice: 'You are not in voice',
   },
   menu: {
+    main: 'Main window: shows what you pick in the navigator',
+    closeTab: 'Close',
     unmaximize: 'Normal size',
     float: 'Float over the desk',
     dock: 'Back to the grid',
@@ -47,6 +49,36 @@ export default {
     close: 'Close window',
     view: 'Windows here',
     reset: 'Default layout',
+  },
+  hints: {
+    folded: {
+      text: 'Not enough room: a window became a tab',
+      more: 'Windows on the desk cannot get narrower than their minimum (a room 420, a chat 320). When they do not all fit, the right ones become tabs of their neighbour. Widen the app or narrow the navigator and they spread out again by themselves. While folded, moving windows around is not remembered.',
+    },
+    mainBack: {
+      text: 'The main window is back',
+      more: 'The main window (the arrow in its title) shows what you pick in the navigator: a channel, a person or a room. It cannot be removed for good: it comes back with your next pick. Other windows can be closed, put on the shelf or set floating.',
+    },
+    room: {
+      text: 'A room has its own layout of windows',
+      more: 'Each situation has its own desk: a group, a person, a room and a call. A room shows the room and the group chat beside it; what you change here is kept for every room. Opening another group or person changes the desk while the voice goes on, shown at the top right. Back to the room: click its name there or press Alt+←.',
+    },
+    call: {
+      text: 'A call has its own layout of windows',
+      more: 'A call shows the call and your chat with the person beside it; what you change here is kept for every call. Opening something else changes the desk while the call goes on, shown at the top right. Back to the call: click its name there or press Alt+←.',
+    },
+    pinned: {
+      text: 'This window stays on the desk everywhere',
+      more: 'A pinned window is added to the group, person, room and call desks. To remove it: “…” in its title → “Stop keeping on the desk” or “Close window”.',
+    },
+    shelf: {
+      text: 'The window is on the shelf below',
+      more: 'The shelf keeps the windows you put away in this situation. Click a capsule on the shelf to bring its window back.',
+    },
+    floating: {
+      text: 'The window floats over the desk',
+      more: 'Drag it by the bar on top, resize it by its edges. Opacity and “Back to the grid” are in its “…” menu. You can also drag its title back into the grid.',
+    },
   },
   room: {
     mode: 'Stream view',

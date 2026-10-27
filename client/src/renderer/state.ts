@@ -12,7 +12,7 @@ export type View =
   | { kind: 'group'; groupId: number; channelId?: number }
   | { kind: 'room'; groupId: number; channelId?: number }
   | { kind: 'call'; channelId: number };
-export type Toast = { id: number; text: string; kind: 'info' | 'error' };
+export type Toast = { id: number; text: string; kind: 'info' | 'error'; ms: number; more?: string };
 export type IncomingCall = { channelId: number; from: number };
 
 export const session = signal<{ api: Api; me: User; server: ServerInfo } | null>(null);
@@ -189,8 +189,9 @@ export function dmChannelWith(userId: number): Channel | undefined {
 }
 
 let toastSeq = 0;
-export function toast(text: string, kind: Toast['kind'] = 'info', ms = 4500) {
-  const item = { id: ++toastSeq, text, kind };
+/** `more` is a longer explanation the toast opens when clicked. */
+export function toast(text: string, kind: Toast['kind'] = 'info', ms = 4500, more?: string) {
+  const item = { id: ++toastSeq, text, kind, ms, more };
   toasts.value = [...toasts.value, item];
   setTimeout(() => (toasts.value = toasts.value.filter((x) => x.id !== item.id)), ms);
 }

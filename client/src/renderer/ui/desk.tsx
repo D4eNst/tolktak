@@ -4,10 +4,18 @@ import { effect, signal } from '@preact/signals';
 import { render, type VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 // The ESM build of dockview-core 8 ships no CSS; this build injects its own.
-import { type AddPanelPositionOptions, createDockview, type DockviewApi, type DockviewGroupPanel, type IDockviewPanel, type SerializedDockview } from 'dockview-core/dist/dockview-core.js';
+import {
+  type AddPanelPositionOptions,
+  createDockview,
+  type DockviewApi,
+  type DockviewGroupPanel,
+  type DockviewPanelApi,
+  type IDockviewPanel,
+  type SerializedDockview,
+} from 'dockview-core/dist/dockview-core.js';
 import type { Group, Room } from '../api';
 import { platform } from '../bridge';
-import { t } from '../i18n';
+import { type Messages, t } from '../i18n';
 import {
   api,
   canModerate,
@@ -32,7 +40,7 @@ import {
 } from '../state';
 import { call, joinVoice, startCall } from '../voice';
 import { ChatActions, ChatView } from './Chat';
-import { Avatar, confirmDialog, Icon, type MenuItem, openMenu, openMenuAt } from './common';
+import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu } from './common';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 
@@ -58,7 +66,6 @@ const viewGroup = () => {
   return v.kind === 'group' || v.kind === 'room' ? groups.value.get(v.groupId) : undefined;
 };
 const groupChannelName = (g: Group, cid: number) => g.text_channels?.find((c) => c.id === cid)?.name ?? t().shell.group.defaultChannel;
-export const groupColor = (id: number) => `var(--user-${id % 8})`;
 const inCallWith = (cid?: number) => !!cid && !!call.value && 'channel_id' in call.value.target && call.value.target.channel_id === cid;
 
 function Empty({ text }: { text: string }) {
@@ -103,7 +110,7 @@ function ChatHead({ cid, name }: { cid?: number; name: string }) {
   if (g && cid)
     return (
       <>
-        <span class="group-dot" style={{ background: groupColor(g.id) }} />
+        <GroupAvatar id={g.id} size={22} />
         <Icon name="hash" size={17} class="win-icon" />
         <span class="win-title">{groupChannelName(g, cid)}</span>
         <span class="win-sub">{g.name}</span>
@@ -264,6 +271,7 @@ const chatOf = (groupId: number) => {
 
 export function enterRoom(g: Group, r: Room) {
   const here = call.value && 'room_id' in call.value.target && call.value.target.room_id === r.id;
+  if (here && view.value.kind === 'room' && view.value.groupId === g.id) return bringForward('room');
   go({ kind: 'room', groupId: g.id, channelId: chatOf(g.id) });
   if (!here)
     joinVoice({ room_id: r.id }, `${r.name} · ${g.name}`).catch((e) => {
@@ -317,13 +325,30 @@ let host: HTMLElement | null = null;
 let shownKind: Kind | null = null;
 let saveTimer = 0;
 // shortcut: while the desk is too narrow, right windows sit as tabs and changes made then are not saved; keep them once someone misses it.
-/** The desk's minimum width before each fold, while folded. */
-let folds: number[] = [];
+/** Each fold while folded: the desk's minimum width before it, and the windows that became tabs with their width. */
+let folds: { min: number; ids: string[]; width: number }[] = [];
+let fitQueued = 0;
+const hintsShown: Record<string, number> = {};
 export const shelf = signal<string[]>([]);
 export const pinned = signal<string[]>([]);
 const opacities = signal<Record<string, number>>({});
 export const CHAT_DRAG = 'application/x-tolktak-chat';
 const DIRECTION = { top: 'above', bottom: 'below', left: 'left', right: 'right', center: 'within' } as const;
+
+/** A short note on what just happened, at most `times` per device and once in 10 s; a click opens the details. */
+function hint(key: keyof Messages['desk']['hints'], times = Infinity) {
+  if (Date.now() - (hintsShown[key] ?? 0) < 10_000) return;
+  try {
+    const n = Number(localStorage.getItem('tolktak.hint.' + key)) || 0;
+    if (n >= times) return;
+    localStorage.setItem('tolktak.hint.' + key, String(n + 1));
+  } catch {
+    /* storage unavailable */
+  }
+  hintsShown[key] = Date.now();
+  const h = t().desk.hints[key];
+  toast(h.text, 'info', 7000, h.more);
+}
 
 function saveLayout() {
   clearTimeout(saveTimer);
@@ -350,25 +375,27 @@ function setShelf(list: string[]) {
 function ensureMain() {
   const id = SITUATIONS[view.value.kind].main;
   if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
-  (dock?.getPanel(id) ?? addWindow(id, 'left')).api.setActive();
+  const p = dock?.getPanel(id);
+  if (p) return p.api.setActive();
+  addWindow(id, 'left');
+  hint('mainBack');
 }
 
 /** Too narrow for the windows' minimum widths: the rightmost become tabs of their neighbour, and come back once there is room. */
-function fit() {
+function fit(byUser = false) {
   const d = dock;
   if (!d || !host) return;
   const width = host.clientWidth;
-  // Room for one more column: lay out the saved desk again and fold only what still does not fit.
-  if (folds.length && width >= folds[folds.length - 1]) {
-    folds = [];
-    const saved = loadDesk().layouts?.[shownKind!];
-    try {
-      if (saved) d.fromJSON(saved);
-    } catch {
-      /* keep the folded layout */
-    }
-    ensureMain();
+  // Moved back rather than reloaded: a reload rebuilds every window and flickers.
+  while (folds.length && width >= folds[folds.length - 1].min) {
+    const f = folds.pop()!;
+    const [first, ...rest] = f.ids.map((id) => d.getPanel(id)).filter((p): p is IDockviewPanel => !!p);
+    if (!first) continue;
+    first.api.moveTo({ group: first.group, position: 'right' });
+    for (const p of rest) p.api.moveTo({ group: first.group, position: 'center' });
+    first.group.api.setSize({ width: f.width });
   }
+  let folded = false;
   while (d.minimumWidth > width) {
     const grid = d.groups.filter((g) => g.api.location.type === 'grid');
     if (grid.length < 2) break;
@@ -376,11 +403,20 @@ function fit() {
     const last = grid.reduce((a, b) => (right(b) > right(a) ? b : a));
     const into = (d.adjacentGroupInDirection(last, 'left') ?? grid.find((g) => g !== last)!) as DockviewGroupPanel;
     if (!folds.length) saveLayout();
-    folds.push(d.minimumWidth);
+    folds.push({ min: d.minimumWidth, ids: last.panels.map((p) => p.id), width: last.api.width });
     last.api.moveTo({ group: into, position: 'center' });
+    folded = true;
   }
-  if (folds.length) d.getPanel(SITUATIONS[view.value.kind].main)?.api.setActive();
+  if (folded) d.getPanel(SITUATIONS[view.value.kind].main)?.api.setActive();
+  if (folded && byUser) hint('folded');
 }
+const queueFit = () => {
+  if (!fitQueued)
+    fitQueued = requestAnimationFrame(() => {
+      fitQueued = 0;
+      fit(true);
+    });
+};
 
 function arrange(kind: Kind) {
   saveLayout();
@@ -398,13 +434,16 @@ function arrange(kind: Kind) {
   for (const id of pinned.value) if (!dock!.getPanel(id) && !shelf.value.includes(id)) addWindow(id, 'right');
   ensureMain();
   fit();
+  if (isVoice(view.value)) hint(view.value.kind as 'room' | 'call', 2);
 }
 
 function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions = 'right') {
   if (!dock) return;
   (dock.getPanel(id) ?? addWindow(id, position)).api.setActive();
-  fit();
+  fit(true);
 }
+/** Shows a window of the situation on screen, as a new one if it was closed. */
+export const bringForward = (id: WindowId) => show(id);
 export function toggleWindow(id: WindowId) {
   const p = dock?.getPanel(id);
   if (p) p.api.close();
@@ -419,8 +458,10 @@ export function resetLayout() {
 export const windowShown = (id: WindowId) => !!dock?.getPanel(id);
 
 export function togglePin(id: string) {
-  pinned.value = pinned.value.includes(id) ? pinned.value.filter((x) => x !== id) : [...pinned.value, id];
+  const on = !pinned.value.includes(id);
+  pinned.value = on ? [...pinned.value, id] : pinned.value.filter((x) => x !== id);
   saveDesk({ pinned: pinned.value });
+  if (on) hint('pinned', 2);
 }
 /** A chat in its own window next to the situation; pinned, it stays in every situation. */
 export function openBeside(cid: number, pin = false) {
@@ -431,6 +472,7 @@ export function openBeside(cid: number, pin = false) {
 function shelve(id: string) {
   setShelf([...shelf.value.filter((x) => x !== id), id]);
   dock?.getPanel(id)?.api.close();
+  hint('shelf', 2);
 }
 function unshelve(id: string) {
   setShelf(shelf.value.filter((x) => x !== id));
@@ -443,6 +485,7 @@ function closeWindow(p: IDockviewPanel) {
 function float(p: IDockviewPanel) {
   const r = host!.getBoundingClientRect();
   dock!.addFloatingGroup(p, { width: 380, height: Math.min(520, r.height - 90), x: r.width - 400, y: 70 });
+  hint('floating', 2);
 }
 function dockBack(p: IDockviewPanel) {
   const into = dock!.groups.find((g) => g.api.location.type === 'grid' && g !== p.group);
@@ -454,8 +497,8 @@ function setOpacity(id: string, v: number) {
   saveDesk({ opacity: opacities.value });
 }
 
-function mount(el: HTMLElement, node: () => VNode) {
-  return { element: el, init: () => render(node(), el), dispose: () => render(null, el) };
+function mount<P>(el: HTMLElement, node: (p: P) => VNode) {
+  return { element: el, init: (p: P) => render(node(p), el), dispose: () => render(null, el) };
 }
 function div(cls: string) {
   const el = document.createElement('div');
@@ -463,9 +506,57 @@ function div(cls: string) {
   return el;
 }
 
-function Tab({ id }: { id: string }) {
+function openWindowMenu(e: { clientX: number; clientY: number; preventDefault?: () => void }, group: DockviewGroupPanel) {
+  const p = group.activePanel;
+  openMenu(e, windowMenu(group), group.api.location.type === 'floating' && p ? <OpacitySlider id={p.id} /> : undefined);
+}
+const toggleMax = (group: DockviewGroupPanel) => group.api.location.type === 'grid' && (group.api.isMaximized() ? group.api.exitMaximized() : group.api.maximize());
+
+function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
   const { w, arg } = parseId(id);
-  return <div class="win-head">{w ? <w.Head arg={arg} /> : id}</div>;
+  const tx = t().desk.menu;
+  return (
+    <div
+      class="win-head"
+      onContextMenu={(e) => {
+        api.setActive();
+        openWindowMenu(e, api.group);
+      }}
+      onDblClick={() => toggleMax(api.group)}
+    >
+      {SITUATIONS[view.value.kind].main === id && (
+        <span class="win-main" title={tx.main}>
+          <Icon name="navigation" size={13} />
+        </span>
+      )}
+      {pinned.value.includes(id) && <Icon name="pin" size={14} class="win-icon" />}
+      {w ? <w.Head arg={arg} /> : id}
+      <button
+        class="win-close"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          const p = dock?.getPanel(id);
+          if (p) closeWindow(p);
+        }}
+        title={tx.closeTab}
+        aria-label={tx.closeTab}
+      >
+        <Icon name="x" size={14} />
+      </button>
+    </div>
+  );
+}
+
+function OpacitySlider({ id }: { id: string }) {
+  const v = opacities.value[id] || 1;
+  return (
+    <label class="menu-slider">
+      <span>{t().desk.menu.opacity}</span>
+      <input type="range" min="0.3" max="1" step="0.05" value={v} onInput={(e) => setOpacity(id, Number(e.currentTarget.value))} />
+      <span class="muted">{Math.round(v * 100)}%</span>
+    </label>
+  );
 }
 
 function windowMenu(group: DockviewGroupPanel): MenuItem[] {
@@ -474,9 +565,11 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
   const tx = t().desk.menu;
   const floating = group.api.location.type === 'floating';
   const max = group.api.isMaximized();
+  // shortcut: a room or call floats only once it has a compact view (spec «Режимы окна»).
+  const canFloat = p.id !== 'room' && p.id !== 'call';
   return [
-    ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => (max ? group.api.exitMaximized() : group.api.maximize()) } as MenuItem]),
-    { label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) },
+    ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => toggleMax(group) } as MenuItem]),
+    ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
     ...(p.id.startsWith('chat:') ? [{ label: pinned.value.includes(p.id) ? tx.unpin : tx.pin, icon: 'pin', run: () => togglePin(p.id) } as MenuItem] : []),
     'sep',
@@ -503,21 +596,16 @@ function GroupActions({ group }: { group: DockviewGroupPanel }) {
   });
   return (
     <>
-      {floating && (
-        <input
-          type="range"
-          class="win-opacity"
-          min="0.3"
-          max="1"
-          step="0.05"
-          value={opacity}
-          onInput={(e) => id && setOpacity(id, Number(e.currentTarget.value))}
-          title={t().desk.menu.opacity}
-          aria-label={t().desk.menu.opacity}
-        />
-      )}
       {w?.Actions && <w.Actions arg={arg} />}
-      <button class="icon-btn" onClick={(e) => openMenuAt(e.currentTarget, windowMenu(group))} title={t().desk.menu.label} aria-label={t().desk.menu.label}>
+      <button
+        class="icon-btn"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          openWindowMenu({ clientX: r.left, clientY: r.bottom + 4 }, group);
+        }}
+        title={t().desk.menu.label}
+        aria-label={t().desk.menu.label}
+      >
         <Icon name="more" size={18} />
       </button>
     </>
@@ -575,7 +663,7 @@ export function Workspace() {
           return w ? <w.Body arg={arg} /> : <Empty text="" />;
         }),
       defaultTabComponent: 'win',
-      createTabComponent: ({ id }) => mount(div('win-tab'), () => <Tab id={id} />),
+      createTabComponent: ({ id }) => mount(div('win-tab'), (p: { api: DockviewPanelApi }) => <Tab id={id} api={p.api} />),
       createRightHeaderActionComponent: (group) => mount(div('win-actions'), () => <GroupActions group={group} />),
     });
     dock = d;
@@ -583,10 +671,15 @@ export function Workspace() {
     const subs = [
       d.onDidLayoutChange(() => {
         track();
+        queueFit();
         clearTimeout(saveTimer);
         saveTimer = window.setTimeout(saveLayout, 300);
       }),
       d.onDidActivePanelChange(track),
+      // A floating window holds one window: nothing docks into it.
+      d.onWillShowOverlay((e) => {
+        if (e.group?.api.location.type === 'floating') e.preventDefault();
+      }),
       d.onUnhandledDragOver((e) => {
         if (e.nativeEvent instanceof DragEvent && e.nativeEvent.dataTransfer?.types.includes(CHAT_DRAG)) e.accept();
       }),
@@ -599,7 +692,7 @@ export function Workspace() {
         show(id, e.group ? { referenceGroup: e.group, direction } : { direction: direction === 'within' ? 'right' : direction });
       }),
     ];
-    const resize = new ResizeObserver(fit);
+    const resize = new ResizeObserver(() => fit());
     resize.observe(host);
     window.addEventListener('beforeunload', saveLayout);
     return () => {
@@ -615,8 +708,13 @@ export function Workspace() {
     };
   }, []);
 
+  const prev = useRef(v);
   useEffect(() => {
+    const p = prev.current;
+    prev.current = v;
     if (v.kind !== shownKind) arrange(v.kind);
+    // In a room a picked channel shows in the chat beside it.
+    else if (v.kind === 'room' && p.kind === 'room' && v.channelId !== p.channelId) show('channel');
     else ensureMain();
     if (started && !isVoice(v)) saveDesk({ last: v });
   }, [v]);

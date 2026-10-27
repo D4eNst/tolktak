@@ -25,6 +25,7 @@ const paths: Record<string, string> = {
   maximize: 'M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3',
   x: 'M18 6 6 18M6 6l12 12',
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
+  navigation: 'M3 11l19-9-9 19-2-8z',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
@@ -117,8 +118,8 @@ export function GroupAvatar({ id, size = 44 }: { id: number; size?: number }) {
   if (!g) return null;
   const src = g.avatar ? avatarUrl(g.avatar) : '';
   return (
-    <span class={'group-avatar' + (src ? ' has-img' : '')} style={{ width: `${size}px`, height: `${size}px`, fontSize: `${size * 0.36}px` }}>
-      {src ? <img src={src} alt="" draggable={false} /> : g.name.slice(0, 2).toUpperCase()}
+    <span class={'group-avatar' + (src ? ' has-img' : '')} style={{ width: `${size}px`, height: `${size}px`, fontSize: `${size * 0.38}px`, '--c': `var(--user-${id % 8})` }}>
+      {src ? <img src={src} alt="" draggable={false} /> : (/\s/.test(g.name.trim()) ? initials(g.name) : g.name.slice(0, 2)).toUpperCase()}
     </span>
   );
 }
@@ -173,12 +174,15 @@ export function Modal({
 }
 
 type Ask =
-  | { kind: 'confirm'; title: string; text?: string; ok: string; danger?: boolean; resolve: (v: boolean) => void }
+  | { kind: 'confirm' | 'info'; title: string; text?: string; ok: string; danger?: boolean; resolve: (v: boolean) => void }
   | { kind: 'prompt'; title: string; label: string; initial: string; ok: string; max: number; resolve: (v: string | null) => void };
 const asking = signal<Ask | null>(null);
 
 export function confirmDialog(title: string, opts: { text?: string; ok?: string; danger?: boolean } = {}): Promise<boolean> {
   return new Promise((resolve) => (asking.value = { kind: 'confirm', title, text: opts.text, ok: opts.ok ?? t().common.yes, danger: opts.danger, resolve }));
+}
+export function infoDialog(title: string, text: string) {
+  asking.value = { kind: 'info', title, text, ok: t().common.ok, resolve: () => {} };
 }
 export function promptDialog(title: string, opts: { label?: string; initial?: string; ok?: string; max?: number } = {}): Promise<string | null> {
   return new Promise((resolve) =>
@@ -197,14 +201,16 @@ export function AskHost() {
     asking.value = null;
     (a.resolve as (x: unknown) => void)(val);
   };
-  if (a.kind === 'confirm') {
+  if (a.kind !== 'prompt') {
     return (
       <Modal title={a.title} onClose={() => done(false)} class="ask">
         {a.text && <p class="ask-text">{a.text}</p>}
         <div class="modal-actions">
-          <button class="secondary" onClick={() => done(false)}>
-            {t().common.cancel}
-          </button>
+          {a.kind === 'confirm' && (
+            <button class="secondary" onClick={() => done(false)}>
+              {t().common.cancel}
+            </button>
+          )}
           <button class={a.danger ? 'danger-btn' : 'primary'} onClick={() => done(true)} autoFocus>
             {a.ok}
           </button>

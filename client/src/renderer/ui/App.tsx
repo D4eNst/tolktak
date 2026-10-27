@@ -5,7 +5,7 @@ import { installHotkeys, loadHotkeys } from '../keys';
 import { boot, booting, incomingCall, session, settingsOpen, switcherOpen, toasts, totalUnread, typing } from '../state';
 import { call, toggleMic } from '../voice';
 import { LightboxHost } from './Chat';
-import { AskHost, MenuHost } from './common';
+import { AskHost, infoDialog, MenuHost } from './common';
 import { IncomingCallDialog, QuickSwitcher } from './Dialogs';
 import { Login } from './Login';
 import { ProfileHost } from './Profile';
@@ -15,11 +15,18 @@ import { Shell, TitleBar } from './Shell';
 function Toasts() {
   return (
     <div class="toasts" role="status" aria-live="polite">
-      {toasts.value.map((t) => (
-        <div key={t.id} class={'toast ' + t.kind}>
-          {t.text}
-        </div>
-      ))}
+      {toasts.value.map((x) =>
+        x.more ? (
+          <button key={x.id} class={'toast more ' + x.kind} style={{ '--out': `${x.ms - 700}ms` }} onClick={() => infoDialog(x.text, x.more!)}>
+            {x.text}
+            <span class="toast-more">{t().common.more}</span>
+          </button>
+        ) : (
+          <div key={x.id} class={'toast ' + x.kind} style={{ '--out': `${x.ms - 700}ms` }}>
+            {x.text}
+          </div>
+        ),
+      )}
     </div>
   );
 }

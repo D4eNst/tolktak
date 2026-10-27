@@ -21,7 +21,6 @@ import {
   serverRestarting,
   session,
   setMuted,
-  shownWindows,
   settingsOpen,
   switcherOpen,
   toast,
@@ -31,14 +30,13 @@ import {
   viewChannel,
   voiceRooms,
 } from '../state';
-import { call, deafened, leaveVoice, lowPower, micOn, peers, sharing, speaking, stopShare, toggleDeafen, toggleMic, watching } from '../voice';
+import { call, deafened, leaveVoice, micOn, sharing, speaking, stopShare, toggleDeafen, toggleMic } from '../voice';
 import { AddMembersDialog, CreateGroupDialog } from './Dialogs';
-import { Avatar, confirmDialog, Icon, type MenuItem, openMenu, openMenuAt, Popover } from './common';
-import { CHAT_DRAG, enterRoom, groupColor, loadDesk, openBeside, openPerson, openVoice, resetLayout, saveDesk, SITUATIONS, toggleWindow, WINDOWS, windowShown, Workspace } from './desk';
+import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, openMenuAt, Popover } from './common';
+import { CHAT_DRAG, enterRoom, loadDesk, openBeside, openPerson, openVoice, resetLayout, saveDesk, SITUATIONS, toggleWindow, WINDOWS, windowShown, Workspace } from './desk';
 import { createRoom, createTextChannel, deleteRoom, deleteTextChannel, GroupSettingsDialog, renameRoom, renameTextChannel } from './GroupSettings';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { SharePicker } from './SharePicker';
-import { VideoView } from './Stage';
 
 const roomKey = (r: Room) => `g${r.group_id}r${r.id}`;
 const groupTextChannels = (g: Group): TextChannel[] => (g.text_channels?.length ? g.text_channels : [{ id: g.channel_id, name: t().shell.group.defaultChannel, position: 0 }]);
@@ -314,7 +312,7 @@ function NavGroup({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'settings
             go({ kind: 'group', groupId: g.id, channelId: (v.kind === 'group' || v.kind === 'room') && v.groupId === g.id ? v.channelId : undefined });
           }}
         >
-          <span class="group-dot" style={{ background: groupColor(g.id) }} />
+          <GroupAvatar id={g.id} size={24} />
           <span class="ellipsis">{g.name}</span>
           {!open && live && <Icon name="speaker" size={14} class="talk" />}
           {!open && unread > 0 && <span class="badge inline">{unread}</span>}
@@ -423,46 +421,6 @@ function Navigator() {
   );
 }
 
-// ---------- mini voice window: in a call whose window is not on screen ----------
-
-function MiniVoice() {
-  const c = call.value;
-  if (!c || shownWindows.value.has('room') || shownWindows.value.has('call')) return null;
-  const tx = t().desk.voice;
-  const ts = t().shell.self;
-  const watched = peers.value.find((p) => p.identity === watching.value && p.screen);
-  return (
-    <section class="win mini-voice" aria-label={c.label}>
-      <button class="mini-voice-head" onClick={openVoice} title={tx.back}>
-        <span class={'dot ' + (c.status === 'connected' ? 'ok' : 'wait')} />
-        <span class="ellipsis">{c.label}</span>
-      </button>
-      {watched && !lowPower.value && (
-        <button class="mini-voice-video" onClick={openVoice} aria-label={tx.back}>
-          <VideoView track={watched.screen} cover />
-        </button>
-      )}
-      <div class="mini-voice-row">
-        <div class="mini-voice-people">
-          {peers.value.slice(0, 6).map((p) => (
-            <Avatar key={p.identity} id={p.userId} size={26} speaking={p.speaking} />
-          ))}
-          {peers.value.length > 6 && <span class="muted small">+{peers.value.length - 6}</span>}
-        </div>
-        <button class={'icon-btn' + (micOn.value ? '' : ' off')} onClick={toggleMic} aria-label={ts.micLabel} aria-pressed={!micOn.value}>
-          <Icon name={micOn.value ? 'mic' : 'micOff'} size={17} />
-        </button>
-        <button class={'icon-btn' + (deafened.value ? ' off' : '')} onClick={toggleDeafen} aria-label={ts.soundLabel} aria-pressed={deafened.value}>
-          <Icon name={deafened.value ? 'headphonesOff' : 'headphones'} size={17} />
-        </button>
-        <button class="icon-btn leave" onClick={leaveVoice} aria-label={tx.leave} title={tx.leave}>
-          <Icon name="phoneOff" size={17} />
-        </button>
-      </div>
-    </section>
-  );
-}
-
 // ---------- the frame ----------
 
 const NAV_MIN = 220;
@@ -490,7 +448,6 @@ export function Shell() {
       <div class="desk">
         <div class="persistent">
           <Navigator />
-          <MiniVoice />
         </div>
         <div
           class="nav-sash"

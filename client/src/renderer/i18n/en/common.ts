@@ -2,6 +2,8 @@ export default {
   close: 'Close',
   cancel: 'Cancel',
   save: 'Save',
+  ok: 'Got it',
+  more: 'More',
   yes: 'Yes',
   name: 'Name',
   copied: 'Copied',
