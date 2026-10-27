@@ -31,7 +31,7 @@ import {
   watching,
   type PeerView,
 } from '../voice';
-import { Avatar, Icon, Slider } from './common';
+import { Avatar, Icon, Modal, openMenu, Slider, Toggle } from './common';
 import { SharePicker } from './SharePicker';
 
 export function VideoView({ track, cover, muted = true, mirror, onEl }: { track?: Track; cover?: boolean; muted?: boolean; mirror?: boolean; onEl?: (v: HTMLVideoElement | null) => void }) {
@@ -271,41 +271,71 @@ export function Floaters() {
   );
 }
 
-/** Your own camera bubble, hidden for you only; the others still see it. */
-const hideOwnCam = signal(false);
+/** Bubbles you hid, for yourself only; the others still see them. */
+const hiddenBubbles = signal<ReadonlySet<string>>(new Set());
 /** All the bubbles over the streams, hidden for you only. */
 const hideBubbles = signal(false);
 /** The list of everyone in the call, over the room window or in a window of its own. */
 export const callPeopleOpen = signal(false);
 
-/** While streams are on, people are bubbles along the edge: cameras, then whoever talks; the rest are in the list. */
+function bubbleMenu(e: MouseEvent, p: PeerView) {
+  e.preventDefault();
+  const tx = t().desk.room;
+  openMenu(e, [
+    { label: p.isLocal ? t().shell.stage.hideOwnCam : tx.hideOne(p.name), icon: 'eyeOff', run: () => (hiddenBubbles.value = new Set([...hiddenBubbles.value, p.identity])) },
+    { label: tx.hideAll, icon: 'eyeOff', run: () => (hideBubbles.value = true) },
+    { label: tx.showAll, icon: 'eye', run: () => ((hideBubbles.value = false), (hiddenBubbles.value = new Set())) },
+  ]);
+}
+
+/** While streams are on, cameras are bubbles along the edge; people without one are in the row below. */
 function Bubbles() {
   const [ref, box] = useBox();
-  if (hideBubbles.value) return null;
   const pr = prefs.value;
-  const tx = t().shell.stage;
-  const cams = lowPower.value ? [] : peers.value.filter((x) => x.camera && !(x.isLocal && hideOwnCam.value));
-  const talking = peers.value.filter((x) => x.speaking && !cams.includes(x));
-  const all = [...cams, ...talking];
+  // The box stays when hidden: it is what gets measured.
+  const cams = lowPower.value || hideBubbles.value ? [] : peers.value.filter((x) => x.camera && !hiddenBubbles.value.has(x.identity));
   const size = Math.max(56, Math.min(96, Math.floor(box.h / 5)));
   const room = Math.max(1, Math.floor((box.h + 10) / (size + 10)));
   // The «+N» bubble takes a slot too whenever someone is left out.
-  const shown = all.length <= room - (peers.value.length > all.length ? 1 : 0) ? all : all.slice(0, room - 1);
-  const more = peers.value.length - shown.length;
+  const shown = cams.length <= room ? cams : cams.slice(0, room - 1);
+  const more = cams.length - shown.length;
   return (
     <div ref={ref} class="cam-bubbles" style={{ '--bubble': size + 'px' }}>
       {shown.map((x) => (
-        <div key={x.identity} class={'cam-bubble' + (x.speaking ? ' speaking' : '') + (x.isLocal ? ' own' : '')} title={x.name}>
-          {x.camera && !lowPower.value ? <VideoView track={x.camera} cover mirror={x.isLocal && pr.mirrorCamera} /> : <Avatar id={x.userId} size={size - 8} />}
-          {x.isLocal && x.camera && (
-            <button class="cam-hide" onClick={() => (hideOwnCam.value = true)} title={tx.hideOwnCam} aria-label={tx.hideOwnCam}>
-              <Icon name="eyeOff" size={12} />
-            </button>
-          )}
+        <div key={x.identity} class={'cam-bubble' + (x.speaking ? ' speaking' : '')} title={x.name} onContextMenu={(e) => bubbleMenu(e, x)}>
+          <VideoView track={x.camera} cover mirror={x.isLocal && pr.mirrorCamera} />
         </div>
       ))}
       {more > 0 && (
         <button class="cam-bubble more" onClick={() => (callPeopleOpen.value = true)} title={t().desk.room.people} aria-label={t().desk.room.people}>
+          +{more}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Everyone in one row under the streams; the last place is «+N», which opens the list. */
+function PeopleRow() {
+  const [ref, box] = useBox();
+  const list = useOrder(peers.value, false);
+  const fit = Math.max(1, Math.floor((box.w + 8) / 40));
+  const shown = list.length <= fit ? list : list.slice(0, fit - 1);
+  const more = list.length - shown.length;
+  return (
+    <div ref={ref} class="people-row">
+      {shown.map((x) => (
+        <div class={'mini' + (x.speaking ? ' speaking' : '')} key={x.identity} title={x.name}>
+          <Avatar id={x.userId} size={32} speaking={x.speaking} />
+          {x.micMuted && (
+            <span class="mini-muted">
+              <Icon name="micOff" size={11} />
+            </span>
+          )}
+        </div>
+      ))}
+      {more > 0 && (
+        <button class="mini more" onClick={() => (callPeopleOpen.value = true)} title={t().desk.room.people} aria-label={t().desk.room.people}>
           +{more}
         </button>
       )}
@@ -335,6 +365,42 @@ function SoundPopover() {
   );
 }
 
+function BubblesToggle() {
+  const tx = t().desk.room;
+  const label = hideBubbles.value ? tx.showBubbles : tx.hideBubbles;
+  return (
+    <button class={'icon-btn' + (hideBubbles.value ? ' active' : '')} onClick={() => (hideBubbles.value = !hideBubbles.value)} title={label} aria-label={label} aria-pressed={hideBubbles.value}>
+      <Icon name={hideBubbles.value ? 'eye' : 'eyeOff'} />
+    </button>
+  );
+}
+
+/** The strip under the streams, the same in both views: whose stream, sound, bubbles, quality, full screen; then the people. */
+function ShareBar({ p, stats, setStats, fullscreen }: { p?: PeerView; stats?: boolean; setStats?: (v: boolean) => void; fullscreen: () => void }) {
+  const tx = t().shell.stage;
+  return (
+    <div class="share-foot">
+      <div class="theater-bar">
+        <span class="live">LIVE</span>
+        <span class="theater-title ellipsis">{p ? (p.isLocal ? tx.yourStream : p.name) : t().desk.room.streams(streams.value.length)}</span>
+        <SoundPopover />
+        <BubblesToggle />
+        {setStats && (
+          <button class={'icon-btn' + (stats ? ' active' : '')} onClick={() => setStats(!stats)} title={tx.streamQualityTitle} aria-label={tx.streamQuality}>
+            <Icon name="info" />
+          </button>
+        )}
+        <button class="icon-btn" onClick={fullscreen} title={tx.fullscreenTitle} aria-label={tx.fullscreen}>
+          <Icon name="maximize" />
+        </button>
+      </div>
+      <PeopleRow />
+    </div>
+  );
+}
+
+const toggleFullscreen = (el: HTMLElement | null) => (document.fullscreenElement ? document.exitFullscreen() : el?.requestFullscreen());
+
 function Theater({ p }: { p: PeerView }) {
   const ref = useRef<HTMLDivElement>(null);
   const [stats, setStats] = useState(false);
@@ -344,10 +410,7 @@ function Theater({ p }: { p: PeerView }) {
   const pr = prefs.value;
   const tx = t().shell.stage;
   const rest = streams.value.filter((x) => x.identity !== p.identity);
-  const fullscreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else ref.current?.requestFullscreen();
-  };
+  const fullscreen = () => toggleFullscreen(ref.current);
   return (
     <div class="theater" ref={ref}>
       {rest.length > 0 && (
@@ -371,87 +434,127 @@ function Theater({ p }: { p: PeerView }) {
         <Floaters />
         <Bubbles />
       </div>
-      <div class="theater-bar">
-        <span class="live">LIVE</span>
-        <span class="theater-title ellipsis">{p.isLocal ? tx.yourStream : p.name}</span>
-        <SoundPopover />
-        <BubblesToggle />
-        <button class={'icon-btn' + (stats ? ' active' : '')} onClick={() => setStats(!stats)} title={tx.streamQualityTitle} aria-label={tx.streamQuality}>
-          <Icon name="info" />
-        </button>
-        <button class="icon-btn" onClick={fullscreen} title={tx.fullscreenTitle} aria-label={tx.fullscreen}>
-          <Icon name="maximize" />
-        </button>
-      </div>
+      <ShareBar p={p} stats={stats} setStats={setStats} fullscreen={fullscreen} />
     </div>
   );
 }
 
-function BubblesToggle() {
-  const tx = t().desk.room;
-  const label = hideBubbles.value ? tx.showBubbles : tx.hideBubbles;
-  return (
-    <button class={'icon-btn' + (hideBubbles.value ? ' active' : '')} onClick={() => (hideBubbles.value = !hideBubbles.value)} title={label} aria-label={label} aria-pressed={hideBubbles.value}>
-      <Icon name={hideBubbles.value ? 'videoOff' : 'video'} />
-    </button>
-  );
-}
-
-/** Everyone in the call: who talks, who shares, and your own volume for each. */
+/** Everyone in the call: you on top, then who shares and who talks; each with your own volume for them. */
 export function CallPeople() {
+  const [q, setQ] = useState('');
   const tx = t().shell.stage;
+  const tr = t().desk.room;
   if (!call.value) return null;
-  const list = [...peers.value].sort((a, b) => Number(b.shared) - Number(a.shared) || Number(b.speaking) - Number(a.speaking) || Number(b.isLocal) - Number(a.isLocal) || a.name.localeCompare(b.name));
-  return (
-    <div class="call-people">
-      {list.map((p) => {
-        const vol = prefs.value.userVolume[p.identity] ?? 1;
-        return (
-          <div key={p.identity} class={'cp-row' + (p.speaking ? ' speaking' : '')}>
-            <Avatar id={p.userId} size={32} speaking={p.speaking} />
-            <div class="cp-main">
-              <div class="cp-name ellipsis">
-                {p.name}
-                {p.isLocal && <span class="muted"> {tx.you}</span>}
-              </div>
-              {!p.isLocal && (
-                <input
-                  class="cp-volume"
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.05"
-                  value={vol}
-                  onInput={(e) => setUserVolume(p.identity, Number(e.currentTarget.value))}
-                  aria-label={tx.participantVolume + ': ' + p.name}
-                  title={Math.round(vol * 100) + '%'}
-                />
-              )}
-            </div>
+  const query = q.trim().toLowerCase();
+  const self = peers.value.find((p) => p.isLocal);
+  const others = peers.value
+    .filter((p) => !p.isLocal && (!query || p.name.toLowerCase().includes(query)))
+    .sort((a, b) => Number(b.shared) - Number(a.shared) || Number(b.speaking) - Number(a.speaking) || a.name.localeCompare(b.name));
+  const row = (p: PeerView) => {
+    const vol = prefs.value.userVolume[p.identity] ?? 1;
+    return (
+      <div key={p.identity} class={'cp-row' + (p.speaking ? ' speaking' : '') + (p.isLocal ? ' self' : '')}>
+        <Avatar id={p.userId} size={32} speaking={p.speaking} />
+        <div class="cp-main">
+          <div class="cp-top">
+            <span class="cp-name ellipsis">
+              {p.name}
+              {p.isLocal && <span class="muted"> {tx.you}</span>}
+            </span>
             <span class="cp-icons">
               {p.shared && <span class="live">LIVE</span>}
-              {p.camera && <Icon name="video" size={14} />}
-              {p.micMuted && <Icon name="micOff" size={14} class="off" />}
+              <Icon name="video" size={14} class={p.camera ? '' : 'none'} />
+              <Icon name={p.micMuted ? 'micOff' : 'mic'} size={14} class={p.micMuted ? 'off' : 'none'} />
             </span>
-            {!p.isLocal && (
-              <button
-                class={'icon-btn' + (vol === 0 ? ' off' : '')}
-                onClick={() => setUserVolume(p.identity, vol === 0 ? 1 : 0)}
-                title={vol === 0 ? tx.unmute : tx.muteForMe}
-                aria-label={vol === 0 ? tx.unmute : tx.muteForMe}
-              >
-                <Icon name={vol === 0 ? 'speakerOff' : 'speaker'} size={16} />
-              </button>
-            )}
           </div>
-        );
-      })}
+          {!p.isLocal && (
+            <div class="cp-volume-row">
+              <input
+                class="cp-volume"
+                type="range"
+                min="0"
+                max="2"
+                step="0.05"
+                value={vol}
+                style={{ '--pct': (vol / 2) * 100 + '%' }}
+                onInput={(e) => setUserVolume(p.identity, Number(e.currentTarget.value))}
+                aria-label={tx.participantVolume + ': ' + p.name}
+              />
+              <span class="cp-pct">{Math.round(vol * 100)}%</span>
+              <button class={'icon-btn tiny' + (vol === 0 ? ' off' : '')} onClick={() => setUserVolume(p.identity, vol === 0 ? 1 : 0)} title={vol === 0 ? tx.unmute : tx.muteForMe} aria-label={vol === 0 ? tx.unmute : tx.muteForMe}>
+                <Icon name={vol === 0 ? 'speakerOff' : 'speaker'} size={15} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div class="call-people">
+      {self && row(self)}
+      <label class="nav-search cp-search">
+        <Icon name="search" size={15} />
+        <input value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder={tr.findPerson} aria-label={tr.findPerson} />
+      </label>
+      {others.map(row)}
+      {query && !others.length && <div class="muted small cp-empty">{t().desk.nav.noMatch}</div>}
     </div>
+  );
+}
+
+/** A look at your camera before the others see it. */
+function CameraCheck({ onClose }: { onClose: () => void }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const p = prefs.value;
+  const tx = t().desk.room;
+  useEffect(() => {
+    let alive = true;
+    let stream: MediaStream | null = null;
+    navigator.mediaDevices
+      .getUserMedia({ video: { deviceId: p.cameraDevice ? { exact: p.cameraDevice } : undefined } })
+      .then((s) => {
+        if (!alive) return s.getTracks().forEach((tr) => tr.stop());
+        stream = s;
+        if (ref.current) ref.current.srcObject = s;
+      })
+      .catch(() => {
+        // No preview: the camera still gets its own chance below.
+      });
+    return () => {
+      alive = false;
+      stream?.getTracks().forEach((tr) => tr.stop());
+    };
+  }, []);
+  return (
+    <Modal title={tx.cameraCheck} onClose={onClose}>
+      <div class={'cam-preview' + (p.mirrorCamera ? ' mirror' : '')}>
+        <video ref={ref} autoPlay playsInline muted />
+      </div>
+      <Toggle checked={!p.cameraPreview} onChange={(skip) => setPrefs({ cameraPreview: !skip })} hint={tx.cameraSkipHint}>
+        {tx.cameraSkip}
+      </Toggle>
+      <div class="modal-actions">
+        <button class="secondary" onClick={onClose}>
+          {t().common.cancel}
+        </button>
+        <button
+          class="primary"
+          onClick={() => {
+            onClose();
+            setCamera(true);
+          }}
+        >
+          <Icon name="video" size={16} /> {tx.cameraOn}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
 export function CallControls() {
   const [picker, setPicker] = useState(false);
+  const [check, setCheck] = useState(false);
   const tx = t().shell.controls;
   return (
     <div class="call-controls">
@@ -466,17 +569,17 @@ export function CallControls() {
       <button class={'round' + (deafened.value ? ' off' : '')} onClick={toggleDeafen} title={tx.deafen} aria-label={tx.soundLabel}>
         <Icon name={deafened.value ? 'headphonesOff' : 'headphones'} />
       </button>
-      <button class={'round' + (cameraOn.value ? ' on' : '')} onClick={() => setCamera(!cameraOn.value)} title={tx.camera} aria-label={tx.camera}>
+      <button
+        class={'round' + (cameraOn.value ? ' on' : '')}
+        onClick={() => (cameraOn.value || !prefs.value.cameraPreview ? setCamera(!cameraOn.value) : setCheck(true))}
+        title={tx.camera}
+        aria-label={tx.camera}
+      >
         <Icon name={cameraOn.value ? 'video' : 'videoOff'} />
       </button>
       <button class={'round' + (sharing.value ? ' on' : '')} onClick={() => setPicker(true)} title={tx.share} aria-label={tx.shareLabel}>
         <Icon name="screen" />
       </button>
-      {hideOwnCam.value && cameraOn.value && (
-        <button class="secondary" onClick={() => (hideOwnCam.value = false)}>
-          <Icon name="eye" size={14} /> {t().shell.stage.showOwnCam}
-        </button>
-      )}
       {sharing.value && (
         <button class="secondary stop-share" onClick={stopShare}>
           <Icon name="stop" size={14} /> {tx.stopShare}
@@ -486,6 +589,7 @@ export function CallControls() {
         <Icon name="phoneOff" />
       </button>
       {picker && <SharePicker onClose={() => setPicker(false)} />}
+      {check && <CameraCheck onClose={() => setCheck(false)} />}
     </div>
   );
 }
@@ -548,29 +652,34 @@ export function RoomModeToggle() {
 /** Рядом: every stream side by side; the one you click gets sound and full quality. */
 function WorkScreens() {
   const [ref, box] = useBox();
+  const wrap = useRef<HTMLDivElement>(null);
   const { cols, width } = fitTiles(streams.value.length, box.w, box.h, 16 / 9);
   // Camera bubbles get their own strip on the right instead of covering a screen.
-  const cams = !hideBubbles.value && !lowPower.value && peers.value.some((p) => p.camera);
+  const cams = !hideBubbles.value && !lowPower.value && peers.value.some((p) => p.camera && !hiddenBubbles.value.has(p.identity));
+  const main = streams.value.find((p) => p.identity === watching.value);
   return (
-    <div ref={ref} class={'work-grid' + (cams ? ' with-bubbles' : '')}>
-      <div class="work-grid-in" style={{ gridTemplateColumns: `repeat(${cols}, ${width}px)` }}>
-        {streams.value.map((p) => (
-          <button
-            key={p.identity}
-            {...hover(p)}
-            class={'work-screen' + (watching.value === p.identity ? ' main' : '')}
-            onClick={() => !p.isLocal && watch(p.identity)}
-            onDblClick={(e) => (e.currentTarget as HTMLElement).requestFullscreen()}
-          >
-            {p.screen && !lowPower.value && <VideoView track={p.screen} />}
-            <span class="work-name">
-              <span class="live">LIVE</span> {p.isLocal ? t().shell.stage.yourStream : p.name}
-              {previewing.value === p.identity && <Icon name="speaker" size={13} />}
-            </span>
-          </button>
-        ))}
+    <div class="theater work" ref={wrap}>
+      <div ref={ref} class={'work-grid' + (cams ? ' with-bubbles' : '')}>
+        <div class="work-grid-in" style={{ gridTemplateColumns: `repeat(${cols}, ${width}px)` }}>
+          {streams.value.map((p) => (
+            <button
+              key={p.identity}
+              {...hover(p)}
+              class={'work-screen' + (watching.value === p.identity ? ' main' : '')}
+              onClick={() => !p.isLocal && watch(p.identity)}
+              onDblClick={(e) => toggleFullscreen(e.currentTarget as HTMLElement)}
+            >
+              {p.screen && !lowPower.value && <VideoView track={p.screen} />}
+              <span class="work-name">
+                <span class="live">LIVE</span> {p.isLocal ? t().shell.stage.yourStream : p.name}
+                {previewing.value === p.identity && <Icon name="speaker" size={13} />}
+              </span>
+            </button>
+          ))}
+        </div>
+        <Bubbles />
       </div>
-      <Bubbles />
+      <ShareBar p={main} fullscreen={() => toggleFullscreen(wrap.current)} />
     </div>
   );
 }
@@ -587,10 +696,14 @@ export function Stage() {
       {main ? (
         <Theater p={main} />
       ) : (
-        <div class={'stage-body' + (work ? ' work' : '')}>
-          {list.length > 0 ? <WorkScreens /> : <Tiles peers={peers.value} />}
-          <Floaters />
-        </div>
+        list.length > 0 ? (
+          <WorkScreens />
+        ) : (
+          <div class="stage-body">
+            <Tiles peers={peers.value} />
+            <Floaters />
+          </div>
+        )
       )}
       <CallControls />
     </section>

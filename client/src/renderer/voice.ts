@@ -46,6 +46,7 @@ export type Prefs = {
   pttRelease: number; // ms the mic stays open after the key is released
   cameraQuality: '720p' | '1080p';
   mirrorCamera: boolean;
+  cameraPreview: boolean; // a look at the camera before turning it on
   streamReactions: boolean;
   backgroundSaver: boolean;
 };
@@ -75,6 +76,7 @@ const defaultPrefs: Prefs = {
   vadThreshold: -50,
   pttRelease: 200,
   cameraQuality: '720p',
+  cameraPreview: true,
   mirrorCamera: true,
   streamReactions: true,
   backgroundSaver: true,

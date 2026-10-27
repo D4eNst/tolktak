@@ -596,6 +596,9 @@ export function SettingsDialog() {
                 ]}
                 onChange={(q) => (setPrefs({ cameraQuality: q }), restartCamera())}
               />
+              <Toggle checked={p.cameraPreview} onChange={(on) => setPrefs({ cameraPreview: on })}>
+                {tx.video.cameraPreview}
+              </Toggle>
               <Toggle checked={p.mirrorCamera} onChange={(on) => setPrefs({ mirrorCamera: on })} hint={tx.video.mirrorHint}>
                 {tx.video.mirror}
               </Toggle>

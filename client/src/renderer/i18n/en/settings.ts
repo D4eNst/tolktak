@@ -110,6 +110,7 @@ export default {
     quality: 'Camera quality',
     q720: 'Uses less bandwidth',
     q1080: 'Maximum sharpness',
+    cameraPreview: 'Show a preview before turning the camera on',
     mirror: 'Mirror my camera',
     mirrorHint: 'Only on your screen; others see the unmirrored image.',
   },
