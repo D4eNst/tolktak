@@ -213,7 +213,7 @@ export const EXTRA_WINDOWS: WindowId[] = ['people', 'profile'];
 /** Where the voice window stood when the last call ended. */
 type Rect = { x: number; y: number; width: number; height: number };
 /** Where the voice window stood when the last call ended: the whole desk then, the shape of the desk without it, and a neighbour to stand by if the desk changed since. */
-type VoicePlace = { desk?: SerializedDockview; shape?: string; position?: AddPanelPositionOptions; width?: number; floating?: Rect };
+type VoicePlace = { desk?: SerializedDockview; shape?: string; position?: AddPanelPositionOptions; width?: number; height?: number; floating?: Rect };
 type Saved = {
   layout?: SerializedDockview;
   /** Windows put away on the shelf. */
@@ -268,8 +268,13 @@ export function openPerson(userId: number) {
 let dock: DockviewApi | null = null;
 let host: HTMLElement | null = null;
 let saveTimer = 0;
-/** Each fold while folded: along which side, the desk's minimum size before it, and the windows that became tabs with their size. */
-let folds: { wide: boolean; min: number; ids: string[]; size: number }[] = [];
+/** The layout before windows were folded into tabs for lack of room; null when nothing is folded or the folded one was changed by hand. */
+let intended: SerializedDockview | null = null;
+/** Our own layout changes, which do not count as the person's; and the folded desk as we left it. */
+let fitting = false;
+let foldedShape = '';
+let fitted = { width: 0, height: 0 };
+let unfoldTimer = 0;
 let fitQueued = 0;
 const hintsShown: Record<string, number> = {};
 export const shelf = signal<string[]>([]);
@@ -294,10 +299,20 @@ function hint(key: keyof Messages['desk']['hints'], times = Infinity) {
 
 function saveLayout() {
   clearTimeout(saveTimer);
-  if (dock) saveDesk({ layout: dock.toJSON() });
+  if (dock) saveDesk({ layout: intended ?? dock.toJSON() });
+}
+/** Lays out a stored desk without it counting as a change by hand. */
+function restore(j: SerializedDockview) {
+  fitting = true;
+  try {
+    dock!.fromJSON(j);
+    applyConstraints();
+  } finally {
+    fitting = false;
+  }
 }
 
-function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOptions, width = 360) {
+function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOptions, size: { width?: number; height?: number } = { width: 360 }) {
   const { w } = parseId(id);
   return dock!.addPanel({
     id,
@@ -305,8 +320,15 @@ function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOpt
     title: w?.name() ?? id,
     minimumWidth: w?.minWidth,
     minimumHeight: w?.minHeight,
-    ...(position && dock!.panels.length ? { position: typeof position === 'string' ? { direction: position } : position, initialWidth: width } : {}),
+    ...(position && dock!.panels.length ? { position: typeof position === 'string' ? { direction: position } : position, initialWidth: size.width, initialHeight: size.height } : {}),
   });
+}
+/** Minimum sizes come from the window descriptions, not from a layout saved before they changed. */
+function applyConstraints() {
+  for (const p of dock!.panels) {
+    const { w } = parseId(p.id);
+    if (w) p.api.setConstraints({ minimumWidth: w.minWidth, minimumHeight: w.minHeight });
+  }
 }
 
 function setShelf(list: string[]) {
@@ -323,34 +345,99 @@ function ensureMain() {
   hint('mainBack');
 }
 
-/** Too small for the windows' minimum sizes: the rightmost (or lowest) become tabs of their neighbour, and come back once there is room. */
+/** How far the grid sticks out of the desk to the right (or bottom): windows at their minimum size, gaps included. */
+function overflow(wide: boolean) {
+  const h = host!.getBoundingClientRect();
+  const grid = dock!.groups.filter((g) => g.api.location.type === 'grid');
+  return Math.max(0, ...grid.map((g) => (wide ? g.element.getBoundingClientRect().right - h.right : g.element.getBoundingClientRect().bottom - h.bottom)));
+}
+
+// The window's title capsule, which dockview counts on top of the content's minimum.
+const HEAD = 46;
+/** A window squeezed below its minimum size, which dockview does not always keep, and by how much. */
+function cramped(wide: boolean) {
+  for (const g of dock!.groups) {
+    if (g.api.location.type !== 'grid') continue;
+    const need = Math.max(0, ...g.panels.map((p) => parseId(p.id).w).map((w) => (w ? (wide ? w.minWidth : w.minHeight + HEAD) : 0)));
+    const r = g.element.getBoundingClientRect();
+    const deficit = need - (wide ? r.width : r.height);
+    if (deficit > 8) return { g, deficit, need };
+  }
+  return null;
+}
+
+// dockview lays itself out lazily; sizes are read right after each change.
+const relayout = () => dock!.layout(host!.clientWidth, host!.clientHeight, true);
+
+/** Too small for the windows' minimum sizes: the rightmost (or lowest, or squeezed) become tabs of their neighbour. */
 function fit(byUser = false) {
   const d = dock;
   if (!d || !host) return;
-  const room = (wide: boolean) => (wide ? host!.clientWidth : host!.clientHeight);
-  // Moved back rather than reloaded: a reload rebuilds every window and flickers.
-  while (folds.length && room(folds[folds.length - 1].wide) >= folds[folds.length - 1].min) {
-    const f = folds.pop()!;
-    const [first, ...rest] = f.ids.map((id) => d.getPanel(id)).filter((p): p is IDockviewPanel => !!p);
-    if (!first) continue;
-    first.api.moveTo({ group: first.group, position: f.wide ? 'right' : 'bottom' });
-    for (const p of rest) p.api.moveTo({ group: first.group, position: 'center' });
-    first.group.api.setSize(f.wide ? { width: f.size } : { height: f.size });
-  }
+  fitting = true;
   let folded = false;
-  for (const wide of [true, false]) {
-    while ((wide ? d.minimumWidth : d.minimumHeight) > room(wide)) {
-      const grid = d.groups.filter((g) => g.api.location.type === 'grid');
-      if (grid.length < 2) break;
-      const edge = (g: DockviewGroupPanel) => (wide ? g.element.getBoundingClientRect().right : g.element.getBoundingClientRect().bottom);
-      const last = grid.reduce((a, b) => (edge(b) > edge(a) ? b : a));
-      const into = (d.adjacentGroupInDirection(last, wide ? 'left' : 'up') ?? grid.find((g) => g !== last)!) as DockviewGroupPanel;
-      folds.push({ wide, min: wide ? d.minimumWidth : d.minimumHeight, ids: last.panels.map((p) => p.id), size: wide ? last.api.width : last.api.height });
-      last.api.moveTo({ group: into, position: 'center' });
-      folded = true;
+  try {
+    for (const wide of [true, false]) {
+      const tried = new Set<DockviewGroupPanel>();
+      for (let i = 0; i < 20; i++) {
+        const out = overflow(wide);
+        const squeezed = out > 1 ? null : cramped(wide);
+        // A squeezed window first takes room from its neighbours; it folds only when they have none to give.
+        if (squeezed && !tried.has(squeezed.g)) {
+          tried.add(squeezed.g);
+          squeezed.g.api.setSize(wide ? { width: squeezed.need } : { height: squeezed.need });
+          relayout();
+          continue;
+        }
+        if (out <= 1 && !squeezed) break;
+        const grid = d.groups.filter((g) => g.api.location.type === 'grid');
+        if (grid.length < 2) break;
+        const edge = (g: DockviewGroupPanel) => (wide ? g.element.getBoundingClientRect().right : g.element.getBoundingClientRect().bottom);
+        const span = (g: DockviewGroupPanel) => (wide ? g.element.getBoundingClientRect().width : g.element.getBoundingClientRect().height);
+        // The outermost window; of those at the edge, the narrowest: a window across the whole desk is not "the last column".
+        const far = Math.max(...grid.map(edge));
+        const last = squeezed?.g ?? grid.filter((g) => edge(g) > far - 2).reduce((a, b) => (span(b) < span(a) ? b : a));
+        const into = (d.adjacentGroupInDirection(last, wide ? 'left' : 'up') ?? d.adjacentGroupInDirection(last, wide ? 'right' : 'down') ?? grid.find((g) => g !== last)!) as DockviewGroupPanel;
+        intended ??= d.toJSON();
+        last.api.moveTo({ group: into, position: 'center' });
+        relayout();
+        folded = true;
+      }
     }
+  } finally {
+    fitting = false;
   }
+  fitted = { width: host.clientWidth, height: host.clientHeight };
+  if (intended) foldedShape = shape(d.toJSON());
   if (folded && byUser) hint('folded');
+}
+/** Back to the intended desk before a change, so the change lands in it and not in the folded one. */
+function unfoldNow() {
+  if (!intended) return;
+  const j = intended;
+  intended = null;
+  restore(j);
+}
+function closeWindow(id: string) {
+  unfoldNow();
+  dock?.getPanel(id)?.api.close();
+  fit();
+}
+/** The desk grew: lay out the intended desk again and fold only what still does not fit. Once resizing stops, so it rebuilds once. */
+function unfold() {
+  if (!intended) return;
+  const j = intended;
+  intended = null;
+  restore(j);
+  ensureMain();
+  fit();
+}
+function onResize() {
+  if (!host) return;
+  const grew = host.clientWidth > fitted.width || host.clientHeight > fitted.height;
+  if (!grew) return fit();
+  clearTimeout(unfoldTimer);
+  if (intended) unfoldTimer = window.setTimeout(unfold, 250);
+  else fitted = { width: host.clientWidth, height: host.clientHeight };
 }
 const queueFit = () => {
   if (!fitQueued)
@@ -363,10 +450,10 @@ const queueFit = () => {
 function load() {
   const saved = loadDesk();
   shelf.value = saved.shelf ?? [];
-  folds = [];
+  intended = null;
   try {
     if (!saved.layout) throw new Error('no saved layout');
-    dock!.fromJSON(saved.layout);
+    restore(saved.layout);
   } catch {
     dock!.clear();
     addWindow('main');
@@ -392,6 +479,14 @@ function voicePlace(p: IDockviewPanel): VoicePlace {
   if (g.api.location.type === 'floating') return { floating: floatRect(g) };
   const other = g.panels.find((x) => x !== p);
   if (other) return { position: { referencePanel: other.id, direction: 'within' } };
+  // Across the whole desk: it goes across the whole desk again, however many windows are there now.
+  const r = g.element.getBoundingClientRect();
+  const h = host!.getBoundingClientRect();
+  const near = (a: number, b: number) => Math.abs(a - b) < 4;
+  const fullWidth = near(r.left, h.left) && near(r.right, h.right);
+  const fullHeight = near(r.top, h.top) && near(r.bottom, h.bottom);
+  if (fullWidth && !fullHeight) return { position: { direction: near(r.top, h.top) ? 'above' : 'below' }, height: r.height };
+  if (fullHeight && !fullWidth) return { position: { direction: near(r.left, h.left) ? 'left' : 'right' }, width: r.width };
   for (const [dir, place] of [['left', 'right'], ['right', 'left'], ['up', 'below'], ['down', 'above']] as const) {
     const n = dock!.adjacentGroupInDirection(g, dir)?.activePanel;
     if (n) return { position: { referencePanel: n.id, direction: place }, width: g.api.width };
@@ -405,7 +500,8 @@ function showVoice() {
   // Nothing moved since the call ended: the desk comes back exactly as it was with the call.
   if (place.desk && place.shape === shape(d.toJSON())) {
     try {
-      d.fromJSON(place.desk);
+      intended = null;
+      restore(place.desk);
       d.getPanel('voice')?.api.setActive();
       return;
     } catch {
@@ -415,7 +511,7 @@ function showVoice() {
   const ref = place.position && 'referencePanel' in place.position ? place.position.referencePanel : undefined;
   // The window it stood by is gone: the voice window comes in as a new one, on the right.
   const fits = !ref || !!d.getPanel(typeof ref === 'string' ? ref : ref.id);
-  const p = addWindow('voice', fits ? (place.position ?? 'right') : 'right', place.width ?? 520);
+  const p = addWindow('voice', fits ? (place.position ?? 'right') : 'right', { width: place.width ?? 520, height: place.height });
   if (place.floating) d.addFloatingGroup(p, place.floating);
   p.api.setActive();
 }
@@ -429,11 +525,16 @@ effect(() => {
   const p = dock.getPanel('voice');
   if (c && !p) {
     if (shelf.value.includes('voice')) setShelf(shelf.value.filter((x) => x !== 'voice'));
+    unfoldNow();
     showVoice();
     fit(true);
   } else if (!c && p) {
-    const place = { ...voicePlace(p), desk: dock.toJSON() };
-    p.api.close();
+    // Folded for lack of room: remember the call's place in the desk as intended.
+    unfoldNow();
+    const v = dock.getPanel('voice')!;
+    const place = { ...voicePlace(v), desk: dock.toJSON() };
+    v.api.close();
+    fit();
     saveDesk({ voice: { ...place, shape: shape(dock.toJSON()) } });
   }
 });
@@ -441,6 +542,7 @@ effect(() => {
 function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions = 'right') {
   if (!dock) return;
   if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
+  unfoldNow();
   (dock.getPanel(id) ?? addWindow(id, position)).api.setActive();
   fit(true);
 }
@@ -453,7 +555,7 @@ export function bringForward(id: WindowId) {
 }
 export function toggleWindow(id: WindowId) {
   const p = dock?.getPanel(id);
-  if (p) p.api.close();
+  if (p) closeWindow(id);
   else show(id);
 }
 export function resetLayout() {
@@ -535,7 +637,7 @@ function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
-          dock?.getPanel(id)?.api.close();
+          closeWindow(id);
         }}
         title={tx.closeTab}
         aria-label={tx.closeTab}
@@ -570,7 +672,7 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
     ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
     'sep',
-    { label: tx.close, icon: 'x', run: () => p.api.close() },
+    { label: tx.close, icon: 'x', run: () => closeWindow(p.id) },
   ];
 }
 
@@ -669,6 +771,8 @@ export function Workspace() {
     track();
     const subs = [
       d.onDidLayoutChange(() => {
+        // Changed by hand while folded: what is on screen is now the desk.
+        if (!fitting && intended && shape(d.toJSON()) !== foldedShape) intended = null;
         track();
         queueFit();
         clearTimeout(saveTimer);
@@ -691,7 +795,8 @@ export function Workspace() {
         show(id, e.group ? { referenceGroup: e.group, direction } : { direction: direction === 'within' ? 'right' : direction });
       }),
     ];
-    const resize = new ResizeObserver(() => fit());
+    // After dockview has laid itself out for the new size.
+    const resize = new ResizeObserver(() => requestAnimationFrame(onResize));
     resize.observe(host);
     window.addEventListener('beforeunload', saveLayout);
     return () => {

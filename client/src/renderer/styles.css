@@ -799,8 +799,9 @@ code {
   z-index: 30;
 }
 .workspace .dv-resize-container {
-  min-width: 280px;
-  min-height: 200px;
+  min-width: 320px;
+  min-height: 220px;
+  overflow: hidden;
   border-radius: var(--r-xl);
   box-shadow: var(--shadow);
 }
