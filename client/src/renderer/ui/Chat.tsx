@@ -984,8 +984,28 @@ function TypingLine({ channelId }: { channelId: number }) {
 }
 
 /** The side panel open in each chat; its buttons live in the window frame. */
-const chatPanel = signal<Record<number, 'pins' | 'search' | undefined>>({});
-const setPanel = (cid: number, p?: 'pins' | 'search') => (chatPanel.value = { ...chatPanel.value, [cid]: p });
+const chatPanel = signal<Record<number, string | undefined>>({});
+export const setPanel = (cid: number, p?: string) => (chatPanel.value = { ...chatPanel.value, [cid]: p });
+export const openPanel = (cid: number) => chatPanel.value[cid];
+/** Side panels other parts of the app add to a chat, by name. */
+const morePanels = new Map<string, (channelId: number, close: () => void) => ComponentChildren>();
+export const addChatPanel = (name: string, render: (channelId: number, close: () => void) => ComponentChildren) => morePanels.set(name, render);
+
+export function SidePanel({ icon, title, onClose, actions, children }: { icon: string; title: string; onClose: () => void; actions?: ComponentChildren; children: ComponentChildren }) {
+  return (
+    <aside class="chat-panel slide-in">
+      <header>
+        <Icon name={icon} size={18} />
+        <h3>{title}</h3>
+        {actions}
+        <button class="icon-btn" onClick={onClose} aria-label={t().chat.close}>
+          <Icon name="x" />
+        </button>
+      </header>
+      {children}
+    </aside>
+  );
+}
 
 export function ChatActions({ channelId }: { channelId: number }) {
   const panel = chatPanel.value[channelId];
@@ -1187,6 +1207,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
         </div>
         {panel === 'pins' && <PinsPanel channelId={channelId} onClose={() => setPanel(channelId)} />}
         {panel === 'search' && <SearchPanel channelId={channelId} onClose={() => setPanel(channelId)} />}
+        {panel && morePanels.get(panel)?.(channelId, () => setPanel(channelId))}
       </div>
       {drag && (
         <div class="drop-overlay">

@@ -29,7 +29,6 @@ import {
   online,
   openDM,
   session,
-  settingsOpen,
   shownWindows,
   toast,
   userName,
@@ -40,8 +39,8 @@ import {
   type View,
 } from '../state';
 import { call, joinVoice, startCall } from '../voice';
-import { ChatActions, ChatView } from './Chat';
-import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, Select } from './common';
+import { addChatPanel, ChatActions, ChatView, openPanel, setPanel, SidePanel } from './Chat';
+import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu } from './common';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 
@@ -123,24 +122,64 @@ function ChatHead({ cid, name, bare }: { cid?: number; name: string; bare?: bool
 }
 function ChatHeadActions({ cid }: { cid?: number }) {
   if (!cid) return null;
+  const dm = !!channels.value.get(cid)?.peer_id;
   return (
     <>
-      {channels.value.get(cid)?.peer_id && <DmCallButton cid={cid} />}
+      {dm && <DmCallButton cid={cid} />}
       <ChatActions channelId={cid} />
+      <SideToggle cid={cid} panel={dm ? 'profile' : 'people'} icon={dm ? 'user' : 'users'} />
     </>
   );
 }
-/** Opens or closes a window that belongs to the main one, beside it on the right. */
-function BesideToggle({ id, icon }: { id: WindowId; icon: string }) {
-  void layoutTick.value;
-  const on = windowShown(id);
-  const name = WINDOWS[id].name();
+/** Group members or a person's profile: a panel over the chat's right edge first, a window of its own on request. */
+function SideToggle({ cid, panel, icon }: { cid: number; panel: 'people' | 'profile'; icon: string }) {
+  const on = openPanel(cid) === panel;
+  const name = WINDOWS[panel].name();
   return (
-    <button class={'icon-btn' + (on ? ' active' : '')} onClick={() => (on ? closeWindow(id) : show(id, { referencePanel: 'main', direction: 'right' }))} title={name} aria-label={name} aria-pressed={on}>
+    <button class={'icon-btn' + (on ? ' active' : '')} onClick={() => setPanel(cid, on ? undefined : panel)} title={name} aria-label={name} aria-pressed={on}>
       <Icon name={icon} size={18} />
     </button>
   );
 }
+function PopOut({ id, close }: { id: WindowId; close: () => void }) {
+  const label = t().desk.menu.popOut;
+  return (
+    <button
+      class="icon-btn"
+      onClick={() => {
+        close();
+        show(id, { referencePanel: 'main', direction: 'right' });
+      }}
+      title={label}
+      aria-label={label}
+    >
+      <Icon name="copy" size={17} />
+    </button>
+  );
+}
+addChatPanel('people', (cid, close) => {
+  const gid = channels.value.get(cid)?.group_id;
+  const g = gid ? groups.value.get(gid) : undefined;
+  return (
+    g && (
+      <SidePanel icon="users" title={WINDOWS.people.name()} onClose={close} actions={<PopOut id="people" close={close} />}>
+        <MembersPanel g={g} />
+      </SidePanel>
+    )
+  );
+});
+addChatPanel('profile', (cid, close) => {
+  const peer = channels.value.get(cid)?.peer_id;
+  return (
+    peer && (
+      <SidePanel icon="user" title={WINDOWS.profile.name()} onClose={close} actions={<PopOut id="profile" close={close} />}>
+        <div class="win-scroll profile-pane">
+          <ProfileCard id={peer} onClose={close} />
+        </div>
+      </SidePanel>
+    )
+  );
+});
 
 function ChatBody({ cid }: { cid?: number }) {
   const ch = cid ? channels.value.get(cid) : undefined;
@@ -156,12 +195,7 @@ export const WINDOWS: Record<WindowId, Win> = {
     minWidth: 320,
     minHeight: 220,
     Head: ({ bare }) => <ChatHead cid={viewChannel(view.value)} name={t().desk.windows.main} bare={bare} />,
-    Actions: () => (
-      <>
-        <ChatHeadActions cid={viewChannel(view.value)} />
-        {view.value.kind === 'group' ? <BesideToggle id="people" icon="users" /> : viewPeer() && <BesideToggle id="profile" icon="user" />}
-      </>
-    ),
+    Actions: () => <ChatHeadActions cid={viewChannel(view.value)} />,
     Body: () => <ChatBody cid={viewChannel(view.value)} />,
   },
   chat: {
@@ -208,7 +242,7 @@ export const WINDOWS: Record<WindowId, Win> = {
     Body: () => {
       const peer = viewPeer();
       return peer ? (
-        <div class="win-scroll">
+        <div class="win-scroll profile-pane">
           <ProfileCard id={peer} onClose={() => {}} />
         </div>
       ) : (
@@ -259,10 +293,9 @@ export function saveDesk(patch: Saved) {
 
 // ---------- behaviour: settings «Окна», per device ----------
 
-type DeskPrefs = { people: 'button' | 'always'; call: 'replace' | 'beside' | 'full' };
+type DeskPrefs = { call: 'replace' | 'beside' | 'full' };
 const PREFS_KEY = 'tolktak.deskPrefs';
 export const deskPrefs = signal<DeskPrefs>({
-  people: 'button',
   call: 'replace',
   ...(() => {
     try {
@@ -657,6 +690,11 @@ export function resetLayout() {
   load();
 }
 export const windowShown = (id: WindowId) => !!dock?.getPanel(id);
+/** Asks first: someone who arranged their windows loses it all to a slip of the mouse otherwise. */
+export async function confirmReset() {
+  const tx = t().desk.menu;
+  if (await confirmDialog(tx.resetConfirm, { text: tx.resetText, ok: tx.resetOk, danger: true })) resetLayout();
+}
 
 /** A chat in its own window next to the main one. */
 export function openBeside(cid: number) {
@@ -831,15 +869,15 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
   const tx = t().desk.menu;
   const floating = group.api.location.type === 'floating';
   const max = group.api.isMaximized();
-  // shortcut: the voice window floats only once it has a compact view (spec «Режимы окна»).
-  const canFloat = p.id !== 'voice';
+  // shortcut: only chats float for now; the call and the side windows need their own compact look first (spec «Режимы окна»).
+  const canFloat = p.id === 'main' || p.id.startsWith('chat:');
   return [
     ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => toggleMax(group) } as MenuItem]),
     ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
     ...(floating ? [] : [isPlain(group, p.id) ? { label: tx.capsule, icon: 'tabAbove', run: () => togglePlain(group, p.id) } : { label: tx.plain, icon: 'tabInside', run: () => togglePlain(group, p.id) }]),
     'sep',
-    { label: tx.reset, icon: 'home', run: resetLayout },
+    { label: tx.reset, icon: 'home', run: confirmReset },
     { label: tx.close, icon: 'x', run: () => closeWindow(p.id) },
   ];
 }
@@ -1018,7 +1056,6 @@ export function Workspace() {
 
   useEffect(() => {
     ensureMain();
-    if (v.kind === 'group' && deskPrefs.value.people === 'always' && !dock?.getPanel('people')) show('people', { referencePanel: 'main', direction: 'right' });
     if (started) saveDesk({ last: v });
   }, [v]);
 
@@ -1164,28 +1201,24 @@ export function WindowsSettings() {
   const p = deskPrefs.value;
   return (
     <>
-      <Select<DeskPrefs['people']>
-        label={tx.people}
-        value={p.people}
-        options={[
-          { value: 'button', label: tx.peopleButton },
-          { value: 'always', label: tx.peopleAlways },
-        ]}
-        onChange={(people) => setDeskPrefs({ people })}
-      />
-      <Select<DeskPrefs['call']>
-        label={tx.call}
-        value={p.call}
-        options={[
-          { value: 'replace', label: tx.callReplace },
-          { value: 'beside', label: tx.callBeside },
-          { value: 'full', label: tx.callFull },
-        ]}
-        onChange={(call) => setDeskPrefs({ call })}
-      />
+      <div class="field-label">{tx.call}</div>
+      <div class="scheme-cards" role="radiogroup" aria-label={tx.call}>
+        {(['replace', 'beside', 'full'] as const).map((how) => (
+          <button key={how} role="radio" aria-checked={p.call === how} class={'scheme-card' + (p.call === how ? ' on' : '')} onClick={() => setDeskPrefs({ call: how })}>
+            {/* A sketch of the desk: navigator, chat and the call coming in; hovering plays it again. */}
+            <span class={'scheme ' + how} aria-hidden="true">
+              <span class="sc-nav" />
+              {how === 'beside' && <span class="sc-chat" />}
+              <span class="sc-call" />
+              {how !== 'beside' && <span class="sc-chat" />}
+            </span>
+            <span>{tx[how === 'replace' ? 'callReplace' : how === 'beside' ? 'callBeside' : 'callFull']}</span>
+          </button>
+        ))}
+      </div>
       <p class="hint">{tx.callHint}</p>
       <div>
-        <button class="secondary" onClick={() => (resetLayout(), (settingsOpen.value = false))}>
+        <button class="secondary" onClick={() => confirmReset()}>
           <Icon name="home" size={16} /> {t().desk.menu.reset}
         </button>
         <p class="hint">{tx.resetHint}</p>

@@ -48,7 +48,41 @@ export function VideoView({ track, cover, muted = true, mirror, onEl }: { track?
   return <video ref={ref} class={(cover ? 'cover' : 'contain') + (mirror ? ' mirror' : '')} autoPlay playsInline muted={muted} />;
 }
 
-function Tile({ p }: { p: PeerView }) {
+const GAP = 12;
+
+/** Columns and tile width that give the biggest 16:10 tiles for n people in a w×h box. */
+export function fitTiles(n: number, w: number, h: number) {
+  let best = { cols: 1, width: 0 };
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const width = Math.min((w - GAP * (cols - 1)) / cols, ((h - GAP * (rows - 1)) / rows) * 1.6);
+    if (width > best.width) best = { cols, width };
+  }
+  return { cols: best.cols, width: Math.max(96, Math.floor(best.width)) };
+}
+
+function Tiles({ peers }: { peers: PeerView[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width, h: e.contentRect.height }));
+    ro.observe(ref.current!);
+    return () => ro.disconnect();
+  }, []);
+  const { cols, width } = fitTiles(peers.length, box.w, box.h);
+  const avatar = Math.round(Math.min(160, Math.max(28, (width / 1.6) * 0.5)));
+  return (
+    <div ref={ref} class="tiles">
+      <div class="tiles-grid" style={{ gridTemplateColumns: `repeat(${cols}, ${width}px)` }}>
+        {peers.map((p) => (
+          <Tile key={p.identity} p={p} avatar={avatar} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Tile({ p, avatar }: { p: PeerView; avatar: number }) {
   const [menu, setMenu] = useState(false);
   const vol = prefs.value.userVolume[p.identity] ?? 1;
   const tx = t().shell.stage;
@@ -59,7 +93,7 @@ function Tile({ p }: { p: PeerView }) {
       ) : (
         <>
           <div class="tile-glow" style={{ '--c': `var(--user-${p.userId % 8})` }} />
-          <Avatar id={p.userId} size={84} speaking={p.speaking} />
+          <Avatar id={p.userId} size={avatar} speaking={p.speaking} />
         </>
       )}
       <div class="tile-name">
@@ -387,11 +421,7 @@ export function Stage() {
                 ))}
               </div>
             ))}
-          <div class={'tiles n' + Math.min(peers.value.length, 9)}>
-            {peers.value.map((p) => (
-              <Tile key={p.identity} p={p} />
-            ))}
-          </div>
+          <Tiles peers={peers.value} />
           <Floaters />
         </div>
       )}

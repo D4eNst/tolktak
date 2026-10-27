@@ -152,12 +152,27 @@ const HOUR = 3600_000;
 function muteMenuItems(key: string): MenuItem[] {
   const tx = t().shell.notifications;
   if (isMuted(key)) return [{ label: tx.unmute, icon: 'bell', run: () => setMuted(key, null) }];
+  // One item, then how long: a menu of three near-identical lines is hard to read.
   return [
-    { label: tx.mute1h, icon: 'bellOff', run: () => setMuted(key, Date.now() + HOUR) },
-    { label: tx.mute8h, icon: 'bellOff', run: () => setMuted(key, Date.now() + 8 * HOUR) },
-    { label: tx.muteForever, icon: 'bellOff', run: () => setMuted(key, 0) },
+    {
+      label: t().desk.menu.muteFor,
+      icon: 'bellOff',
+      run: () =>
+        setTimeout(() => {
+          openMenu({ clientX: lastMenuPoint.x, clientY: lastMenuPoint.y }, [
+            { label: tx.mute1h, icon: 'bellOff', run: () => setMuted(key, Date.now() + HOUR) },
+            { label: tx.mute8h, icon: 'bellOff', run: () => setMuted(key, Date.now() + 8 * HOUR) },
+            { label: tx.muteForever, icon: 'bellOff', run: () => setMuted(key, 0) },
+          ]);
+        }),
+    },
   ];
 }
+// Where the last menu item was clicked: the follow-up menu opens there.
+const lastMenuPoint = { x: 0, y: 0 };
+window.addEventListener('pointerdown', (e) => {
+  if ((e.target as HTMLElement).closest?.('.menu')) Object.assign(lastMenuPoint, { x: e.clientX, y: e.clientY });
+}, true);
 
 function groupMenuItems(g: Group, open: (d: 'settings' | 'add') => void): MenuItem[] {
   const role = groupRole(g);
@@ -207,10 +222,15 @@ function RoomItem({ g, r, mod }: { g: Group; r: Room; mod: boolean }) {
   const here = inRoom(r);
   const tx = t().shell.group;
   const menu = (e: MouseEvent) =>
-    mod &&
     openMenu(e, [
-      { label: t().groups.channels.rename, icon: 'edit', run: () => renameRoom(r) },
-      ...(g.rooms.length > 1 ? [{ label: tx.deleteRoom, icon: 'trash', danger: true, run: () => deleteRoom(r) } as MenuItem] : []),
+      here ? { label: t().desk.voice.leave, icon: 'phoneOff', danger: true, run: leaveVoice } : { label: tx.joinRoom, icon: 'speaker', run: () => enterRoom(g, r) },
+      ...(mod
+        ? ([
+            'sep',
+            { label: t().groups.channels.rename, icon: 'edit', run: () => renameRoom(r) },
+            ...(g.rooms.length > 1 ? [{ label: tx.deleteRoom, icon: 'trash', danger: true, run: () => deleteRoom(r) } as MenuItem] : []),
+          ] as MenuItem[])
+        : []),
     ]);
   return (
     <>
