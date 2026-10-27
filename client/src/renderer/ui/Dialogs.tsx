@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Group } from '../api';
 import { locale, t } from '../i18n';
-import { api, channels, errorText, groups, incomingCall, me, online, openDM, switcherOpen, toast, userName, users, view } from '../state';
-import { joinVoice, ringing } from '../voice';
+import { api, channels, errorText, go, groups, incomingCall, me, online, switcherOpen, toast, userName, users } from '../state';
+import { ringing } from '../voice';
+import { callPerson, enterRoom, openPerson } from './desk';
 import { Avatar, GroupAvatar, Icon, Modal } from './common';
 
 export function UserPicker({ exclude, selected, onChange }: { exclude: number[]; selected: number[]; onChange: (ids: number[]) => void }) {
@@ -46,7 +47,7 @@ export function CreateGroupDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       const { group } = await api().createGroup(name, members, { room_name: t().shell.group.defaultRoom, channel_name: t().shell.group.defaultChannel });
-      view.value = { kind: 'group', groupId: group.id };
+      go({ kind: 'group', groupId: group.id });
       onClose();
     } catch (err) {
       toast(errorText(err), 'error');
@@ -113,10 +114,10 @@ export function QuickSwitcher() {
   const items = useMemo<Item[]>(() => {
     const out: Item[] = [];
     for (const g of groups.value.values()) {
-      out.push({ key: 'g' + g.id, label: g.name, hint: ts.group, icon: <GroupAvatar id={g.id} size={18} />, run: () => (view.value = { kind: 'group', groupId: g.id }) });
+      out.push({ key: 'g' + g.id, label: g.name, hint: ts.group, icon: <GroupAvatar id={g.id} size={18} />, run: () => go({ kind: 'group', groupId: g.id }) });
       for (const ch of g.text_channels ?? []) {
         if (ch.id === g.channel_id) continue;
-        out.push({ key: 't' + ch.id, label: ch.name, hint: ts.channel(g.name), icon: <Icon name="hash" size={16} />, run: () => (view.value = { kind: 'group', groupId: g.id, channelId: ch.id }) });
+        out.push({ key: 't' + ch.id, label: ch.name, hint: ts.channel(g.name), icon: <Icon name="hash" size={16} />, run: () => go({ kind: 'group', groupId: g.id, channelId: ch.id }) });
       }
       for (const r of g.rooms) {
         out.push({
@@ -124,10 +125,7 @@ export function QuickSwitcher() {
           label: r.name,
           hint: ts.voice(g.name),
           icon: <Icon name="speaker" size={16} />,
-          run: () => {
-            view.value = { kind: 'group', groupId: g.id, stage: true };
-            joinVoice({ room_id: r.id }, `${r.name} · ${g.name}`).catch((e) => toast(errorText(e), 'error'));
-          },
+          run: () => enterRoom(g, r),
         });
       }
     }
@@ -138,7 +136,7 @@ export function QuickSwitcher() {
         label: u.display_name,
         hint: '@' + u.username + (online.value.has(u.id) ? ts.online : ''),
         icon: <Avatar id={u.id} size={18} />,
-        run: () => openDM(u.id).catch((e) => toast(errorText(e), 'error')),
+        run: () => openPerson(u.id),
       });
     }
     const s = q.trim().toLowerCase();
@@ -212,12 +210,7 @@ export function IncomingCallDialog() {
   const ti = t().groups.incoming;
   const accept = async () => {
     incomingCall.value = null;
-    view.value = { kind: 'home', channelId: c.channelId };
-    try {
-      await joinVoice({ channel_id: c.channelId }, userName(c.from));
-    } catch (e) {
-      toast(errorText(e), 'error');
-    }
+    callPerson(c.channelId, true);
   };
   const decline = () => {
     incomingCall.value = null;

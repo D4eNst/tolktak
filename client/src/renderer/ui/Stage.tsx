@@ -1,5 +1,4 @@
 import { signal } from '@preact/signals';
-import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Track } from 'livekit-client';
 import { t } from '../i18n';
@@ -331,37 +330,82 @@ export function CallControls() {
   );
 }
 
-export function Stage({ extra }: { extra?: ComponentChildren } = {}) {
+// Per room on this device: the room's view of streams.
+type RoomMode = 'kino' | 'work';
+const MODES_KEY = 'tolktak.roomModes';
+const roomModes = signal<Record<string, RoomMode>>(
+  (() => {
+    try {
+      return JSON.parse(localStorage.getItem(MODES_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  })(),
+);
+const roomMode = (): RoomMode => (call.value && roomModes.value[call.value.room]) || 'kino';
+function setRoomMode(m: RoomMode) {
+  if (!call.value) return;
+  roomModes.value = { ...roomModes.value, [call.value.room]: m };
+  try {
+    localStorage.setItem(MODES_KEY, JSON.stringify(roomModes.value));
+  } catch {
+    /* storage unavailable */
+  }
+}
+export const toggleRoomMode = () => setRoomMode(roomMode() === 'kino' ? 'work' : 'kino');
+
+export function RoomModeToggle() {
+  const m = roomMode();
+  const tx = t().desk.room;
+  if (!call.value) return null;
+  return (
+    <div class="seg-toggle" role="radiogroup" aria-label={tx.mode} title={tx.modeHint}>
+      {(['kino', 'work'] as const).map((x) => (
+        <button key={x} role="radio" aria-checked={m === x} class={m === x ? 'on' : ''} onClick={() => setRoomMode(x)}>
+          {tx[x]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Работа: every stream side by side; the one you click gets sound and full quality. */
+function WorkScreens() {
+  return (
+    <div class={'work-grid n' + Math.min(streams.value.length, 4)}>
+      {streams.value.map((p) => (
+        <button key={p.identity} class={'work-screen' + (watching.value === p.identity ? ' main' : '')} onClick={() => !p.isLocal && watch(p.identity)} onDblClick={(e) => (e.currentTarget as HTMLElement).requestFullscreen()}>
+          {p.screen && !lowPower.value && <VideoView track={p.screen} />}
+          <span class="work-name">
+            <span class="live">LIVE</span> {p.isLocal ? t().shell.stage.yourStream : p.name}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Stage() {
   const c = call.value;
   if (!c) return null;
-  const tx = t().shell.stage;
-  const watched = watching.value ? peers.value.find((p) => p.identity === watching.value && p.shared) : undefined;
+  const work = roomMode() === 'work';
+  const watched = !work && watching.value ? peers.value.find((p) => p.identity === watching.value && p.shared) : undefined;
   return (
     <section class="stage">
-      <header class="main-head">
-        <div>
-          <h1>{c.label}</h1>
-          <span class="muted small">
-            {c.status === 'connecting' && tx.connecting}
-            {c.status === 'ringing' && tx.ringing}
-            {c.status === 'reconnecting' && tx.reconnecting}
-            {c.status === 'connected' && tx.inRoom(peers.value.length)}
-            {sharing.value && tx.sharingInfo(sharing.value.sourceName, sharing.value.audioInfo)}
-          </span>
-        </div>
-        <div class="head-actions">{extra}</div>
-      </header>
       {watched ? (
         <Theater p={watched} />
       ) : (
-        <div class="stage-body">
-          {streams.value.length > 0 && (
-            <div class="streams">
-              {streams.value.map((p) => (
-                <StreamCard key={p.identity} p={p} />
-              ))}
-            </div>
-          )}
+        <div class={'stage-body' + (work ? ' work' : '')}>
+          {streams.value.length > 0 &&
+            (work ? (
+              <WorkScreens />
+            ) : (
+              <div class="streams">
+                {streams.value.map((p) => (
+                  <StreamCard key={p.identity} p={p} />
+                ))}
+              </div>
+            ))}
           <div class={'tiles n' + Math.min(peers.value.length, 9)}>
             {peers.value.map((p) => (
               <Tile key={p.identity} p={p} />

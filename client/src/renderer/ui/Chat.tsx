@@ -980,26 +980,30 @@ function TypingLine({ channelId }: { channelId: number }) {
   );
 }
 
-export function ChatView({
-  channelId,
-  title,
-  subtitle,
-  icon,
-  actions,
-  canModerate = false,
-}: {
-  channelId: number;
-  title: string;
-  subtitle?: ComponentChildren;
-  icon?: ComponentChildren;
-  actions?: ComponentChildren;
-  canModerate?: boolean;
-}) {
+/** The side panel open in each chat; its buttons live in the window frame. */
+const chatPanel = signal<Record<number, 'pins' | 'search' | undefined>>({});
+const setPanel = (cid: number, p?: 'pins' | 'search') => (chatPanel.value = { ...chatPanel.value, [cid]: p });
+
+export function ChatActions({ channelId }: { channelId: number }) {
+  const panel = chatPanel.value[channelId];
+  return (
+    <>
+      <button class={'icon-btn' + (panel === 'pins' ? ' active' : '')} onClick={() => setPanel(channelId, panel === 'pins' ? undefined : 'pins')} title={t().chat.pins.title} aria-label={t().chat.pins.title}>
+        <Icon name="pin" size={18} />
+      </button>
+      <button class={'icon-btn' + (panel === 'search' ? ' active' : '')} onClick={() => setPanel(channelId, panel === 'search' ? undefined : 'search')} title={t().chat.search.title} aria-label={t().chat.search.label}>
+        <Icon name="search" size={18} />
+      </button>
+    </>
+  );
+}
+
+export function ChatView({ channelId, title, icon, canModerate = false }: { channelId: number; title: string; icon?: ComponentChildren; canModerate?: boolean }) {
   const cm = messages.value.get(channelId);
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const prevHeight = useRef(0);
-  const [panel, setPanel] = useState<null | 'pins' | 'search'>(null);
+  const panel = chatPanel.value[channelId];
   const [editing, setEditing] = useState(0);
   const [atBottom, setAtBottom] = useState(true);
   const [drag, setDrag] = useState(false);
@@ -1097,24 +1101,6 @@ export function ChatView({
         if (files.length) window.dispatchEvent(new CustomEvent('tolktak:files', { detail: files }));
       }}
     >
-      <header class="main-head">
-        <div class="head-title">
-          {icon}
-          <div>
-            <h1>{title}</h1>
-            {subtitle && <div class="muted small head-sub">{subtitle}</div>}
-          </div>
-        </div>
-        <div class="head-actions">
-          {actions}
-          <button class={'icon-btn' + (panel === 'pins' ? ' active' : '')} onClick={() => setPanel(panel === 'pins' ? null : 'pins')} title={t().chat.pins.title} aria-label={t().chat.pins.title}>
-            <Icon name="pin" />
-          </button>
-          <button class={'icon-btn' + (panel === 'search' ? ' active' : '')} onClick={() => setPanel(panel === 'search' ? null : 'search')} title={t().chat.search.title} aria-label={t().chat.search.label}>
-            <Icon name="search" />
-          </button>
-        </div>
-      </header>
       <div class="chat-body">
         <div class="chat-col">
           <div class="msg-list" ref={listRef} onScroll={onScroll}>
@@ -1195,8 +1181,8 @@ export function ChatView({
           <TypingLine channelId={channelId} />
           <Composer channelId={channelId} title={title} onEditLast={editLast} edit={items.find((m) => m.id === editing) ?? null} onEditEnd={() => setEditing(0)} />
         </div>
-        {panel === 'pins' && <PinsPanel channelId={channelId} onClose={() => setPanel(null)} />}
-        {panel === 'search' && <SearchPanel channelId={channelId} onClose={() => setPanel(null)} />}
+        {panel === 'pins' && <PinsPanel channelId={channelId} onClose={() => setPanel(channelId)} />}
+        {panel === 'search' && <SearchPanel channelId={channelId} onClose={() => setPanel(channelId)} />}
       </div>
       {drag && (
         <div class="drop-overlay">

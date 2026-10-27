@@ -1,19 +1,10 @@
 export default {
-  titleBar: {
-    search: 'Search people, groups, rooms',
-  },
   notifications: {
     mute1h: 'Mute for 1 hour',
     mute8h: 'Mute for 8 hours',
     muteForever: 'Mute until I turn it back on',
     unmute: 'Unmute',
     muted: 'Notifications muted',
-  },
-  rail: {
-    label: 'Groups',
-    directMessages: 'Direct messages',
-    voiceActive: 'Someone is in a voice room',
-    newGroup: 'New group',
   },
   self: {
     profile: 'Your profile',
@@ -31,24 +22,10 @@ export default {
     logOut: 'Log out',
     logOutConfirm: 'Log out of your account?',
   },
-  callCard: {
-    connected: 'Voice connected',
-    ringing: 'Calling…',
-    reconnecting: 'Reconnecting…',
-    connecting: 'Connecting…',
-    live: '● You are live',
-    disconnect: 'Disconnect',
-    leaveVoice: 'Leave voice',
-  },
   home: {
-    title: 'Messages',
-    searchPlaceholder: 'Find a person',
-    people: 'People',
     onlineCount: (n: number) => `${n} online`,
     profile: 'Profile',
     call: 'Call',
-    inCall: 'Call in progress',
-    noResults: 'No one found',
     noUsers: 'No other users on this server yet.',
   },
   group: {
@@ -68,12 +45,7 @@ export default {
     leaveGroupConfirm: (name: string) => `Leave “${name}”?`,
     leaveGroupText: 'You can only rejoin if someone invites you again.',
     leave: 'Leave',
-    textChannels: 'Text channels',
-    voiceRooms: 'Voice rooms',
-    openChat: 'Open group chat',
-    toRoom: 'Back to room',
     members: 'Members',
-    memberCount: (n: number) => `${n} ${n === 1 ? 'member' : 'members'}`,
   },
   member: {
     profile: 'Profile',
@@ -94,11 +66,6 @@ export default {
     joinCall: 'Join call',
     online: 'online',
     offline: 'offline',
-  },
-  empty: {
-    greeting: (name: string) => `Hi, ${name}`,
-    hint: 'Select a conversation or a group on the left.',
-    searchHint: 'to search.',
   },
   offlineBanner: 'No connection to the server. Reconnecting…',
   restartingBanner: (v: string) => `The server is updating to ${v}. Reconnecting as soon as it is back…`,
@@ -134,8 +101,6 @@ export default {
     connecting: 'Connecting…',
     ringing: 'Calling…',
     reconnecting: 'Reconnecting…',
-    inRoom: (n: number) => `${n} in room`,
-    sharingInfo: (source: string, audio: string) => ` · you are sharing “${source}” ${audio}`,
   },
   controls: {
     mic: 'Microphone (Ctrl+Shift+M)',

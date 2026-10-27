@@ -1,0 +1,48 @@
+export default {
+  search: 'Search or open',
+  voice: {
+    notInVoice: 'Not in voice',
+    checkMic: 'Check microphone',
+    back: 'Back to the call',
+    share: 'Share screen',
+    stopShare: 'Stop sharing',
+    leave: 'Leave voice',
+  },
+  nav: {
+    label: 'Navigator',
+    groups: 'Groups',
+    direct: 'Direct',
+    newGroup: 'New group',
+    createFirst: 'Create a group',
+    expand: 'Expand',
+    collapse: 'Collapse',
+    youAreHere: 'you are here',
+    resize: 'Navigator width',
+  },
+  windows: {
+    dm: 'Direct chat',
+    channel: 'Channel',
+    room: 'Room',
+    call: 'Call',
+    people: 'Group members',
+    profile: 'Profile',
+  },
+  empty: {
+    pickChat: 'Pick a conversation on the left',
+    noVoice: 'You are not in voice',
+  },
+  menu: {
+    label: 'Window menu',
+    maximize: 'Fill the desk',
+    restore: 'Back to the grid',
+    close: 'Close window',
+    view: 'Windows here',
+    reset: 'Default layout',
+  },
+  room: {
+    mode: 'Stream view',
+    modeHint: 'Cinema: one stream fills the room. Work: streams side by side. Key F',
+    kino: 'Cinema',
+    work: 'Work',
+  },
+};

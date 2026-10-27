@@ -1,22 +1,12 @@
-import { ruPlural } from '..';
 import type en from '../en/shell';
 
 const ru: typeof en = {
-  titleBar: {
-    search: 'Найти людей, группы, комнаты',
-  },
   notifications: {
     mute1h: 'Без уведомлений на 1 час',
     mute8h: 'Без уведомлений на 8 часов',
     muteForever: 'Без уведомлений, пока не включу',
     unmute: 'Включить уведомления',
     muted: 'Уведомления отключены',
-  },
-  rail: {
-    label: 'Группы',
-    directMessages: 'Личные сообщения',
-    voiceActive: 'В голосовой комнате кто-то есть',
-    newGroup: 'Новая группа',
   },
   self: {
     profile: 'Ваш профиль',
@@ -34,24 +24,10 @@ const ru: typeof en = {
     logOut: 'Выйти',
     logOutConfirm: 'Выйти из аккаунта?',
   },
-  callCard: {
-    connected: 'Голос подключён',
-    ringing: 'Вызов…',
-    reconnecting: 'Переподключение…',
-    connecting: 'Подключение…',
-    live: '● Вы в эфире',
-    disconnect: 'Отключиться',
-    leaveVoice: 'Выйти из голоса',
-  },
   home: {
-    title: 'Сообщения',
-    searchPlaceholder: 'Найти человека',
-    people: 'Люди',
     onlineCount: (n: number) => `${n} в сети`,
     profile: 'Профиль',
     call: 'Позвонить',
-    inCall: 'Идёт звонок',
-    noResults: 'Никого не найдено',
     noUsers: 'На сервере пока нет других пользователей.',
   },
   group: {
@@ -71,12 +47,7 @@ const ru: typeof en = {
     leaveGroupConfirm: (name: string) => `Покинуть «${name}»?`,
     leaveGroupText: 'Вернуться можно будет, только если вас снова пригласят.',
     leave: 'Покинуть',
-    textChannels: 'Текстовые каналы',
-    voiceRooms: 'Голосовые комнаты',
-    openChat: 'Открыть чат группы',
-    toRoom: 'К комнате',
     members: 'Участники',
-    memberCount: (n: number) => `${n} ${ruPlural(n, 'участник', 'участника', 'участников')}`,
   },
   member: {
     profile: 'Профиль',
@@ -97,11 +68,6 @@ const ru: typeof en = {
     joinCall: 'Присоединиться к звонку',
     online: 'в сети',
     offline: 'не в сети',
-  },
-  empty: {
-    greeting: (name: string) => `Привет, ${name}`,
-    hint: 'Выберите диалог или группу слева.',
-    searchHint: 'для поиска.',
   },
   offlineBanner: 'Нет связи с сервером. Переподключение…',
   restartingBanner: (v) => `Сервер обновляется до ${v}. Переподключимся, как только он запустится…`,
@@ -137,8 +103,6 @@ const ru: typeof en = {
     connecting: 'Подключение…',
     ringing: 'Вызов…',
     reconnecting: 'Переподключение…',
-    inRoom: (n: number) => `${n} в комнате`,
-    sharingInfo: (source: string, audio: string) => ` · вы показываете «${source}» ${audio}`,
   },
   controls: {
     mic: 'Микрофон (Ctrl+Shift+M)',

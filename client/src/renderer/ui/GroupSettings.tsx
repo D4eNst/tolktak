@@ -1,10 +1,10 @@
 import { useState } from 'preact/hooks';
 import type { FileMeta, Group, Room, TextChannel } from '../api';
 import { t } from '../i18n';
-import { api, errorText, groupRole, me, online, toast, userName, users, view } from '../state';
+import { api, errorText, go, groupRole, me, online, toast, userName, users } from '../state';
 import { AddMembersDialog } from './Dialogs';
 import { Avatar, confirmDialog, GroupAvatar, Icon, Modal, promptDialog } from './common';
-import { memberMenu } from './Shell';
+import { memberMenu } from './desk';
 
 const MAX_AVATAR = 8 * 1024 * 1024;
 
@@ -40,7 +40,7 @@ export async function createTextChannel(g: Group) {
   if (!name) return;
   try {
     const { channel } = await api().createTextChannel(g.id, name);
-    view.value = { kind: 'group', groupId: g.id, channelId: channel.id };
+    go({ kind: 'group', groupId: g.id, channelId: channel.id });
   } catch (e) {
     toast(errorText(e), 'error');
   }

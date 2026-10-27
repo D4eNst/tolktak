@@ -173,14 +173,14 @@ function createWindow() {
     minWidth: 940,
     minHeight: 560,
     show: false,
-    backgroundColor: '#0e0c12',
+    backgroundColor: '#0b1327',
     title: 'TolkTak',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     ...(process.platform === 'darwin'
-      ? { trafficLightPosition: { x: 14, y: 12 } }
-      : { titleBarOverlay: { color: '#0e0c12', symbolColor: '#b9b1c6', height: 34 } }),
+      ? { trafficLightPosition: { x: 18, y: 21 } }
+      : { titleBarOverlay: { color: '#0b1327', symbolColor: '#97a3c5', height: 56 } }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
