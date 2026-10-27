@@ -667,6 +667,17 @@ function openWindowMenu(e: { clientX: number; clientY: number; preventDefault?: 
 }
 const toggleMax = (group: DockviewGroupPanel) => group.api.location.type === 'grid' && (group.api.isMaximized() ? group.api.exitMaximized() : group.api.maximize());
 
+/** A window's name in words, for lists. */
+function windowLabel(id: string): string {
+  const { w, arg } = parseId(id);
+  const cid = id === 'main' ? viewChannel(view.value) : id.startsWith('chat:') ? arg : undefined;
+  const ch = cid ? channels.value.get(cid) : undefined;
+  if (ch?.peer_id) return userName(ch.peer_id);
+  const g = ch?.group_id ? groups.value.get(ch.group_id) : undefined;
+  if (g && cid) return groupChannelName(g, cid);
+  if (id === 'voice' && call.value) return call.value.label;
+  return w?.name() ?? id;
+}
 const groupOfWindow = (id: string) => {
   const cid = id === 'main' ? viewChannel(view.value) : id.startsWith('chat:') ? Number(id.slice(5)) : undefined;
   return cid ? channels.value.get(cid)?.group_id : undefined;
@@ -927,10 +938,14 @@ export function Workspace() {
       e.preventDefault();
       e.stopPropagation();
       const r = btn.getBoundingClientRect();
-      const name = (id: string) => group.element.querySelector(`.dv-tab[data-tab-panel-id="${CSS.escape(id)}"]`)?.textContent?.trim() || parseId(id).w?.name() || id;
       openMenu(
         { clientX: r.left, clientY: r.bottom + 4 },
-        group.panels.map((p) => ({ label: name(p.id), icon: p === group.activePanel ? 'check' : undefined, run: () => p.api.setActive() })),
+        group.panels.map((p) => ({
+          label: windowLabel(p.id),
+          icon: p === group.activePanel ? 'check' : 'hash',
+          hint: p.id === 'main' ? t().desk.menu.mainShort : undefined,
+          run: () => p.api.setActive(),
+        })),
       );
     };
     host.addEventListener('pointerdown', more, true);

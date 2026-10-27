@@ -37,6 +37,7 @@ export default {
     noVoice: 'You are not in voice',
   },
   menu: {
+    mainShort: 'main',
     capsule: 'Tab above the window',
     plain: 'Tab inside the window',
     main: 'Main window: shows what you pick in the navigator',
