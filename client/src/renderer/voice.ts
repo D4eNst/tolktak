@@ -129,8 +129,6 @@ export type PeerView = {
   screen?: Track;
   shared: boolean;
   screenAudio: boolean;
-  /** How the author wants the stream watched, from its track name. */
-  shareView?: 'kino' | 'work';
   quality: string;
 };
 export type ShareMode = 'motion' | 'detail';
@@ -166,6 +164,8 @@ export const sharing = signal<(ShareOptions & { audioInfo: string }) | null>(nul
 export const watching = signal<string | null>(null);
 /** A stream preview under the mouse: its sound plays quietly meanwhile. */
 export const previewing = signal<string | null>(null);
+/** Joined a big room with the mic turned off for you: the mic button says so until it is touched. */
+export const quietJoin = signal(false);
 export const speakingRemote = signal(false);
 export const speaking = signal<ReadonlySet<string>>(new Set());
 
@@ -197,8 +197,10 @@ export async function joinVoice(target: CallTarget, label: string, opts: { ringi
   }
   leaving = false;
   const { url, token, room: roomName } = await api().joinVoice(target);
+  quietJoin.value = false;
   if (prefs.value.quietBigRooms && (voiceRooms.value.get(roomName)?.length ?? 0) >= 10 && !prefs.value.micMuted) {
     setPrefs({ micMuted: true });
+    quietJoin.value = true;
     toast(t().core.voice.quietBigRoom);
   }
   call.value = { room: roomName, label, target, status: opts.ringing ? 'ringing' : 'connecting' };
@@ -471,7 +473,6 @@ function viewOf(p: Participant, isLocal: boolean): PeerView {
     screen: scr?.track,
     shared: !!scr,
     screenAudio: !!scrA,
-    shareView: scr?.trackName === 'screen:work' ? 'work' : scr?.trackName === 'screen:kino' ? 'kino' : undefined,
     quality: p.connectionQuality,
   };
 }
@@ -1117,8 +1118,7 @@ async function publishScreen(r: Room, o: ShareOptions, video: LocalVideoTrack, a
   const single = o.singleLayer || o.quality === 'source60' || layers.length === 0;
   await r.localParticipant.publishTrack(video, {
     source: Track.Source.ScreenShare,
-    // The author's view for viewers on «Как у автора»: a moving picture is for Кино, a still one for Работа.
-    name: o.mode === 'motion' ? 'screen:kino' : 'screen:work',
+    name: 'screen',
     videoCodec: VIDEO_CODEC,
     // A backup codec is a second software encoder on the streamer's PC.
     backupCodec: false,

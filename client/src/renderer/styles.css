@@ -1494,11 +1494,6 @@ code {
   background: var(--bg-active);
   color: var(--text);
 }
-/* On «Авто»: the view the author picked, marked lightly. */
-.seg-toggle button.eff {
-  color: var(--text);
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
 
 .group-avatar {
   position: relative;
@@ -2866,20 +2861,50 @@ code {
   margin-top: 6px;
 }
 
-/* «Работа»: one screen made bigger spans the row */
-.work-grid.has-big .work-screen.big {
-  grid-column: 1 / -1;
+
+/* «Крупно»: the other streams small above the big one */
+.theater-previews {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px 0;
+  overflow-x: auto;
+  flex: none;
 }
-.work-big {
+.theater-preview {
+  position: relative;
+  width: 160px;
+  aspect-ratio: 16 / 9;
+  flex: none;
+  border-radius: var(--r);
+  overflow: hidden;
+  background: #000;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.theater-preview video {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  opacity: 0;
-  transition: opacity var(--t);
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
-.work-screen:hover .work-big,
-.work-big:focus-visible {
-  opacity: 1;
+.theater-preview .work-name {
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  font-size: 11.5px;
+}
+.work-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.round.nudge {
+  box-shadow: 0 0 0 2px var(--accent);
+  animation: nudge 1.6s var(--ease) 3;
+}
+@keyframes nudge {
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
 }
 
 /* rooms over 8 people: a compact list */

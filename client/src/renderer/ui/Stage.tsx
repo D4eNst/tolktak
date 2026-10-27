@@ -15,6 +15,8 @@ import {
   micOn,
   peers,
   preview,
+  previewing,
+  quietJoin,
   prefs,
   setCamera,
   setPrefs,
@@ -148,6 +150,7 @@ function StreamCard({ p }: { p: PeerView }) {
       <div class="stream-preview">{p.screen && !lowPower.value && <VideoView track={p.screen} cover />}</div>
       <div class="stream-meta">
         <span class="live">LIVE</span> {p.isLocal ? tx.yourStream : p.name}
+        {previewing.value === p.identity && <Icon name="speaker" size={13} />}
         {!p.isLocal && <span class="watch-btn">{tx.watch}</span>}
       </div>
       {p.isLocal && <OwnStreamStats />}
@@ -281,12 +284,26 @@ function Theater({ p }: { p: PeerView }) {
   const tx = t().shell.stage;
   const cams = lowPower.value ? [] : peers.value.filter((x) => x.camera && !(x.isLocal && hideOwnCam.value));
   const others = peers.value.filter((x) => !cams.includes(x));
+  const rest = streams.value.filter((x) => x.identity !== p.identity);
   const fullscreen = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else ref.current?.requestFullscreen();
   };
   return (
     <div class="theater" ref={ref}>
+      {rest.length > 0 && (
+        <div class="theater-previews">
+          {rest.map((x) => (
+            <button key={x.identity} {...hover(x)} class="theater-preview" onClick={() => !x.isLocal && watch(x.identity)} disabled={x.isLocal}>
+              {x.screen && !lowPower.value && <VideoView track={x.screen} cover />}
+              <span class="work-name">
+                {x.isLocal ? tx.yourStream : x.name}
+                {previewing.value === x.identity && <Icon name="speaker" size={12} />}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       <div class="theater-video" ref={setHost} onDblClick={fullscreen}>
         <div class="ambilight" aria-hidden="true" />
         <VideoView track={p.screen} onEl={setVideoEl} />
@@ -347,7 +364,7 @@ export function CallControls() {
   const tx = t().shell.controls;
   return (
     <div class="call-controls">
-      <button class={'round' + (micOn.value ? '' : ' off')} onClick={toggleMic} title={tx.mic} aria-label={tx.micLabel}>
+      <button class={'round' + (micOn.value ? '' : ' off') + (quietJoin.value && !micOn.value ? ' nudge' : '')} onClick={toggleMic} title={quietJoin.value && !micOn.value ? t().core.voice.quietBigRoom : tx.mic} aria-label={tx.micLabel}>
         <Icon name={micOn.value ? 'mic' : 'micOff'} />
       </button>
       <button class={'round' + (deafened.value ? ' off' : '')} onClick={toggleDeafen} title={tx.deafen} aria-label={tx.soundLabel}>
@@ -359,6 +376,11 @@ export function CallControls() {
       <button class={'round' + (sharing.value ? ' on' : '')} onClick={() => setPicker(true)} title={tx.share} aria-label={tx.shareLabel}>
         <Icon name="screen" />
       </button>
+      {hideOwnCam.value && cameraOn.value && (
+        <button class="secondary" onClick={() => (hideOwnCam.value = false)}>
+          <Icon name="eye" size={14} /> {t().shell.stage.showOwnCam}
+        </button>
+      )}
       {sharing.value && (
         <button class="secondary stop-share" onClick={stopShare}>
           <Icon name="stop" size={14} /> {tx.stopShare}
@@ -384,17 +406,19 @@ const roomModes = signal<Record<string, RoomMode>>(
     }
   })(),
 );
-/** «Как у автора»: the view the author of the stream on screen (or the newest one) picked. */
-const authorMode = (): RoomMode => (streams.value.find((p) => p.identity === watching.value) ?? streams.value[streams.value.length - 1])?.shareView ?? 'kino';
-const roomMode = (): RoomMode => (call.value && roomModes.value[call.value.room]) || authorMode();
-function setRoomMode(m: RoomMode | 'auto') {
+/** One stream: big; several: side by side; unless chosen for this room. */
+const roomMode = (): RoomMode => (call.value && roomModes.value[call.value.room]) || (streams.value.length > 1 ? 'work' : 'kino');
+function setRoomMode(m: RoomMode) {
   if (!call.value) return;
-  const { [call.value.room]: _, ...rest } = roomModes.value;
-  roomModes.value = m === 'auto' ? rest : { ...rest, [call.value.room]: m };
+  roomModes.value = { ...roomModes.value, [call.value.room]: m };
   try {
     localStorage.setItem(MODES_KEY, JSON.stringify(roomModes.value));
   } catch {
     /* storage unavailable */
+  }
+  if (m === 'kino' && !streams.value.some((p) => p.identity === watching.value)) {
+    const last = streams.value.filter((p) => !p.isLocal).pop();
+    if (last) watch(last.identity);
   }
 }
 export const toggleRoomMode = () => setRoomMode(roomMode() === 'kino' ? 'work' : 'kino');
@@ -411,57 +435,36 @@ effect(() => {
 export function RoomModeToggle() {
   const m = roomMode();
   const tx = t().desk.room;
-  if (!call.value) return null;
-  const auto = !roomModes.value[call.value.room];
+  if (!call.value || !streams.value.length) return null;
   return (
-    <div class="seg-toggle" role="radiogroup" aria-label={tx.mode} title={tx.modeHint}>
-      <button role="radio" aria-checked={auto} class={auto ? 'on' : ''} onClick={() => setRoomMode('auto')} title={tx.autoHint}>
-        {tx.auto}
-      </button>
+    <div class="seg-toggle" role="radiogroup" aria-label={tx.mode}>
       {(['kino', 'work'] as const).map((x) => (
-        <button key={x} role="radio" aria-checked={!auto && m === x} class={(!auto && m === x ? 'on' : '') + (auto && m === x ? ' eff' : '')} onClick={() => setRoomMode(x)}>
-          {tx[x]}
+        <button key={x} role="radio" aria-checked={m === x} class={m === x ? 'on' : ''} onClick={() => setRoomMode(x)} title={tx[x === 'kino' ? 'kinoHint' : 'workHint']} aria-label={tx[x]}>
+          <Icon name={x === 'kino' ? 'layoutBig' : 'layoutGrid'} size={16} />
         </button>
       ))}
     </div>
   );
 }
 
-/** Работа: every stream side by side; the one you click gets sound and full quality. */
-const bigScreen = signal<string | null>(null);
-
+/** Рядом: every stream side by side; the one you click gets sound and full quality. */
 function WorkScreens() {
-  const tx = t().desk.room;
-  const big = streams.value.some((p) => p.identity === bigScreen.value) ? bigScreen.value : null;
   return (
-    <div class={'work-grid n' + Math.min(streams.value.length, 4) + (big ? ' has-big' : '')}>
+    <div class={'work-grid n' + Math.min(streams.value.length, 4)}>
       {streams.value.map((p) => (
-        <div
+        <button
           key={p.identity}
-          role="button"
-          tabIndex={0}
           {...hover(p)}
-          class={'work-screen' + (watching.value === p.identity ? ' main' : '') + (big === p.identity ? ' big' : '')}
+          class={'work-screen' + (watching.value === p.identity ? ' main' : '')}
           onClick={() => !p.isLocal && watch(p.identity)}
           onDblClick={(e) => (e.currentTarget as HTMLElement).requestFullscreen()}
         >
           {p.screen && !lowPower.value && <VideoView track={p.screen} />}
           <span class="work-name">
             <span class="live">LIVE</span> {p.isLocal ? t().shell.stage.yourStream : p.name}
+            {previewing.value === p.identity && <Icon name="speaker" size={13} />}
           </span>
-          {streams.value.length > 1 && (
-            <button
-              class="chip work-big"
-              onClick={(e) => {
-                e.stopPropagation();
-                bigScreen.value = big === p.identity ? null : p.identity;
-                if (!p.isLocal) watch(p.identity);
-              }}
-            >
-              <Icon name="maximize" size={13} /> {big === p.identity ? tx.small : tx.big}
-            </button>
-          )}
-        </div>
+        </button>
       ))}
     </div>
   );
