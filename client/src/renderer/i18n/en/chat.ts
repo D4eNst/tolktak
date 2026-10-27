@@ -67,7 +67,7 @@ export default {
     waitForUploads: 'Wait for the files to finish uploading',
     tooLong: (max: number) => `Messages are limited to ${max} characters`,
     micUnavailable: (error: string) => `Microphone unavailable: ${error}`,
-    recording: 'Recording voice message',
+    recording: 'Recording',
     cancelRecordingHint: 'Cancel',
     cancelRecording: 'Cancel recording',
     sendVoice: 'Send voice message',

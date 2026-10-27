@@ -70,7 +70,7 @@ const ru: typeof en = {
     waitForUploads: 'Дождитесь загрузки файлов',
     tooLong: (max: number) => `Сообщение длиннее ${max} символов`,
     micUnavailable: (error: string) => `Микрофон недоступен: ${error}`,
-    recording: 'Запись голосового сообщения',
+    recording: 'Запись',
     cancelRecordingHint: 'Отменить',
     cancelRecording: 'Отменить запись',
     sendVoice: 'Отправить голосовое',

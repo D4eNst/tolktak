@@ -46,7 +46,7 @@ import { RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 
 export type WindowId = 'main' | 'voice' | 'people' | 'profile' | 'chat';
 /** `arg` is what a window is fixed to, from its id `type:arg`: `chat:12` is channel 12. */
-type WinProps = { arg?: number };
+type WinProps = { arg?: number; bare?: boolean };
 type Win = {
   name: () => string;
   minWidth: number;
@@ -100,7 +100,7 @@ function DmCallButton({ cid }: { cid: number }) {
 }
 
 // A chat, a person's or a group channel's: the main window and the fixed `chat:` ones.
-function ChatHead({ cid, name }: { cid?: number; name: string }) {
+function ChatHead({ cid, name, bare }: { cid?: number; name: string; bare?: boolean }) {
   const ch = cid ? channels.value.get(cid) : undefined;
   const g = ch?.group_id ? groups.value.get(ch.group_id) : undefined;
   if (ch?.peer_id)
@@ -114,7 +114,7 @@ function ChatHead({ cid, name }: { cid?: number; name: string }) {
   if (g && cid)
     return (
       <>
-        <GroupAvatar id={g.id} size={22} />
+        {!bare && <GroupAvatar id={g.id} size={22} />}
         <Icon name="hash" size={17} class="win-icon" />
         <span class="win-title">{groupChannelName(g, cid)}</span>
         <span class="win-sub">{g.name}</span>
@@ -144,7 +144,7 @@ export const WINDOWS: Record<WindowId, Win> = {
     name: () => t().desk.windows.main,
     minWidth: 320,
     minHeight: 220,
-    Head: () => <ChatHead cid={viewChannel(view.value)} name={t().desk.windows.main} />,
+    Head: ({ bare }) => <ChatHead cid={viewChannel(view.value)} name={t().desk.windows.main} bare={bare} />,
     Actions: () => <ChatHeadActions cid={viewChannel(view.value)} />,
     Body: () => <ChatBody cid={viewChannel(view.value)} />,
   },
@@ -152,7 +152,7 @@ export const WINDOWS: Record<WindowId, Win> = {
     name: () => t().desk.windows.chat,
     minWidth: 320,
     minHeight: 220,
-    Head: ({ arg }) => <ChatHead cid={arg} name={t().desk.windows.chat} />,
+    Head: ({ arg, bare }) => <ChatHead cid={arg} name={t().desk.windows.chat} bare={bare} />,
     Actions: ({ arg }) => <ChatHeadActions cid={arg} />,
     Body: ({ arg }) => <ChatBody cid={arg} />,
   },
@@ -318,8 +318,8 @@ function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOpt
     id,
     component: id.split(':')[0],
     title: w?.name() ?? id,
-    minimumWidth: w?.minWidth,
-    minimumHeight: w?.minHeight,
+    minimumWidth: w && w.minWidth + PAD,
+    minimumHeight: w && w.minHeight + PAD,
     ...(position && dock!.panels.length ? { position: typeof position === 'string' ? { direction: position } : position, initialWidth: size.width, initialHeight: size.height } : {}),
   });
 }
@@ -327,7 +327,7 @@ function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOpt
 function applyConstraints() {
   for (const p of dock!.panels) {
     const { w } = parseId(p.id);
-    if (w) p.api.setConstraints({ minimumWidth: w.minWidth, minimumHeight: w.minHeight });
+    if (w) p.api.setConstraints({ minimumWidth: w.minWidth + PAD, minimumHeight: w.minHeight + PAD });
   }
 }
 
@@ -354,16 +354,34 @@ function overflow(wide: boolean) {
 
 // The window's title capsule, which dockview counts on top of the content's minimum.
 const HEAD = 46;
+// The gap between windows is padding inside each one: dockview's own gap overflows nested layouts by a gap.
+const PAD = 10;
 /** A window squeezed below its minimum size, which dockview does not always keep, and by how much. */
 function cramped(wide: boolean) {
   for (const g of dock!.groups) {
     if (g.api.location.type !== 'grid') continue;
-    const need = Math.max(0, ...g.panels.map((p) => parseId(p.id).w).map((w) => (w ? (wide ? w.minWidth : w.minHeight + HEAD) : 0)));
+    const need = Math.max(0, ...g.panels.map((p) => parseId(p.id).w).map((w) => (w ? (wide ? w.minWidth + PAD : w.minHeight + HEAD + PAD) : 0)));
     const r = g.element.getBoundingClientRect();
     const deficit = need - (wide ? r.width : r.height);
     if (deficit > 8) return { g, deficit, need };
   }
   return null;
+}
+
+/** The smallest the desk can be, [width, height], from the windows' minimums: dockview's own goes stale after moves. */
+type GridNode = { type: 'leaf' | 'branch'; data: { views: string[] } | GridNode[] };
+function minSize(j: SerializedDockview): [number, number] {
+  const walk = (n: GridNode, vertical: boolean): [number, number] => {
+    if (n.type === 'leaf') {
+      const ws = (n.data as { views: string[] }).views.map((v) => parseId(v).w).filter((w): w is Win => !!w);
+      return [Math.max(0, ...ws.map((w) => w.minWidth + PAD)), Math.max(0, ...ws.map((w) => w.minHeight + HEAD + PAD))];
+    }
+    const kids = (n.data as GridNode[]).map((c) => walk(c, !vertical));
+    const sum = (k: 0 | 1) => kids.reduce((a, c) => a + c[k], 0);
+    const max = (k: 0 | 1) => Math.max(0, ...kids.map((c) => c[k]));
+    return vertical ? [max(0), sum(1)] : [sum(0), max(1)];
+  };
+  return walk(j.grid.root as unknown as GridNode, j.grid.orientation === 'VERTICAL');
 }
 
 // dockview lays itself out lazily; sizes are read right after each change.
@@ -378,8 +396,19 @@ function fit(byUser = false) {
   try {
     for (const wide of [true, false]) {
       const tried = new Set<DockviewGroupPanel>();
+      let rebuilt = false;
       for (let i = 0; i < 20; i++) {
-        const out = overflow(wide);
+        const room = wide ? host.clientWidth : host.clientHeight;
+        const fits = minSize(d.toJSON())[wide ? 0 : 1] <= room + 1;
+        // It fits, yet dockview sticks out: its minimums are stale after windows moved. A rebuild resets them.
+        if (fits && overflow(wide) > 1 && !rebuilt) {
+          rebuilt = true;
+          d.fromJSON(d.toJSON());
+          applyConstraints();
+          relayout();
+        }
+        if (fits && overflow(wide) <= 1 && !cramped(wide)) break;
+        const out = fits ? 0 : overflow(wide) || 2;
         const squeezed = out > 1 ? null : cramped(wide);
         // A squeezed window first takes room from its neighbours; it folds only when they have none to give.
         if (squeezed && !tried.has(squeezed.g)) {
@@ -396,6 +425,14 @@ function fit(byUser = false) {
         // The outermost window; of those at the edge, the narrowest: a window across the whole desk is not "the last column".
         const far = Math.max(...grid.map(edge));
         const last = squeezed?.g ?? grid.filter((g) => edge(g) > far - 2).reduce((a, b) => (span(b) < span(a) ? b : a));
+        // A window just dropped in can stick out only because of the size dockview gave it: shrink it to its minimum first.
+        if (!squeezed && !tried.has(last)) {
+          tried.add(last);
+          const min = Math.max(0, ...last.panels.map((p) => parseId(p.id).w).map((w) => (w ? (wide ? w.minWidth + PAD : w.minHeight + HEAD + PAD) : 0)));
+          last.api.setSize(wide ? { width: min } : { height: min });
+          relayout();
+          continue;
+        }
         const into = (d.adjacentGroupInDirection(last, wide ? 'left' : 'up') ?? d.adjacentGroupInDirection(last, wide ? 'right' : 'down') ?? grid.find((g) => g !== last)!) as DockviewGroupPanel;
         intended ??= d.toJSON();
         last.api.moveTo({ group: into, position: 'center' });
@@ -614,9 +651,34 @@ function openWindowMenu(e: { clientX: number; clientY: number; preventDefault?: 
 }
 const toggleMax = (group: DockviewGroupPanel) => group.api.location.type === 'grid' && (group.api.isMaximized() ? group.api.exitMaximized() : group.api.maximize());
 
+const groupOfWindow = (id: string) => {
+  const cid = id === 'main' ? viewChannel(view.value) : id.startsWith('chat:') ? Number(id.slice(5)) : undefined;
+  return cid ? channels.value.get(cid)?.group_id : undefined;
+};
+
 function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
   const { w, arg } = parseId(id);
   const tx = t().desk.menu;
+  // Tabs of one group show its avatar once, on the first tab.
+  const [, rerender] = useState(0);
+  useEffect(() => {
+    let subs: { dispose(): void }[] = [];
+    const watch = () => {
+      subs.forEach((d) => d.dispose());
+      const m = api.group.model;
+      subs = [m.onDidAddPanel, m.onDidRemovePanel].map((ev) => ev(() => rerender((n) => n + 1)));
+      rerender((n) => n + 1);
+    };
+    watch();
+    const moved = api.onDidGroupChange(watch);
+    return () => {
+      moved.dispose();
+      subs.forEach((d) => d.dispose());
+    };
+  }, []);
+  const tabs = api.group.panels.map((p) => p.id);
+  const owners = tabs.map(groupOfWindow);
+  const bare = tabs.length > 1 && tabs[0] !== id && owners.every((g) => g !== undefined && g === owners[0]);
   return (
     <div
       class="win-head"
@@ -631,7 +693,7 @@ function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
           <Icon name="navigation" size={13} />
         </span>
       )}
-      {w ? <w.Head arg={arg} /> : id}
+      {w ? <w.Head arg={arg} bare={bare} /> : id}
       <button
         class="win-close"
         onMouseDown={(e) => e.stopPropagation()}
@@ -751,7 +813,7 @@ export function Workspace() {
     host = ref.current!;
     opacities.value = loadDesk().opacity ?? {};
     const d = createDockview(host, {
-      theme: { name: 'blue', className: 'dockview-theme-blue', gap: 10, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
+      theme: { name: 'blue', className: 'dockview-theme-blue', gap: 0, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
       singleTabMode: 'fullwidth',
       disableTabsOverflowList: true,
       floatingGroupBounds: 'boundedWithinViewport',
