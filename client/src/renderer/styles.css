@@ -2944,7 +2944,8 @@ code {
 .people-row {
   display: flex;
   gap: 8px;
-  padding: 2px 14px 10px;
+  /* Room for the green ring of whoever talks, which sits outside the avatar. */
+  padding: 5px 14px 10px;
   overflow: hidden;
 }
 .mini {
@@ -3026,8 +3027,15 @@ code {
   place-items: center;
 }
 .work-grid-in {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  /* A last row that is not full sits in the middle. */
+  justify-content: center;
   gap: 12px;
+}
+.work-grid-in > * {
+  width: var(--tile);
+  flex: none;
 }
 .work-screen {
   position: relative;
@@ -3095,8 +3103,15 @@ code {
   place-items: start center;
 }
 .tiles-grid {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  /* A last row that is not full sits in the middle. */
+  justify-content: center;
   gap: 12px;
+}
+.tiles-grid > * {
+  width: var(--tile);
+  flex: none;
 }
 .tile {
   position: relative;
@@ -3361,20 +3376,58 @@ video.mirror {
 .call-people {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px;
+  padding: 0 8px 10px;
+}
+.cp-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 0 8px;
+  background: var(--bg-raised);
 }
 .cp-search {
-  margin: 6px 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 12px;
+  border-radius: var(--r);
+  background: var(--bg-input);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+}
+.cp-search:focus-within {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.cp-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 13.5px;
+  outline: none;
+}
+.cp-sec {
+  padding: 12px 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
 }
 .cp-row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 2px;
   align-items: center;
-  gap: 10px;
-  min-height: 52px;
-  padding: 6px 8px;
+  padding: 8px;
   border-radius: var(--r);
+}
+.cp-row > .avatar {
+  grid-row: span 2;
+  align-self: center;
 }
 .cp-row:hover {
   background: var(--bg-hover);
@@ -3382,44 +3435,51 @@ video.mirror {
 .cp-row.self {
   background: var(--bg-sunk);
 }
-.cp-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.cp-row.self > .avatar {
+  grid-row: auto;
 }
-.cp-top {
+.cp-line {
+  min-width: 0;
+  height: 26px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
+  gap: 6px;
 }
 .cp-name {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  margin-right: auto;
   font-size: 13.5px;
   font-weight: 600;
+}
+.cp-line .live {
+  flex: none;
+  margin-right: auto;
+}
+.cp-name:has(+ .live) {
+  margin-right: 0;
 }
 .cp-row.speaking .cp-name {
   color: var(--ok);
 }
-.cp-icons {
+.cp-slot {
+  width: 26px;
+  height: 26px;
   flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: grid;
+  place-items: center;
   color: var(--muted);
 }
-.cp-icons .none {
-  visibility: hidden;
-}
-.cp-icons .off {
+.cp-slot .off,
+.cp-slot .icon-btn.off {
   color: var(--danger);
 }
-.cp-volume-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.cp-slot .dim {
+  opacity: 0.45;
+}
+.cp-slot .icon-btn {
+  width: 26px;
+  height: 26px;
 }
 .cp-volume {
   flex: 1;
@@ -3429,7 +3489,7 @@ video.mirror {
   accent-color: var(--accent);
 }
 .cp-pct {
-  width: 36px;
+  width: 38px;
   flex: none;
   text-align: right;
   font-size: 11.5px;

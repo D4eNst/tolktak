@@ -53,19 +53,19 @@ export function VideoView({ track, cover, muted = true, mirror, onEl }: { track?
 
 const GAP = 12;
 
-/** Columns and tile width that give the biggest tiles of the given shape for n of them in a w×h box. */
-export function fitTiles(n: number, w: number, h: number, ratio = 1.6) {
-  let best = { cols: 1, width: 0 };
-  for (let cols = 1; cols <= n; cols++) {
-    const rows = Math.ceil(n / cols);
-    const width = Math.min((w - GAP * (cols - 1)) / cols, ((h - GAP * (rows - 1)) / rows) * ratio);
-    if (width > best.width) best = { cols, width };
-  }
-  return { cols: best.cols, width: Math.max(96, Math.floor(best.width)) };
+/**
+ * The grid for n tiles in a w×h box: a row grows by one column before another row is added
+ * (1 → 1×1, 2 → 1×2, 3–4 → 2×2, 5–6 → 2×3, 7–9 → 3×3, 10–12 → 3×4), and only as many columns as fit at `min` wide.
+ * When the rows outgrow the height, tiles stay as wide as the columns allow and the box scrolls.
+ */
+export function fitTiles(n: number, w: number, h: number, ratio = 1.6, min = 200) {
+  const cols = Math.max(1, Math.min(Math.ceil(Math.sqrt(n)), Math.floor((w + GAP) / (min + GAP))));
+  const rows = Math.ceil(n / cols);
+  const byW = (w - GAP * (cols - 1)) / cols;
+  const byH = ((h - GAP * (rows - 1)) / rows) * ratio;
+  const scroll = byH < Math.min(min, byW);
+  return { cols, width: Math.max(1, Math.floor(scroll ? byW : Math.min(byW, byH))), scroll };
 }
-
-/** Lower than this a tile stops shrinking and the room scrolls instead. */
-const MIN_TILE = 200;
 
 /** Who to put first when not everyone fits: the ones sharing, then those talking now or a moment ago. */
 function useOrder(list: PeerView[], all: boolean) {
@@ -93,17 +93,13 @@ function useBox() {
 
 function Tiles({ peers }: { peers: PeerView[] }) {
   const [ref, box] = useBox();
-  let { cols, width } = fitTiles(peers.length, box.w, box.h);
-  const fits = width >= MIN_TILE || box.w < MIN_TILE;
-  if (!fits) {
-    cols = Math.max(1, Math.floor((box.w + GAP) / (MIN_TILE + GAP)));
-    width = Math.floor((box.w - GAP * (cols - 1)) / cols);
-  }
+  const { cols, width, scroll } = fitTiles(peers.length, box.w, box.h);
+  const fits = !scroll;
   const avatar = Math.round(Math.max(28, (width / 1.6) * 0.6));
   const list = useOrder(peers, fits);
   return (
     <div ref={ref} class={'tiles' + (fits ? '' : ' scroll')}>
-      <div class="tiles-grid" style={{ gridTemplateColumns: `repeat(${cols}, ${width}px)` }}>
+      <div class="tiles-grid" style={{ width: cols * width + (cols - 1) * GAP + 'px', '--tile': width + 'px' }}>
         {list.map((p) => (
           <Tile key={p.identity} p={p} avatar={avatar} />
         ))}
@@ -439,7 +435,7 @@ function Theater({ p }: { p: PeerView }) {
   );
 }
 
-/** Everyone in the call: you on top, then who shares and who talks; each with your own volume for them. */
+/** Everyone in the call: search, you, then who shares and who talks; each with your own volume for them. */
 export function CallPeople() {
   const [q, setQ] = useState('');
   const tx = t().shell.stage;
@@ -450,53 +446,66 @@ export function CallPeople() {
   const others = peers.value
     .filter((p) => !p.isLocal && (!query || p.name.toLowerCase().includes(query)))
     .sort((a, b) => Number(b.shared) - Number(a.shared) || Number(b.speaking) - Number(a.speaking) || a.name.localeCompare(b.name));
+  // Every row has the same slots in the same places, filled or not: mic and sound on the top right, camera after the volume.
   const row = (p: PeerView) => {
     const vol = prefs.value.userVolume[p.identity] ?? 1;
+    const muted = vol === 0;
     return (
       <div key={p.identity} class={'cp-row' + (p.speaking ? ' speaking' : '') + (p.isLocal ? ' self' : '')}>
-        <Avatar id={p.userId} size={32} speaking={p.speaking} />
-        <div class="cp-main">
-          <div class="cp-top">
-            <span class="cp-name ellipsis">
-              {p.name}
-              {p.isLocal && <span class="muted"> {tx.you}</span>}
-            </span>
-            <span class="cp-icons">
-              {p.shared && <span class="live">LIVE</span>}
-              <Icon name="video" size={14} class={p.camera ? '' : 'none'} />
-              <Icon name={p.micMuted ? 'micOff' : 'mic'} size={14} class={p.micMuted ? 'off' : 'none'} />
+        <Avatar id={p.userId} size={36} speaking={p.speaking} />
+        <div class="cp-line">
+          <span class="cp-name ellipsis">
+            {p.name}
+            {p.isLocal && <span class="muted"> {tx.you}</span>}
+          </span>
+          {p.shared && <span class="live">LIVE</span>}
+          <span class="cp-slot" title={p.micMuted ? tr.micOff : tr.micOn}>
+            <Icon name={p.micMuted ? 'micOff' : 'mic'} size={15} class={p.micMuted ? 'off' : 'dim'} />
+          </span>
+          <span class="cp-slot">
+            {!p.isLocal && (
+              <button class={'icon-btn tiny' + (muted ? ' off' : '')} onClick={() => setUserVolume(p.identity, muted ? 1 : 0)} title={muted ? tx.unmute : tx.muteForMe} aria-label={muted ? tx.unmute : tx.muteForMe}>
+                <Icon name={muted ? 'speakerOff' : 'speaker'} size={15} />
+              </button>
+            )}
+          </span>
+        </div>
+        {!p.isLocal && (
+          <div class="cp-line">
+            <input
+              class="cp-volume"
+              type="range"
+              min="0"
+              max="2"
+              step="0.05"
+              value={vol}
+              onInput={(e) => setUserVolume(p.identity, Number(e.currentTarget.value))}
+              aria-label={tx.participantVolume + ': ' + p.name}
+            />
+            <span class="cp-pct">{Math.round(vol * 100)}%</span>
+            <span class="cp-slot" title={p.camera ? tr.camOn : undefined}>
+              {p.camera && <Icon name="video" size={15} />}
             </span>
           </div>
-          {!p.isLocal && (
-            <div class="cp-volume-row">
-              <input
-                class="cp-volume"
-                type="range"
-                min="0"
-                max="2"
-                step="0.05"
-                value={vol}
-                style={{ '--pct': (vol / 2) * 100 + '%' }}
-                onInput={(e) => setUserVolume(p.identity, Number(e.currentTarget.value))}
-                aria-label={tx.participantVolume + ': ' + p.name}
-              />
-              <span class="cp-pct">{Math.round(vol * 100)}%</span>
-              <button class={'icon-btn tiny' + (vol === 0 ? ' off' : '')} onClick={() => setUserVolume(p.identity, vol === 0 ? 1 : 0)} title={vol === 0 ? tx.unmute : tx.muteForMe} aria-label={vol === 0 ? tx.unmute : tx.muteForMe}>
-                <Icon name={vol === 0 ? 'speakerOff' : 'speaker'} size={15} />
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     );
   };
   return (
     <div class="call-people">
+      <div class="cp-head">
+        <div class="cp-search">
+          <Icon name="search" size={15} />
+          <input value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder={tr.findPerson} aria-label={tr.findPerson} />
+          {q && (
+            <button class="icon-btn tiny" onClick={() => setQ('')} aria-label={t().common.cancel}>
+              <Icon name="x" size={13} />
+            </button>
+          )}
+        </div>
+      </div>
       {self && row(self)}
-      <label class="nav-search cp-search">
-        <Icon name="search" size={15} />
-        <input value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder={tr.findPerson} aria-label={tr.findPerson} />
-      </label>
+      <div class="cp-sec">{tr.inCall(peers.value.length - 1)}</div>
       {others.map(row)}
       {query && !others.length && <div class="muted small cp-empty">{t().desk.nav.noMatch}</div>}
     </div>
@@ -653,14 +662,14 @@ export function RoomModeToggle() {
 function WorkScreens() {
   const [ref, box] = useBox();
   const wrap = useRef<HTMLDivElement>(null);
-  const { cols, width } = fitTiles(streams.value.length, box.w, box.h, 16 / 9);
+  const { cols, width } = fitTiles(streams.value.length, box.w, box.h, 16 / 9, 240);
   // Camera bubbles get their own strip on the right instead of covering a screen.
   const cams = !hideBubbles.value && !lowPower.value && peers.value.some((p) => p.camera && !hiddenBubbles.value.has(p.identity));
   const main = streams.value.find((p) => p.identity === watching.value);
   return (
     <div class="theater work" ref={wrap}>
       <div ref={ref} class={'work-grid' + (cams ? ' with-bubbles' : '')}>
-        <div class="work-grid-in" style={{ gridTemplateColumns: `repeat(${cols}, ${width}px)` }}>
+        <div class="work-grid-in" style={{ width: cols * width + (cols - 1) * GAP + 'px', '--tile': width + 'px' }}>
           {streams.value.map((p) => (
             <button
               key={p.identity}
