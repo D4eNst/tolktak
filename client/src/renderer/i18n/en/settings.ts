@@ -99,7 +99,6 @@ export default {
     echoHint: 'Stops others from hearing themselves through your speakers. Can be turned off with headphones.',
     calls: 'Calls',
     voiceVolume: 'Voice volume',
-    quietBigRooms: 'Join rooms of 10 or more people muted',
     startMuted: 'Join rooms with the microphone muted',
     sounds: 'Interface sounds',
     soundsHint: 'Members joining and leaving, microphone toggles, push to talk.',

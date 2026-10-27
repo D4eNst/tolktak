@@ -16,7 +16,6 @@ import {
   peers,
   preview,
   previewing,
-  quietJoin,
   prefs,
   setCamera,
   setPrefs,
@@ -568,9 +567,9 @@ export function CallControls() {
   return (
     <div class="call-controls">
       <button
-        class={'round' + (micOn.value ? '' : ' off') + (quietJoin.value && !micOn.value ? ' nudge' : '')}
+        class={'round' + (micOn.value ? '' : ' off')}
         onClick={toggleMic}
-        title={quietJoin.value && !micOn.value ? t().core.voice.quietBigRoom : tx.mic}
+        title={tx.mic}
         aria-label={tx.micLabel}
       >
         <Icon name={micOn.value ? 'mic' : 'micOff'} />

@@ -27,7 +27,6 @@ const ru: typeof en = {
     streamStarted: (name) => `${name} начал(а) трансляцию`,
     streamEnded: 'Трансляция завершена',
     reconnected: 'Соединение восстановлено',
-    quietBigRoom: 'В комнате 10 человек и больше: микрофон выключен',
     removed: 'Вы были отключены от комнаты',
     rejoined: 'Снова в комнате',
     joinRoomFirst: 'Сначала войдите в голосовую комнату',

@@ -18,7 +18,7 @@ import {
 import { VoiceChain, type ChainSettings, type ChainStats, type Denoise } from './audio/chain';
 import { bridge, platform, type AudioMode } from './bridge';
 import { t } from './i18n';
-import { api, appActive, callEvents, errorText, me, sendRealtime, session, toast, userName, voiceRooms, windowHidden } from './state';
+import { api, appActive, callEvents, errorText, me, sendRealtime, session, toast, userName, windowHidden } from './state';
 import { STREAM_REACTIONS } from './ui/emoji';
 
 export type Prefs = {
@@ -39,7 +39,6 @@ export type Prefs = {
   sounds: boolean;
   micMuted: boolean;
   deafened: boolean;
-  quietBigRooms: boolean; // join rooms of 10+ people muted
   micMode: 'voice' | 'ptt';
   vadAuto: boolean; // false: open the mic only above vadThreshold
   vadThreshold: number; // dBFS, -80..0
@@ -70,7 +69,6 @@ const defaultPrefs: Prefs = {
   sounds: true,
   micMuted: false,
   deafened: false,
-  quietBigRooms: true,
   micMode: 'voice',
   vadAuto: true,
   vadThreshold: -50,
@@ -164,8 +162,6 @@ export const sharing = signal<(ShareOptions & { audioInfo: string }) | null>(nul
 export const watching = signal<string | null>(null);
 /** A stream preview under the mouse: its sound plays quietly meanwhile. */
 export const previewing = signal<string | null>(null);
-/** Joined a big room with the mic turned off for you: the mic button says so until it is touched. */
-export const quietJoin = signal(false);
 export const speakingRemote = signal(false);
 export const speaking = signal<ReadonlySet<string>>(new Set());
 
@@ -202,12 +198,6 @@ export async function joinVoice(target: CallTarget, label: string, opts: { ringi
   }
   leaving = false;
   const { url, token, room: roomName } = await api().joinVoice(target);
-  quietJoin.value = false;
-  if (prefs.value.quietBigRooms && (voiceRooms.value.get(roomName)?.length ?? 0) >= 10 && !prefs.value.micMuted) {
-    setPrefs({ micMuted: true });
-    quietJoin.value = true;
-    toast(t().core.voice.quietBigRoom);
-  }
   call.value = { room: roomName, label, target, status: opts.ringing ? 'ringing' : 'connecting' };
   bridge.setInCall(true);
   try {

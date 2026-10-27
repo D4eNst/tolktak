@@ -2897,15 +2897,6 @@ code {
   align-items: center;
   gap: 6px;
 }
-.round.nudge {
-  box-shadow: 0 0 0 2px var(--accent);
-  animation: nudge 1.6s var(--ease) 3;
-}
-@keyframes nudge {
-  50% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent);
-  }
-}
 
 
 /* «Кино»: cameras as bubbles along the edge, clear of the middle */
