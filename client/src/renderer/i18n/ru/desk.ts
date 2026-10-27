@@ -30,6 +30,7 @@ const ru: typeof en = {
   windows: {
     main: 'Главный чат',
     room: 'Комната',
+    callPeople: 'Участники звонка',
     voice: 'Голос',
     chat: 'Чат',
     people: 'Люди группы',
@@ -106,6 +107,10 @@ const ru: typeof en = {
     nobody: 'Пока никого',
     inside: (n: number) => `В комнате: ${n}`,
     live: 'LIVE',
+    people: 'Участники звонка',
+    sound: 'Звук',
+    hideBubbles: 'Скрыть людей поверх показа',
+    showBubbles: 'Показать людей поверх показа',
     mode: 'Как показывать экраны',
     kino: 'Крупно',
     kinoHint: 'Крупно: один показ на всё окно, остальные маленькими сверху. Клавиша F',

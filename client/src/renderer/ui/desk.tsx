@@ -39,13 +39,13 @@ import {
   voiceRooms,
   type View,
 } from '../state';
-import { call, joinVoice, startCall } from '../voice';
+import { call, joinVoice, peers, startCall } from '../voice';
 import { addChatPanel, ChatActions, ChatView, openPanel, setPanel, SidePanel } from './Chat';
 import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, Toggle } from './common';
 import { copyText, openProfile, ProfileCard } from './Profile';
-import { RoomModeToggle, Stage, toggleRoomMode } from './Stage';
+import { CallPeople, callPeopleOpen, RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 
-export type WindowId = 'main' | 'voice' | 'room' | 'people' | 'profile' | 'chat';
+export type WindowId = 'main' | 'voice' | 'room' | 'people' | 'profile' | 'chat' | 'callpeople';
 /** `arg` is what a window is fixed to, from its id `type:arg`: `chat:12` is channel 12. */
 type WinProps = { arg?: number; bare?: boolean };
 type Win = {
@@ -141,6 +141,34 @@ function RoomLobby({ rid }: { rid: number }) {
         <Icon name="speaker" size={16} /> {tx.join}
       </button>
     </div>
+  );
+}
+
+/** The call with the list of its people over its right edge, as a chat shows its side panels. */
+function RoomStage() {
+  const close = () => (callPeopleOpen.value = false);
+  return (
+    <div class="stage-wrap">
+      <Stage />
+      {callPeopleOpen.value && (
+        <SidePanel icon="users" title={t().desk.windows.callPeople} onClose={close} actions={<PopOut id="callpeople" close={close} />}>
+          <div class="win-scroll">
+            <CallPeople />
+          </div>
+        </SidePanel>
+      )}
+    </div>
+  );
+}
+function CallPeopleToggle() {
+  const own = shownWindows.value.has('callpeople');
+  const on = own || callPeopleOpen.value;
+  const label = t().desk.windows.callPeople;
+  return (
+    <button class={'icon-btn count-btn' + (on ? ' active' : '')} onClick={() => (own ? closeWindow('callpeople') : (callPeopleOpen.value = !on))} title={label} aria-label={label} aria-pressed={on}>
+      <Icon name="users" size={17} />
+      <span>{peers.value.length}</span>
+    </button>
   );
 }
 
@@ -270,16 +298,46 @@ export const WINDOWS: Record<WindowId, Win> = {
     minWidth: 420,
     minHeight: 320,
     Head: () => <VoiceHead />,
-    Actions: () => <RoomModeToggle />,
-    Body: () => (call.value ? <Stage /> : <Empty text={t().desk.empty.noVoice} />),
+    Actions: () => (
+      <>
+        <CallPeopleToggle />
+        <RoomModeToggle />
+      </>
+    ),
+    Body: () => (call.value ? <RoomStage /> : <Empty text={t().desk.empty.noVoice} />),
   },
   room: {
     name: () => t().desk.windows.room,
     minWidth: 420,
     minHeight: 320,
     Head: ({ arg, bare }) => <RoomHead rid={arg!} bare={bare} />,
-    Actions: ({ arg }) => (callRoom() === arg ? <RoomModeToggle /> : null),
-    Body: ({ arg }) => (callRoom() === arg ? <Stage /> : <RoomLobby rid={arg!} />),
+    Actions: ({ arg }) =>
+      callRoom() === arg ? (
+        <>
+          <CallPeopleToggle />
+          <RoomModeToggle />
+        </>
+      ) : null,
+    Body: ({ arg }) => (callRoom() === arg ? <RoomStage /> : <RoomLobby rid={arg!} />),
+  },
+  callpeople: {
+    name: () => t().desk.windows.callPeople,
+    minWidth: 260,
+    minHeight: 200,
+    Head: () => (
+      <>
+        <Icon name="users" size={17} class="win-icon" />
+        <span class="win-title">{t().desk.windows.callPeople}</span>
+      </>
+    ),
+    Body: () =>
+      call.value ? (
+        <div class="win-scroll">
+          <CallPeople />
+        </div>
+      ) : (
+        <Empty text={t().desk.empty.noVoice} />
+      ),
   },
   people: {
     name: () => t().desk.windows.people,

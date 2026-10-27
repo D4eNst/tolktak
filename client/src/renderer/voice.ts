@@ -35,7 +35,6 @@ export type Prefs = {
   streamVolume: number; // 0..2
   ducking: boolean;
   duckLevel: number; // 0..1, stream volume factor while someone talks
-  autoWatch: boolean;
   userVolume: Record<string, number>; // identity -> 0..2
   sounds: boolean;
   micMuted: boolean;
@@ -66,7 +65,6 @@ const defaultPrefs: Prefs = {
   streamVolume: 1,
   ducking: true,
   duckLevel: 0.4,
-  autoWatch: false,
   userVolume: {},
   sounds: true,
   micMuted: false,
@@ -383,7 +381,6 @@ function wire(r: Room) {
       (pub as RemoteTrackPublication).setSubscribed(wantSubscribed(pub.source, p.identity));
       if (pub.source === Track.Source.ScreenShare) {
         toast(t().core.voice.streamStarted(p.name || userName(Number(p.identity))));
-        if (prefs.value.autoWatch && !watching.value) watch(p.identity);
       }
       update();
     })

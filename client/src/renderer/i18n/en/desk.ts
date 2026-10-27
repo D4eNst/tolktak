@@ -28,6 +28,7 @@ export default {
   windows: {
     main: 'Main chat',
     room: 'Room',
+    callPeople: 'People in the call',
     voice: 'Voice',
     chat: 'Chat',
     people: 'Group members',
@@ -104,6 +105,10 @@ export default {
     nobody: 'Nobody here yet',
     inside: (n: number) => `In the room: ${n}`,
     live: 'LIVE',
+    people: 'People in the call',
+    sound: 'Sound',
+    hideBubbles: 'Hide people over the stream',
+    showBubbles: 'Show people over the stream',
     mode: 'How to show screens',
     kino: 'Big',
     kinoHint: 'Big: one stream fills the window, the rest small on top. Key F',

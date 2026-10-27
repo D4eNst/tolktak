@@ -644,12 +644,6 @@ export function SettingsDialog() {
               {p.ducking && (
                 <Slider label={tx.watch.duckLevel} value={p.duckLevel} max={1} onInput={(lvl) => setPrefs({ duckLevel: lvl })} format={(lvl) => tx.watch.duckValue(Math.round(lvl * 100))} />
               )}
-              <Toggle checked={p.autoWatch} onChange={(on) => setPrefs({ autoWatch: on })}>
-                {tx.watch.autoWatch}
-              </Toggle>
-              <Toggle checked={p.streamReactions} onChange={(on) => setPrefs({ streamReactions: on })} hint={tx.watch.reactionsHint}>
-                {tx.watch.reactions}
-              </Toggle>
               <Toggle checked={p.backgroundSaver} onChange={(on) => setPrefs({ backgroundSaver: on })} hint={tx.watch.saverHint}>
                 {tx.watch.saver}
               </Toggle>
