@@ -1076,7 +1076,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
+    const ro = new ((el.ownerDocument.defaultView ?? window) as typeof window).ResizeObserver(() => {
       if (stickToBottom.current) el.scrollTop = el.scrollHeight;
     });
     for (const c of el.children) ro.observe(c);

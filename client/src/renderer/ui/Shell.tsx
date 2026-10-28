@@ -502,7 +502,7 @@ const NAV_MAX = 440;
 
 // Ctrl+\ folds the navigator into a strip of avatars and back.
 const navFolded = signal(false);
-const toggleNav = () => {
+export const toggleNav = () => {
   navFolded.value = !navFolded.value;
   saveDesk({ navFolded: navFolded.value });
 };

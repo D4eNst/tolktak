@@ -13,7 +13,7 @@ export type AppInfo = {
 };
 export type MediaKind = 'microphone' | 'camera';
 export type MediaAccess = 'granted' | 'denied' | 'restricted' | 'not-determined' | 'unknown';
-export type Hotkeys = { mute?: string; deafen?: string; ptt?: string };
+export type Hotkeys = { mute?: string; deafen?: string; ptt?: string; window?: string };
 export type DesktopSettings = {
   server: string;
   token: string;

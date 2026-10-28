@@ -2,7 +2,7 @@
 // and unlike RegisterHotKey never takes the key away from the game.
 import { globalShortcut } from 'electron';
 
-export type HotkeyName = 'mute' | 'deafen' | 'ptt';
+export type HotkeyName = 'mute' | 'deafen' | 'ptt' | 'window';
 export type Hotkeys = Partial<Record<HotkeyName, string>>;
 
 type Koffi = typeof import('koffi');
@@ -70,7 +70,7 @@ export function parseAccelerator(accel: string): { mods: number[]; key: number }
 
 let timer: NodeJS.Timeout | null = null;
 
-/** `fire` receives "toggleMute", "toggleDeafen", "ptt:down" or "ptt:up". */
+/** `fire` receives "toggleMute", "toggleDeafen", "toggleWindow", "ptt:down" or "ptt:up". */
 export function installHotkeys(keys: Hotkeys, fire: (name: string) => void) {
   uninstallHotkeys();
 
@@ -87,6 +87,7 @@ export function installHotkeys(keys: Hotkeys, fire: (name: string) => void) {
     for (const [name, event] of [
       ['mute', 'toggleMute'],
       ['deafen', 'toggleDeafen'],
+      ['window', 'toggleWindow'],
     ] as const) {
       const accel = keys[name];
       if (!accel || accel.startsWith('Mouse')) continue;
@@ -99,7 +100,7 @@ export function installHotkeys(keys: Hotkeys, fire: (name: string) => void) {
     return;
   }
 
-  const parsed = (['mute', 'deafen', 'ptt'] as const)
+  const parsed = (['mute', 'deafen', 'ptt', 'window'] as const)
     .map((name) => ({ name, combo: keys[name] ? parseAccelerator(keys[name]!) : null, down: false }))
     .filter((x) => x.combo);
   if (!parsed.length) return;
@@ -111,7 +112,7 @@ export function installHotkeys(keys: Hotkeys, fire: (name: string) => void) {
       if (now === k.down) continue;
       k.down = now;
       if (k.name === 'ptt') fire(now ? 'ptt:down' : 'ptt:up');
-      else if (now) fire(k.name === 'mute' ? 'toggleMute' : 'toggleDeafen');
+      else if (now) fire(k.name === 'mute' ? 'toggleMute' : k.name === 'deafen' ? 'toggleDeafen' : 'toggleWindow');
     }
   }, 25);
 }

@@ -122,6 +122,7 @@ const ru: typeof en = {
     mute: 'Выключить микрофон',
     deafen: 'Выключить звук и микрофон',
     ptt: 'Рация (push-to-talk)',
+    window: 'Показать или скрыть TolkTak',
     pttGlobalHint: 'Работает и в играх, когда окно TolkTak не активно.',
     pttFocusedHint: 'Работает, пока окно TolkTak активно.',
     pttModeHint: 'Действует, когда режим микрофона — «Рация».',

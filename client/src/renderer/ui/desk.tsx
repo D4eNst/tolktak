@@ -396,6 +396,8 @@ type Saved = {
   voice?: VoicePlace;
   /** Room windows kept on the desk after the call in them ends. */
   pinned?: string[];
+  /** Windows hidden behind the right edge of the desk, showing only a tab there. */
+  edge?: string[];
   nav?: number;
   navFolded?: boolean;
   last?: View;
@@ -679,6 +681,77 @@ function unfoldNow() {
   intended = null;
   restore(j);
 }
+// ---------- windows of their own ----------
+
+/** Windows popped out of the desk into windows of the system, drawn from here: one page, one state, one call. */
+const popped = new Map<string, Window>();
+/** Popped windows whose «back to the desk» was pressed: they return to the desk when their window closes. */
+const returning = new Set<string>();
+window.addEventListener('beforeunload', () => popped.forEach((w) => w.close()));
+
+// shortcut: popped windows are not remembered across restarts; save them with the layout when people ask for it.
+function popOut(id: string) {
+  // The main window follows the navigator: what goes out is its chat.
+  const own = id === 'main' ? 'chat:' + viewChannel(view.value) : id;
+  if (own === 'chat:undefined' || popped.has(own)) return popped.get(own)?.focus();
+  const r = dock?.getPanel(id)?.group.element.getBoundingClientRect();
+  const w = window.open('about:blank', 'tolktak-pop-' + own.replace(':', '-'), `width=${Math.round(Math.max(420, r?.width ?? 640))},height=${Math.round(Math.max(320, r?.height ?? 520))}`);
+  if (!w) return;
+  const doc = w.document;
+  doc.title = windowLabel(own);
+  const base = doc.createElement('base');
+  base.href = location.href;
+  doc.head.append(base);
+  for (const el of document.head.querySelectorAll('link[rel="stylesheet"], style')) doc.head.append(el.cloneNode(true));
+  for (const a of ['data-theme', 'lang']) doc.documentElement.setAttribute(a, document.documentElement.getAttribute(a) ?? '');
+  const root = doc.createElement('div');
+  root.className = 'popout';
+  doc.body.append(root);
+  if (id !== 'main') closeWindow(id);
+  popped.set(own, w);
+  shownWindows.value = new Set([...shownWindows.value, own]);
+  render(<PopWindow id={own} />, root);
+  w.addEventListener('pagehide', () => {
+    render(null, root);
+    popped.delete(own);
+    shownWindows.value = new Set([...shownWindows.value].filter((x) => x !== own));
+    // The main window already shows that chat: it is back on the desk there.
+    if (returning.delete(own) && own !== 'chat:' + viewChannel(view.value)) show(own);
+  });
+}
+
+function PopWindow({ id }: { id: string }) {
+  const { w, arg } = parseId(id);
+  if (!w) return null;
+  const label = t().desk.menu.backToDesk;
+  return (
+    <div class="popout-win">
+      <div class="popout-head">
+        <div class="win-head">
+          <w.Head arg={arg} />
+        </div>
+        <div class="win-actions">
+          {w.Actions && <w.Actions arg={arg} />}
+          <button
+            class="icon-btn"
+            onClick={() => {
+              returning.add(id);
+              popped.get(id)?.close();
+            }}
+            title={label}
+            aria-label={label}
+          >
+            <Icon name="home" size={17} />
+          </button>
+        </div>
+      </div>
+      <div class="win-body">
+        <w.Body arg={arg} />
+      </div>
+    </div>
+  );
+}
+
 function closeWindow(id: string) {
   unfoldNow();
   dock?.getPanel(id)?.api.close();
@@ -695,6 +768,7 @@ function unfold() {
 }
 function onResize() {
   if (!host) return;
+  placeEdges();
   const grew = host.clientWidth > fitted.width || host.clientHeight > fitted.height;
   if (!grew) return fit();
   clearTimeout(unfoldTimer);
@@ -797,6 +871,8 @@ effect(() => {
   if (!dock || id === callWin) return;
   const was = callWin;
   callWin = id;
+  // A call window of its own closes with the call too.
+  if (was && !kept(was)) popped.get(was)?.close();
   if (was && !kept(was) && dock.getPanel(was)) {
     // Folded for lack of room: remember the call's place in the desk as intended.
     unfoldNow();
@@ -811,6 +887,8 @@ effect(() => {
 
 function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions = 'right') {
   if (!dock) return;
+  const own = popped.get(id);
+  if (own) return own.focus();
   if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
   unfoldNow();
   (dock.getPanel(id) ?? addWindow(id, position)).api.setActive();
@@ -818,6 +896,8 @@ function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions =
 }
 /** Shows a window on screen, as a new one if it was closed. */
 export function bringForward(id: string) {
+  const own = popped.get(id);
+  if (own) return own.focus();
   if (!call.value || id !== callWindow() || dock?.getPanel(id)) return show(id);
   if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
   unfoldNow();
@@ -855,6 +935,78 @@ function unshelve(id: string) {
   const p = dock?.getPanel(id);
   if (rect && p) dock!.addFloatingGroup(p, rect);
 }
+// ---------- behind the edge ----------
+
+const edge = signal<string[]>([]);
+const edgeOpen = signal<string | null>(null);
+const EDGE_WIDTH = 380;
+function setEdge(v: string[]) {
+  edge.value = v;
+  saveDesk({ edge: v });
+}
+/** A window behind the right edge: a floating one the full height of the desk, slid out of sight until its tab is clicked. */
+function toEdge(p: IDockviewPanel) {
+  const r = host!.getBoundingClientRect();
+  if (p.group.api.location.type !== 'floating') dock!.addFloatingGroup(p, { x: r.width - EDGE_WIDTH, y: 0, width: EDGE_WIDTH, height: r.height });
+  setEdge([...edge.value.filter((x) => x !== p.id), p.id]);
+  edgeOpen.value = null;
+  fit(true);
+}
+function placeEdges() {
+  if (!dock || !host) return;
+  // Docked back or closed: no longer behind the edge.
+  const still = edge.value.filter((id) => dock!.getPanel(id)?.group.api.location.type === 'floating');
+  if (still.length !== edge.value.length) setEdge(still);
+  const W = host.clientWidth;
+  for (const id of still) {
+    const box = dock.getPanel(id)!.group.element.closest<HTMLElement>('.dv-resize-container');
+    if (!box) continue;
+    // Left of the strip of tabs, so a tab stays clickable while its window is out.
+    const w = Math.min(box.offsetWidth || EDGE_WIDTH, W - 90);
+    Object.assign(box.style, { top: '0px', left: W - w - 34 + 'px', width: w + 'px', height: host.clientHeight + 'px' });
+    box.classList.add('edge-win');
+    box.classList.toggle('edge-shut', edgeOpen.value !== id);
+  }
+}
+effect(() => {
+  void edge.value;
+  void edgeOpen.value;
+  requestAnimationFrame(placeEdges);
+});
+
+function EdgeTabs() {
+  if (!edge.value.length) return null;
+  return (
+    <div class="edge-tabs" role="toolbar" aria-label={t().desk.menu.edge}>
+      {edge.value.map((id) => {
+        const { w, arg } = parseId(id);
+        return (
+          w && (
+            <button key={id} class={'edge-tab' + (edgeOpen.value === id ? ' on' : '')} onClick={() => (edgeOpen.value = edgeOpen.value === id ? null : id)} title={windowLabel(id)} aria-label={windowLabel(id)} aria-expanded={edgeOpen.value === id}>
+              <Icon name="chevronRight" size={14} class="edge-arrow" />
+              <span class="edge-label">
+                <w.Head arg={arg} bare />
+              </span>
+            </button>
+          )
+        );
+      })}
+    </div>
+  );
+}
+
+/** Alt+Shift+arrow: the window in front joins its neighbour that way, or splits off its tabs that way. */
+function moveWindow(dir: 'left' | 'right' | 'up' | 'down') {
+  const p = dock?.activePanel;
+  if (!p || p.group.api.location.type !== 'grid') return;
+  const n = dock!.adjacentGroupInDirection(p.group as DockviewGroupPanel, dir);
+  if (n) p.api.moveTo({ group: n as DockviewGroupPanel, position: 'center' });
+  else if (p.group.panels.length > 1) p.api.moveTo({ group: p.group as DockviewGroupPanel, position: ({ left: 'left', right: 'right', up: 'top', down: 'bottom' } as const)[dir] });
+  else return;
+  fit(true);
+  p.api.setActive();
+}
+
 function float(p: IDockviewPanel) {
   const r = host!.getBoundingClientRect();
   dock!.addFloatingGroup(p, { width: 380, height: Math.min(520, r.height - 90), x: r.width - 400, y: 70 });
@@ -1035,6 +1187,9 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
     ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => toggleMax(group) } as MenuItem]),
     ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
+    { label: tx.ownWindow, icon: 'external', run: () => popOut(p.id) },
+    ...(!floating && p.id !== 'main' && p.id !== 'voice' && !p.id.startsWith('room:') ? [{ label: tx.toEdge, icon: 'chevronRight', run: () => toEdge(p) } as MenuItem] : []),
+    ...(!floating ? [{ label: tx.keyMove, icon: 'keyboard', run: () => hint('keyMove') } as MenuItem] : []),
     ...(p.id.startsWith('room:')
       ? [
           pinned.value.includes(p.id)
@@ -1128,6 +1283,7 @@ export function Workspace() {
     opacities.value = loadDesk().opacity ?? {};
     plain.value = loadDesk().plain ?? [];
     capsule.value = loadDesk().capsule ?? [];
+    edge.value = loadDesk().edge ?? [];
     pinned.value = loadDesk().pinned ?? [];
     const d = createDockview(host, {
       theme: { name: 'blue', className: 'dockview-theme-blue', gap: 0, dndOverlayMounting: 'absolute', dndPanelOverlay: 'group' },
@@ -1145,11 +1301,12 @@ export function Workspace() {
     });
     dock = d;
     load();
-    const track = () => (shownWindows.value = new Set(d.groups.map((g) => g.activePanel?.id).filter((x): x is string => !!x)));
+    const track = () => (shownWindows.value = new Set([...d.groups.map((g) => g.activePanel?.id).filter((x): x is string => !!x), ...popped.keys()]));
     track();
     const subs = [
       d.onDidLayoutChange(() => {
         layoutTick.value++;
+        requestAnimationFrame(placeEdges);
         // Changed by hand while folded: what is on screen is now the desk.
         if (!fitting && intended && shape(d.toJSON()) !== foldedShape) intended = null;
         track();
@@ -1242,7 +1399,13 @@ export function Workspace() {
     const keys = (e: KeyboardEvent) => {
       // On macOS Option+arrow moves by word: a field with text keeps it.
       const wordJump = platform === 'darwin' && typing(e) && !!(e.target as HTMLInputElement).value;
-      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !wordJump) {
+      const arrow = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as const)[e.key as 'ArrowLeft'];
+      if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && arrow && !typing(e)) {
+        e.preventDefault();
+        moveWindow(arrow);
+        return;
+      }
+      if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !wordJump) {
         e.preventDefault();
         goBy(e.key === 'ArrowLeft' ? -1 : 1);
       }
@@ -1263,17 +1426,22 @@ export function Workspace() {
       }
     };
     const mouse = (e: MouseEvent) => (e.button === 3 || e.button === 4) && goBy(e.button === 3 ? -1 : 1);
+    // A window out from behind the edge slides back on a click anywhere else.
+    const away = (e: PointerEvent) => edgeOpen.value && !(e.target as HTMLElement).closest('.edge-win, .edge-tabs, .menu') && (edgeOpen.value = null);
     window.addEventListener('keydown', keys);
     window.addEventListener('mouseup', mouse);
+    window.addEventListener('pointerdown', away);
     return () => {
       window.removeEventListener('keydown', keys);
       window.removeEventListener('mouseup', mouse);
+      window.removeEventListener('pointerdown', away);
     };
   }, []);
 
   return (
     <div class="workspace">
       <div class="dock dockview-theme-blue" ref={ref} />
+      <EdgeTabs />
       <Shelf />
     </div>
   );

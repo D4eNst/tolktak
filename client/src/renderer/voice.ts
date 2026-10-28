@@ -162,6 +162,8 @@ export const sharing = signal<(ShareOptions & { audioInfo: string }) | null>(nul
 export const watching = signal<string | null>(null);
 /** A stream preview under the mouse: its sound plays quietly meanwhile. */
 export const previewing = signal<string | null>(null);
+/** Screens shown side by side and how tall they are on screen, in device pixels: big ones get the full layer. */
+export const screenHeights = signal<Record<string, number>>({});
 export const speakingRemote = signal(false);
 export const speaking = signal<ReadonlySet<string>>(new Set());
 
@@ -900,7 +902,8 @@ function applyVideoPolicy() {
     if (scr?.isSubscribed) {
       const watched = watching.value === p.identity;
       scr.setEnabled(watched ? !windowHidden.value || !prefs.value.backgroundSaver : front);
-      scr.setVideoQuality(watched ? VideoQuality.HIGH : VideoQuality.LOW);
+      // The low layer is half size: a screen drawn taller than that needs the full one.
+      scr.setVideoQuality(watched || (screenHeights.value[p.identity] ?? 0) > 540 ? VideoQuality.HIGH : VideoQuality.LOW);
     }
     const cam = p.getTrackPublication(Track.Source.Camera) as RemoteTrackPublication | undefined;
     if (cam?.isSubscribed) cam.setEnabled(front);
@@ -910,6 +913,7 @@ function applyVideoPolicy() {
 effect(() => {
   void lowPower.value;
   void windowHidden.value;
+  void screenHeights.value;
   applyVideoPolicy();
 });
 

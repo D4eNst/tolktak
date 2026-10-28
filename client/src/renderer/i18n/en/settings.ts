@@ -120,6 +120,7 @@ export default {
     mute: 'Mute microphone',
     deafen: 'Mute microphone and sound',
     ptt: 'Push to talk',
+    window: 'Show or hide TolkTak',
     pttGlobalHint: 'Also works in games when the TolkTak window is not focused.',
     pttFocusedHint: 'Works while the TolkTak window is focused.',
     pttModeHint: 'Applies when the input mode is Push to talk.',

@@ -44,7 +44,12 @@ export default {
   menu: {
     pin: 'Keep this window',
     unpin: 'Stop keeping',
-    popOut: 'Open as a separate window',
+    toEdge: 'Hide behind the edge',
+    edge: 'Windows behind the edge',
+    keyMove: 'Move with the keyboard',
+    ownWindow: 'Open in its own window',
+    backToDesk: 'Back to the desk',
+    popOut: 'Open as a window beside',
     muteFor: 'Mute notifications…',
     resetOk: 'Reset',
     resetText: 'Every window you opened, moved or minimised goes away. Only the main chat stays.',
@@ -82,6 +87,10 @@ export default {
     shelf: {
       text: 'The window is minimised below',
       more: 'Minimised windows wait at the bottom. Click one to put it back.',
+    },
+    keyMove: {
+      text: 'Alt+Shift+arrows move the window',
+      more: 'The window in focus joins its neighbour that way as a tab. With no neighbour there and tabs in its frame, the tab splits off that way. F6 goes through the windows in turn.',
     },
     floating: {
       text: 'The window is detached',

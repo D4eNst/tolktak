@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Group } from '../api';
 import { locale, t } from '../i18n';
-import { api, channels, errorText, go, groups, incomingCall, me, online, switcherOpen, toast, userName, users } from '../state';
-import { ringing } from '../voice';
-import { callPerson, enterRoom, openPerson } from './desk';
+import { api, channels, errorText, go, groups, incomingCall, me, online, settingsOpen, switcherOpen, toast, userName, users } from '../state';
+import { call, leaveVoice, micOn, ringing, toggleMic } from '../voice';
+import { callPerson, confirmReset, enterRoom, openBeside, openPerson, openRoom, openVoice } from './desk';
+import { callPeopleOpen } from './Stage';
+import { toggleNav } from './Shell';
 import { Avatar, GroupAvatar, Icon, Modal } from './common';
 
 export function UserPicker({ exclude, selected, onChange }: { exclude: number[]; selected: number[]; onChange: (ids: number[]) => void }) {
@@ -102,7 +104,8 @@ export function AddMembersDialog({ group, onClose }: { group: Group; onClose: ()
   );
 }
 
-type Item = { key: string; label: string; hint: string; icon: preact.ComponentChildren; run: () => void };
+/** `beside` is what Ctrl+Enter does: the same thing in a window next to the main one. */
+type Item = { key: string; label: string; hint: string; icon: preact.ComponentChildren; run: () => void; beside?: () => void };
 
 export function QuickSwitcher() {
   const [q, setQ] = useState('');
@@ -113,11 +116,12 @@ export function QuickSwitcher() {
   const ts = t().groups.switcher;
   const items = useMemo<Item[]>(() => {
     const out: Item[] = [];
+    const dmOf = (uid: number) => [...channels.value.values()].find((c) => c.kind === 'dm' && c.peer_id === uid)?.id;
     for (const g of groups.value.values()) {
-      out.push({ key: 'g' + g.id, label: g.name, hint: ts.group, icon: <GroupAvatar id={g.id} size={18} />, run: () => go({ kind: 'group', groupId: g.id }) });
+      out.push({ key: 'g' + g.id, label: g.name, hint: ts.group, icon: <GroupAvatar id={g.id} size={18} />, run: () => go({ kind: 'group', groupId: g.id }), beside: () => openBeside(g.channel_id) });
       for (const ch of g.text_channels ?? []) {
         if (ch.id === g.channel_id) continue;
-        out.push({ key: 't' + ch.id, label: ch.name, hint: ts.channel(g.name), icon: <Icon name="hash" size={16} />, run: () => go({ kind: 'group', groupId: g.id, channelId: ch.id }) });
+        out.push({ key: 't' + ch.id, label: ch.name, hint: ts.channel(g.name), icon: <Icon name="hash" size={16} />, run: () => go({ kind: 'group', groupId: g.id, channelId: ch.id }), beside: () => openBeside(ch.id) });
       }
       for (const r of g.rooms) {
         out.push({
@@ -126,6 +130,7 @@ export function QuickSwitcher() {
           hint: ts.voice(g.name),
           icon: <Icon name="speaker" size={16} />,
           run: () => enterRoom(g, r),
+          beside: () => openRoom(r.id),
         });
       }
     }
@@ -137,11 +142,27 @@ export function QuickSwitcher() {
         hint: '@' + u.username + (online.value.has(u.id) ? ts.online : ''),
         icon: <Avatar id={u.id} size={18} />,
         run: () => openPerson(u.id),
+        beside: dmOf(u.id) ? () => openBeside(dmOf(u.id)!) : undefined,
       });
     }
+    // Actions, after places and people: «выйти из звонка», «свернуть навигатор» and the like.
+    const tc = t().groups.switcher.commands;
+    const act = (key: string, label: string, icon: string, run: () => void) => out.push({ key: 'a' + key, label, hint: ts.action, icon: <Icon name={icon} size={16} />, run });
+    if (call.value) {
+      act('back', tc.backToCall, 'speaker', () => openVoice());
+      act('people', tc.callPeople, 'users', () => (openVoice(), (callPeopleOpen.value = true)));
+      act('mic', micOn.value ? tc.micOff : tc.micOn, micOn.value ? 'micOff' : 'mic', toggleMic);
+      act('leave', tc.leave, 'phoneOff', () => leaveVoice());
+    }
+    act('nav', tc.nav, 'navigation', toggleNav);
+    act('settings', tc.settings, 'settings', () => (settingsOpen.value = 'profile'));
+    act('windows', tc.windows, 'tabInside', () => (settingsOpen.value = 'windows'));
+    act('reset', tc.reset, 'home', () => confirmReset());
     const s = q.trim().toLowerCase();
+    // Without a query the list is places and people; actions show up once typed for.
+    const pool = s ? out : out.filter((it) => !it.key.startsWith('a'));
     const dms = new Map([...channels.value.values()].filter((c) => c.kind === 'dm').map((c) => ['u' + c.peer_id, c]));
-    const scored = out
+    const scored = pool
       .map((it) => {
         const l = it.label.toLowerCase();
         const h = it.hint.toLowerCase();
@@ -152,17 +173,17 @@ export function QuickSwitcher() {
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score);
     return scored.slice(0, 30).map((x) => x.it);
-  }, [q, groups.value, users.value, online.value, locale.value]);
+  }, [q, groups.value, users.value, online.value, locale.value, call.value, micOn.value]);
 
   useEffect(() => setIdx(0), [q]);
   useEffect(() => {
     listRef.current?.children[idx]?.scrollIntoView({ block: 'nearest' });
   }, [idx]);
 
-  const pick = (it?: Item) => {
+  const pick = (it?: Item, beside = false) => {
     if (!it) return;
     close();
-    it.run();
+    (beside && it.beside ? it.beside : it.run)();
   };
 
   return (
@@ -176,13 +197,13 @@ export function QuickSwitcher() {
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') (e.preventDefault(), setIdx(Math.min(idx + 1, items.length - 1)));
             if (e.key === 'ArrowUp') (e.preventDefault(), setIdx(Math.max(idx - 1, 0)));
-            if (e.key === 'Enter') pick(items[idx]);
+            if (e.key === 'Enter') pick(items[idx], e.ctrlKey || e.metaKey);
             if (e.key === 'Escape') (e.preventDefault(), close());
           }}
         />
         <div class="switcher-list" ref={listRef}>
           {items.map((it, i) => (
-            <button key={it.key} class={'switcher-item' + (i === idx ? ' active' : '')} onMouseEnter={() => setIdx(i)} onClick={() => pick(it)}>
+            <button key={it.key} class={'switcher-item' + (i === idx ? ' active' : '')} onMouseEnter={() => setIdx(i)} onClick={(e) => pick(it, e.ctrlKey || e.metaKey)}>
               {it.icon}
               <span>{it.label}</span>
               <span class="muted small">{it.hint}</span>
@@ -208,6 +229,8 @@ export function IncomingCallDialog() {
   }, [c?.channelId]);
   if (!c) return null;
   const ti = t().groups.incoming;
+  // One voice connection: answering takes you out of the room you are in.
+  const busy = call.value && 'room_id' in call.value.target ? call.value.label : undefined;
   const accept = async () => {
     incomingCall.value = null;
     callPerson(c.channelId, true);
@@ -223,12 +246,12 @@ export function IncomingCallDialog() {
       <Avatar id={c.from} size={56} />
       <div>
         <b>{userName(c.from)}</b>
-        <div class="muted small">{ti.calling}</div>
+        <div class="muted small">{busy ? ti.leaveRoom(busy) : ti.calling}</div>
       </div>
       <button class="round danger" onClick={decline} aria-label={ti.decline}>
         <Icon name="phoneOff" />
       </button>
-      <button class="round accept" onClick={accept} aria-label={ti.accept}>
+      <button class="round accept" onClick={accept} aria-label={busy ? ti.acceptLeave : ti.accept} title={busy ? ti.acceptLeave : ti.accept}>
         <Icon name="phone" />
       </button>
     </div>

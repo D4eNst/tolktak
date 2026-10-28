@@ -610,6 +610,7 @@ export function SettingsDialog() {
               <KeyCapture name="mute" label={tx.keys.mute} />
               <KeyCapture name="deafen" label={tx.keys.deafen} />
               <KeyCapture name="ptt" label={tx.keys.ptt} hint={p.micMode === 'ptt' ? undefined : tx.keys.pttModeHint} />
+              {isDesktop && <KeyCapture name="window" label={tx.keys.window} />}
               <h3 class="section-title">{tx.keys.inApp}</h3>
               <div class="shortcut-list">
                 <div>

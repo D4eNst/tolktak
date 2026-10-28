@@ -761,6 +761,7 @@ code {
   outline: none;
 }
 .workspace {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -772,6 +773,8 @@ code {
   min-height: 0;
   position: relative;
   margin: -5px;
+  /* Windows behind the edge slide out past it. */
+  overflow: clip;
 }
 .shelf {
   flex: none;
@@ -4711,4 +4714,98 @@ label.radio .muted {
 .update-bar button { padding: 6px 12px; }
 .theater.work {
   background: transparent;
+}
+
+/* a window of the desk in a window of its own */
+.popout {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app);
+}
+.popout-win {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.popout-head {
+  height: 46px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-island);
+}
+.popout-head .win-head,
+.popout-head .win-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.popout-win > .win-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* windows behind the right edge of the desk: a strip of tabs, each slides its window out */
+.workspace .dv-resize-container.edge-win {
+  transition: transform 220ms var(--ease);
+}
+.workspace .dv-resize-container.edge-shut {
+  transform: translateX(calc(100% + 40px));
+  pointer-events: none;
+}
+.edge-tabs {
+  position: absolute;
+  top: 50%;
+  right: -4px;
+  z-index: 31;
+  translate: 0 -50%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.edge-tab {
+  writing-mode: vertical-rl;
+  max-height: 180px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 5px;
+  border-radius: 10px 0 0 10px;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+}
+.edge-tab:hover,
+.edge-tab.on {
+  background: var(--bg-active);
+}
+.edge-tab .edge-arrow {
+  transform: rotate(180deg);
+  transition: transform 200ms var(--ease);
+}
+.edge-tab.on .edge-arrow {
+  transform: none;
+}
+.edge-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.edge-label .win-title {
+  font-size: 12.5px;
 }

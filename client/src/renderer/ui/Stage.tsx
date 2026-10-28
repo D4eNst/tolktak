@@ -16,6 +16,7 @@ import {
   peers,
   preview,
   previewing,
+  screenHeights,
   prefs,
   setCamera,
   setPrefs,
@@ -83,7 +84,9 @@ function useBox() {
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   useEffect(() => {
-    const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width, h: e.contentRect.height }));
+    // From the element's own window: it may be drawn in a popped-out one.
+    const View = (ref.current!.ownerDocument.defaultView ?? window) as typeof window;
+    const ro = new View.ResizeObserver(([e]) => setBox({ w: e.contentRect.width, h: e.contentRect.height }));
     ro.observe(ref.current!);
     return () => ro.disconnect();
   }, []);
@@ -665,6 +668,12 @@ function WorkScreens() {
   // Camera bubbles get their own strip on the right instead of covering a screen.
   const cams = !hideBubbles.value && !lowPower.value && peers.value.some((p) => p.camera && !hiddenBubbles.value.has(p.identity));
   const main = streams.value.find((p) => p.identity === watching.value);
+  const ids = streams.value.map((p) => p.identity).join();
+  useEffect(() => {
+    const h = Math.round(((width * 9) / 16) * devicePixelRatio);
+    screenHeights.value = Object.fromEntries(streams.value.map((p) => [p.identity, h]));
+  }, [width, ids]);
+  useEffect(() => () => (screenHeights.value = {}), []);
   return (
     <div class="theater work" ref={wrap}>
       <div ref={ref} class={'work-grid' + (cams ? ' with-bubbles' : '')}>

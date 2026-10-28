@@ -66,7 +66,7 @@ function cleanSettings(raw: unknown): Persisted {
   if (r.hotkeys && typeof r.hotkeys === 'object') {
     const keys = r.hotkeys as Record<string, unknown>;
     out.hotkeys = {};
-    for (const name of ['mute', 'deafen', 'ptt'] as HotkeyName[]) {
+    for (const name of ['mute', 'deafen', 'ptt', 'window'] as HotkeyName[]) {
       const accel = keys[name];
       if (typeof accel === 'string' && accel.length <= 64) out.hotkeys[name] = accel;
     }
@@ -198,7 +198,13 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'index.html'));
 
   win.webContents.on('will-navigate', (e) => e.preventDefault());
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    // A window of the desk on its own: a blank page of the same origin that the desk draws into.
+    if (url === 'about:blank' && frameName.startsWith('tolktak-pop'))
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: { minWidth: 320, minHeight: 240, backgroundColor: '#0b1327', autoHideMenuBar: true, icon: path.join(__dirname, 'assets', 'icon.png') },
+      };
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -238,7 +244,11 @@ function createTray() {
 }
 
 function registerShortcuts() {
-  installHotkeys(settings.hotkeys ?? {}, (name) => win?.webContents.send('shortcut', name));
+  installHotkeys(settings.hotkeys ?? {}, (name) => {
+    if (name !== 'toggleWindow') return win?.webContents.send('shortcut', name);
+    if (win?.isVisible() && win.isFocused()) win.hide();
+    else (win?.show(), win?.focus());
+  });
 }
 
 // Only the app's own page may use the main process.
