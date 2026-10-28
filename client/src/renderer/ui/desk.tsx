@@ -961,10 +961,14 @@ function setEdge(v: string[]) {
 /** A window behind the right edge: a floating one the full height of the desk, slid out of sight until its tab is clicked. */
 function toEdge(p: IDockviewPanel) {
   const r = host!.getBoundingClientRect();
-  if (p.group.api.location.type !== 'floating') dock!.addFloatingGroup(p, { x: r.width - EDGE_WIDTH, y: 0, width: EDGE_WIDTH, height: r.height });
-  setEdge([...edge.value.filter((x) => x !== p.id), p.id]);
+  // Taking a window off the grid only frees room: lay the desk out as intended first, and say nothing about folding.
+  unfoldNow();
+  const q = dock!.getPanel(p.id) ?? p;
+  if (q.group.api.location.type !== 'floating') dock!.addFloatingGroup(q, { x: r.width - EDGE_WIDTH, y: 0, width: EDGE_WIDTH, height: r.height });
+  setEdge([...edge.value.filter((x) => x !== q.id), q.id]);
   edgeOpen.value = null;
-  fit(true);
+  relayout();
+  fit();
 }
 /** Out from behind the edge into an ordinary floating window, where it stood. */
 function fromEdge(p: IDockviewPanel) {
@@ -1224,7 +1228,7 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
       : []),
     ...(floating ? [] : [isPlain(group, p.id) ? { label: tx.capsule, icon: 'tabAbove', run: () => togglePlain(group, p.id) } : { label: tx.plain, icon: 'tabInside', run: () => togglePlain(group, p.id) }]),
     'sep',
-    { label: tx.reset, icon: 'home', run: confirmReset },
+    { label: tx.reset, icon: 'reset', run: confirmReset },
     { label: tx.close, icon: 'x', run: () => closeWindow(p.id) },
   ];
 }
@@ -1597,7 +1601,7 @@ export function WindowsSettings() {
       </Toggle>
       <div>
         <button class="secondary" onClick={() => confirmReset()}>
-          <Icon name="home" size={16} /> {t().desk.menu.reset}
+          <Icon name="reset" size={16} /> {t().desk.menu.reset}
         </button>
         <p class="hint">{tx.resetHint}</p>
       </div>

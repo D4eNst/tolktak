@@ -158,7 +158,7 @@ export function QuickSwitcher() {
     act('nav', tc.nav, 'navigation', toggleNav);
     act('settings', tc.settings, 'settings', () => (settingsOpen.value = 'profile'));
     act('windows', tc.windows, 'tabInside', () => (settingsOpen.value = 'windows'));
-    act('reset', tc.reset, 'home', () => confirmReset());
+    act('reset', tc.reset, 'reset', () => confirmReset());
     const s = q.trim().toLowerCase();
     // Without a query the list is places and people; actions show up once typed for.
     const pool = s ? out : out.filter((it) => !it.key.startsWith('a'));

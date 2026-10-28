@@ -1241,6 +1241,9 @@ code {
   background: none;
 }
 .workspace .dv-resize-container .dv-groupview {
+  /* The frame is what was resized: the window fills it, whatever size dockview last gave it. */
+  width: 100% !important;
+  height: 100% !important;
   padding: 0;
   border-radius: var(--r-xl);
   overflow: hidden;

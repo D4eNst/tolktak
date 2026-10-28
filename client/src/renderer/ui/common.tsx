@@ -25,6 +25,7 @@ const paths: Record<string, string> = {
   speaker: 'M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14',
   maximize: 'M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3',
   x: 'M18 6 6 18M6 6l12 12',
+  reset: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5',
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
   navigation: 'M3 11l19-9-9 19-2-8z',
   tabInside: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 9h18',
