@@ -347,12 +347,25 @@ type RowProps = {
 };
 
 // Memoised, so its props must keep their identity between renders of the chat.
-const MessageRow = memo(function MessageRow({ m, fresh, grouped, canPin, canDelete, editing, setEditing }: RowProps) {
+const MessageRow = memo(function MessageRow({ m: live, fresh, grouped, canPin, canDelete, editing, setEditing }: RowProps) {
+  // A deleted message keeps showing what it said while it fades and folds away, then leaves the list.
+  const alive = useRef(live);
+  if (!live.deleted) alive.current = live;
+  const m = alive.current;
+  const [gone, setGone] = useState(live.deleted);
+  const dying = live.deleted && !gone;
   const mine = m.author_id === me.value?.id;
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [enter] = useState(() => (sentAt.has(m.nonce) ? Date.now() - sentAt.get(m.nonce)! : fresh ? 0 : -1));
-  const wasDeleted = useRef(m.deleted);
+  const row = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = row.current;
+    if (!dying || !el) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return setGone(true);
+    const fold = { height: '0px', paddingTop: '0px', paddingBottom: '0px', overflow: 'hidden' };
+    el.animate([{ height: el.offsetHeight + 'px', overflow: 'hidden' }, fold], { duration: 420, delay: leaving ? 0 : 140, easing: 'cubic-bezier(0.65, 0, 0.35, 1)', fill: 'forwards' }).onfinish = () => setGone(true);
+  }, [dying]);
   const author = users.value.get(m.author_id);
   const sticker = STICKER_RE.exec(m.text);
   const st = sticker ? findSticker(sticker[1]) : undefined;
@@ -394,6 +407,7 @@ const MessageRow = memo(function MessageRow({ m, fresh, grouped, canPin, canDele
   };
   const profile = (e: MouseEvent) => openProfile(m.author_id, e.clientX + 12, e.clientY - 40);
 
+  if (gone) return null;
   return (
     <div
       class={
@@ -404,9 +418,10 @@ const MessageRow = memo(function MessageRow({ m, fresh, grouped, canPin, canDele
         (highlight.value === m.id ? ' flash' : '') +
         (m.pinned_at ? ' pinned' : '') +
         (enter >= 0 && enter < 400 ? ' enter' : '') +
-        (leaving ? ' leaving' : '')
+        (leaving || dying ? ' leaving' : '')
       }
       style={enter > 0 ? { animationDelay: `-${enter}ms` } : undefined}
+      ref={row}
       data-id={m.id}
       onContextMenu={menu}
       onDblClick={(e) => !m.deleted && !(e.target as HTMLElement).closest('a,button,.spoiler,img,audio,video') && setReply(m.channel_id, m)}
@@ -436,7 +451,7 @@ const MessageRow = memo(function MessageRow({ m, fresh, grouped, canPin, canDele
           </div>
         )}
         {m.deleted ? (
-          <div class={'msg-text deleted' + (wasDeleted.current ? '' : ' gone')}>{t().chat.message.deleted}</div>
+          <div class="msg-text deleted">{t().chat.message.deleted}</div>
         ) : st ? (
           <div class={'sticker anim-' + st.anim}>{st.emoji}</div>
         ) : (
@@ -1106,6 +1121,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
 
   useLayoutEffect(() => {
     stickToBottom.current = true;
+    prevHeight.current = 0;
     setEditing(0);
     openChannel(channelId);
   }, [channelId]);
@@ -1113,18 +1129,34 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
   const readMark = useMemo(() => channels.value.get(channelId)?.last_read_id ?? 0, [channelId]);
   // Messages newer than this arrived while the chat was open, and play their entrance.
   const openedAt = useMemo(() => Date.now(), [channelId]);
+  const gliding = useRef(0);
+  // A new message at the bottom eases the list up by its height instead of jumping.
+  const glide = (el: HTMLDivElement, by: number) => {
+    cancelAnimationFrame(gliding.current);
+    const target = () => el.scrollHeight - el.clientHeight;
+    // Travels only the new message's height, wherever the list was left.
+    if (target() - el.scrollTop > by) el.scrollTop = target() - by;
+    const from = el.scrollTop;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / 420);
+      el.scrollTop = from + (target() - from) * (1 - (1 - k) ** 2);
+      gliding.current = k < 1 ? requestAnimationFrame(step) : 0;
+    };
+    gliding.current = requestAnimationFrame(step);
+  };
+  useEffect(() => () => cancelAnimationFrame(gliding.current), []);
   useEffect(() => {
     const sent = (e: Event) => {
       if ((e as CustomEvent<number>).detail !== channelId) return;
       stickToBottom.current = true;
-      const el = listRef.current;
-      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     };
     window.addEventListener('tolktak:sent', sent);
     return () => window.removeEventListener('tolktak:sent', sent);
   }, [channelId]);
 
   const items = cm?.items ?? [];
+  let shown: Message | undefined;
   const pending = cm?.pending ?? [];
   const last = items[items.length - 1];
 
@@ -1139,7 +1171,11 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
   useLayoutEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    if (stickToBottom.current) el.scrollTop = el.scrollHeight;
+    const fresh = pending.length > 0 || (!!last && last.created_at > openedAt);
+    if (stickToBottom.current && gliding.current) {
+      // A glide under way already eases to wherever the bottom now is.
+    } else if (stickToBottom.current && fresh && prevHeight.current && el.scrollHeight > prevHeight.current && !matchMedia('(prefers-reduced-motion: reduce)').matches) glide(el, el.scrollHeight - prevHeight.current);
+    else if (stickToBottom.current) el.scrollTop = el.scrollHeight;
     else if (prevHeight.current && el.scrollHeight > prevHeight.current && el.scrollTop < 50) {
       el.scrollTop += el.scrollHeight - prevHeight.current;
     }
@@ -1151,13 +1187,14 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
     const el = listRef.current;
     if (!el) return;
     const ro = new ((el.ownerDocument.defaultView ?? window) as typeof window).ResizeObserver(() => {
-      if (stickToBottom.current) el.scrollTop = el.scrollHeight;
+      if (stickToBottom.current && !gliding.current) el.scrollTop = el.scrollHeight;
     });
     for (const c of el.children) ro.observe(c);
     return () => ro.disconnect();
   }, [items.length, channelId]);
 
   const onScroll = () => {
+    if (gliding.current) return;
     const el = listRef.current!;
     const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     stickToBottom.current = bottom;
@@ -1217,9 +1254,12 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
               </div>
             )}
             {items.map((m, i) => {
-              const prev = items[i - 1];
-              const newDay = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
-              const grouped = !!prev && !newDay && prev.author_id === m.author_id && m.created_at - prev.created_at < 5 * 60_000 && !prev.deleted && !m.reply;
+              // Deleted messages leave the list, so each row lays out against the last message still shown.
+              const prev = shown;
+              const before = items[i - 1];
+              if (!m.deleted) shown = m;
+              const newDay = !m.deleted && (!prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString());
+              const grouped = !!prev && !newDay && prev.author_id === m.author_id && m.created_at - prev.created_at < 5 * 60_000 && !m.reply;
               return (
                 <div key={m.id} class="msg-wrap">
                   {newDay && (
@@ -1227,7 +1267,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
                       <span>{dayLabel(m.created_at)}</span>
                     </div>
                   )}
-                  {prev && prev.id <= readMark && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
+                  {!m.deleted && before && before.id <= readMark && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
                   <RowBoundary>
                     <MessageRow m={m} fresh={m.created_at > openedAt} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} editing={editing === m.id} setEditing={setEditing} />
                   </RowBoundary>
@@ -1236,20 +1276,27 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
             })}
             {pending.map((p, i) => {
               sentAt.set(p.nonce, p.created_at);
-              const last = items[items.length - 1];
+              const last = shown;
               // Laid out as the message will be once it is stored, so nothing moves when it is.
               const grouped = !p.reply_to && (i > 0 || (!!last && last.author_id === me.value?.id && !last.deleted && p.created_at - last.created_at < 5 * 60_000));
               const r = p.reply_to ? items.find((x) => x.id === p.reply_to) : undefined;
               return (
                 <div class={'msg pending mine enter ' + p.status + (grouped ? ' grouped' : '')} key={p.nonce}>
-                  <div class="msg-gutter">{!grouped && <Avatar id={me.value!.id} size={38} />}</div>
+                  <div class="msg-gutter">
+                    {!grouped && (
+                      <span class="avatar-btn">
+                        <Avatar id={me.value!.id} size={38} />
+                      </span>
+                    )}
+                  </div>
                   <div class="msg-main">
                     {!grouped && (
                       <div class="msg-head">
-                        <span class="msg-author" style={{ color: me.value!.color }}>
+                        <button class="msg-author" style={{ color: me.value!.color }} tabIndex={-1}>
                           {userName(me.value!.id)}
-                        </span>
-                        <span class="msg-time">{t().chat.view.sending}</span>
+                        </button>
+                        <span class="msg-time">{timeLabel(p.created_at)}</span>
+                        {p.status === 'sending' && <span class="msg-sending" title={t().chat.view.sending} />}
                         {r && <ReplyRef r={r} />}
                       </div>
                     )}

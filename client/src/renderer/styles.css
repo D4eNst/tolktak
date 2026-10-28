@@ -2012,7 +2012,8 @@ code {
   border-radius: var(--r);
   transition: background 120ms var(--ease);
 }
-.msg:hover {
+.msg:hover,
+.msg:has(:focus-visible) {
   background: color-mix(in srgb, var(--text) 2.5%, transparent);
 }
 .msg.grouped {
@@ -2161,48 +2162,49 @@ code {
   color: var(--text);
   background: var(--bg-hover);
 }
-/* A spoiler is a patch of drifting haze over the words; opening it, the haze settles and the words come into focus. */
+/* A spoiler is a patch of haze over the words that slowly breathes; opened, the haze thins out and the words come into focus. */
+@property --haze {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 7px;
+}
 .spoiler {
+  --haze: 7px;
   border-radius: 5px;
   padding: 0 2px;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
   cursor: pointer;
   color: transparent;
-  text-shadow: 0 0 7px color-mix(in srgb, var(--text) 70%, transparent);
+  text-shadow: 0 0 var(--haze) color-mix(in srgb, var(--text) 75%, transparent);
   filter: blur(2.5px);
-  background: linear-gradient(100deg, color-mix(in srgb, var(--text) 10%, transparent) 30%, color-mix(in srgb, var(--text) 22%, transparent) 50%, color-mix(in srgb, var(--text) 10%, transparent) 70%) 0 0 / 300% 100%;
-  animation: haze 3.2s ease-in-out infinite alternate;
+  background-color: color-mix(in srgb, var(--text) 9%, transparent);
+  animation: haze 2.8s ease-in-out infinite alternate;
   transition:
-    filter 460ms var(--ease-out),
-    color 460ms var(--ease-out),
-    text-shadow 460ms var(--ease-out),
-    background-color 460ms var(--ease-out);
+    filter 700ms var(--ease-out),
+    color 700ms var(--ease-out),
+    text-shadow 700ms var(--ease-out),
+    background-color 900ms var(--ease-out);
 }
 .spoiler * {
   color: inherit;
 }
-.spoiler:hover {
-  filter: blur(2px);
+.spoiler:not(.open):hover {
+  background-color: color-mix(in srgb, var(--text) 13%, transparent);
 }
 .spoiler:focus-visible {
   outline: 2px solid var(--accent-line);
-  filter: none;
 }
 .spoiler.open {
   cursor: text;
-  color: inherit;
-  text-shadow: none;
-  filter: none;
-  animation: none;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+  text-shadow: 0 0 0 transparent;
+  filter: blur(0);
+  background-color: color-mix(in srgb, var(--text) 5%, transparent);
 }
 @keyframes haze {
-  from {
-    background-position: 0 0;
-  }
   to {
-    background-position: 100% 0;
+    --haze: 11px;
   }
 }
 .mention {
@@ -2225,12 +2227,19 @@ code {
   font-size: 11px;
   font-style: normal;
 }
-.msg.pending .msg-text {
-  opacity: 0.72;
-}
 .msg.pending.failed .msg-text {
   color: var(--danger);
-  opacity: 1;
+}
+/* Shows only when sending takes a while, so a quick send never blinks. */
+.msg-sending {
+  align-self: center;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--faint);
+  animation:
+    gone-in 300ms 700ms var(--ease-out) backwards,
+    sending 1.4s 1s ease-in-out infinite alternate;
 }
 /* What a message answers sits in its header line, after the time. */
 .msg-reply {
@@ -2266,13 +2275,14 @@ code {
 .msg-actions {
   --row: color-mix(in srgb, var(--text) 2.5%, var(--bg-island));
   position: absolute;
-  top: 2px;
+  top: 0;
   right: 10px;
+  /* Never taller than the row: the strip's own edges must stay inside the row's tone. */
+  height: min(100%, 38px);
   display: flex;
   align-items: center;
   gap: 1px;
-  padding: 2px 2px 2px 28px;
-  border-radius: 10px;
+  padding: 0 2px 0 28px;
   background: linear-gradient(90deg, transparent, var(--row) 24px);
   opacity: 0;
   transform: translateX(6px);
@@ -2282,8 +2292,9 @@ code {
     transform 260ms var(--ease-out);
   z-index: 2;
 }
-.msg.grouped .msg-actions {
-  top: -2px;
+.msg.grouped .msg-actions button {
+  width: 26px;
+  height: 24px;
 }
 .msg:hover .msg-actions,
 .msg:has(:focus-visible) .msg-actions {
@@ -2415,41 +2426,45 @@ code {
   }
 }
 
-/* entrances and exits */
+/* entrances and exits: the list itself eases up (see Chat.tsx), the new row only settles in */
 .msg.enter {
-  animation: msg-in 360ms var(--ease-out) backwards;
+  animation: msg-in 420ms var(--ease-out) backwards;
 }
-.msg.mine.enter {
-  animation-name: msg-sent;
-}
-.msg-main > * {
+.msg-gutter,
+.msg-main {
   transition:
-    opacity 220ms var(--ease-out),
-    filter 220ms var(--ease-out);
+    opacity 260ms var(--ease-out),
+    filter 260ms var(--ease-out);
 }
-.msg.leaving .msg-main > :not(.msg-head) {
+.msg.leaving {
+  pointer-events: none;
+  background: none;
+}
+.msg.leaving .msg-gutter,
+.msg.leaving .msg-main {
   opacity: 0;
-  filter: blur(3px);
+  filter: blur(4px);
 }
-.msg-text.gone {
-  animation: gone-in 420ms var(--ease-out);
+.msg.leaving .msg-actions {
+  opacity: 0;
 }
 @keyframes msg-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
-}
-@keyframes msg-sent {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.985);
+  40% {
+    opacity: 1;
   }
 }
 @keyframes gone-in {
   from {
     opacity: 0;
-    filter: blur(2px);
+  }
+}
+@keyframes sending {
+  to {
+    opacity: 0.35;
   }
 }
 
