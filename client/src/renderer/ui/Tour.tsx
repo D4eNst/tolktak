@@ -2,11 +2,11 @@ import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { t } from '../i18n';
 import { keyLabel } from '../keys';
+import { Icon } from './common';
 import { settingsOpen } from '../state';
-import { deskPrefs } from './desk';
 
 const SEEN_KEY = 'tolktak.tour';
-const STEPS = ['nav', 'move', 'beside', 'call', 'menu'] as const;
+const STEPS = ['nav', 'move', 'beside', 'menu'] as const;
 
 export const tourOpen = signal(false);
 
@@ -60,11 +60,33 @@ const Cursor = () => (
   </svg>
 );
 
-/** A sketch of the desk for each step, played on a loop. */
+const Call = ({ people }: { people?: boolean }) => (
+  <span class="ts-win ts-call">
+    <i class="ts-name" />
+    {people && <i class="ts-deco ts-ppl-icon" />}
+    <span class="ts-tiles">
+      <i />
+      <i />
+    </span>
+  </span>
+);
+
+const People = () => (
+  <span class="ts-win ts-ppl">
+    <i class="ts-name" />
+    <i class="ts-deco ts-dots" />
+    <span class="ts-faces">
+      {[3, 1, 2, 0].map((c) => (
+        <i key={c} style={{ background: `var(--user-${c})` }} />
+      ))}
+    </span>
+  </span>
+);
+
+/** A sketch of the desk for each step, played on a loop; every step starts where the previous one ends. */
 function Scene({ step }: { step: (typeof STEPS)[number] }) {
-  const m = t().desk.menu;
   return (
-    <span class={'tour-scene t-' + step + (step === 'call' ? ' tm-' + deskPrefs.value.call : '')} aria-hidden="true">
+    <span class={'tour-scene t-' + step} aria-hidden="true">
       <span class="ts-top">
         <i class="ts-logo" />
         <i class="ts-search" />
@@ -73,49 +95,39 @@ function Scene({ step }: { step: (typeof STEPS)[number] }) {
         </i>
         <i class="ts-ava" />
       </span>
-      <Nav rooms={step === 'call'} />
-      {step === 'move' && <i class="ts-zone" />}
-      {step === 'beside' && <i class="ts-zone" />}
-      <span class="ts-win ts-a">
-        <i class="ts-name" />
-        {step === 'menu' && <i class="ts-dots" />}
-        <Msgs />
-      </span>
-      {step === 'move' && (
-        <span class="ts-win ts-b">
+      <Nav rooms={step === 'move'} />
+      {step !== 'nav' && <i class="ts-zone" />}
+      {step !== 'menu' && (
+        <span class="ts-win ts-a">
           <i class="ts-name" />
+          {step === 'beside' && <i class="ts-deco ts-x" />}
           <Msgs />
         </span>
       )}
-      {step === 'beside' && (
-        <>
-          <span class="ts-win ts-c">
-            <i class="ts-name" />
-            <Msgs />
-          </span>
-          <i class="ts-chip" />
-        </>
-      )}
-      {step === 'call' && (
-        <span class="ts-win ts-call">
+      {step !== 'nav' && <Call people={step === 'beside'} />}
+      {(step === 'beside' || step === 'menu') && <People />}
+      {(step === 'beside' || step === 'menu') && (
+        <span class="ts-win ts-b">
           <i class="ts-name" />
-          <span class="ts-tiles">
-            <i />
-            <i />
-          </span>
+          {step === 'menu' && <i class="ts-deco ts-dots" />}
+          <Msgs />
         </span>
       )}
+      {step === 'beside' && <i class="ts-chip" />}
       {step === 'menu' && (
         <>
           <span class="ts-menu">
             <i class="ts-mhl" />
-            {[m.pin, m.float, m.toEdge, m.popOut].map((x) => (
-              <span key={x}>{x}</span>
+            {[52, 66, 44].map((w) => (
+              <span key={w}>
+                <i style={{ width: w }} />
+              </span>
             ))}
           </span>
           <i class="ts-edgetab" />
         </>
       )}
+      {step !== 'nav' && <i class="ts-veil" />}
       <Cursor />
     </span>
   );
@@ -187,6 +199,9 @@ export function Tour() {
               <button key={s} class={i === step ? 'on' : ''} onClick={() => go(i)} aria-label={tx.stepOf(i + 1, STEPS.length)} aria-current={i === step ? 'step' : undefined} />
             ))}
           </div>
+          <button class="icon-btn tour-back" onClick={() => go(step - 1)} disabled={!step} title={tx.back} aria-label={tx.back}>
+            <Icon name="chevronRight" size={18} />
+          </button>
           <button class="primary" onClick={() => (last ? close() : go(step + 1))} autoFocus>
             {last ? tx.start : tx.next}
           </button>
