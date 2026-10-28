@@ -2,7 +2,8 @@ export default {
   search: 'Search or open',
   voice: {
     notInVoice: 'Not in voice',
-    checkMic: 'Check microphone',
+    quiet: 'Quiet',
+    peek: (room: string) => `Talking now in “${room}”`,
     back: 'Back to the call',
     share: 'Share screen',
     stopShare: 'Stop sharing',

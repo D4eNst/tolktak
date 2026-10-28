@@ -50,32 +50,62 @@ const dragChat = (cid: number) => (e: DragEvent) => e.dataTransfer?.setData(CHAT
 
 // ---------- top bar ----------
 
+function busiestRoom() {
+  let best: { room: Room; members: number[] } | null = null;
+  for (const g of groups.value.values())
+    for (const r of g.rooms) {
+      const m = voiceRooms.value.get(roomKey(r)) ?? [];
+      if (m.length > (best?.members.length ?? 0)) best = { room: r, members: m.map((x) => x.user_id) };
+    }
+  return best;
+}
+
 function VoiceCapsule() {
   const c = call.value;
   const [picker, setPicker] = useState(false);
   const tx = t().desk.voice;
   const ts = t().shell.self;
-  if (!c)
-    return (
-      <div class="capsule">
-        <span class="capsule-idle">{tx.notInVoice}</span>
-        <button class="chip" onClick={() => (settingsOpen.value = 'voice')}>
-          <Icon name="mic" size={15} /> {tx.checkMic}
-        </button>
-      </div>
-    );
-  return (
-    <div class="capsule">
-      <button class="capsule-room" onClick={openVoice} title={tx.back}>
-        <span class={'dot ' + (c.status === 'connected' ? 'ok' : 'wait')} />
-        <span class="ellipsis">{c.label}</span>
-      </button>
+  const toggles = (
+    <>
       <button class={'icon-btn' + (micOn.value ? '' : ' off')} onClick={toggleMic} title={micOn.value ? ts.micOff : ts.micOn} aria-label={ts.micLabel} aria-pressed={!micOn.value}>
         <Icon name={micOn.value ? 'mic' : 'micOff'} size={18} />
       </button>
       <button class={'icon-btn' + (deafened.value ? ' off' : '')} onClick={toggleDeafen} title={deafened.value ? ts.soundOn : ts.soundOff} aria-label={ts.soundLabel} aria-pressed={deafened.value}>
         <Icon name={deafened.value ? 'headphonesOff' : 'headphones'} size={18} />
       </button>
+    </>
+  );
+  if (!c) {
+    const live = busiestRoom();
+    return (
+      <div class="capsule idle">
+        {live ? (
+          <button class="capsule-room" onClick={() => openRoom(live.room.id)} title={tx.peek(live.room.name)}>
+            <span class="dot idle" />
+            <span class="capsule-faces">
+              {live.members.slice(0, 3).map((id) => (
+                <Avatar key={id} id={id} size={20} />
+              ))}
+            </span>
+            <span class="ellipsis capsule-live">{live.room.name}</span>
+          </button>
+        ) : (
+          <span class="capsule-room capsule-quiet" title={tx.notInVoice}>
+            <span class="dot idle" />
+            <span class="ellipsis">{tx.quiet}</span>
+          </span>
+        )}
+        {toggles}
+      </div>
+    );
+  }
+  return (
+    <div class="capsule">
+      <button class="capsule-room" onClick={openVoice} title={tx.back}>
+        <span class={'dot ' + (c.status === 'connected' ? 'ok live' : 'wait')} />
+        <span class="ellipsis">{c.label}</span>
+      </button>
+      {toggles}
       <button class={'icon-btn' + (sharing.value ? ' accent' : '')} onClick={() => (sharing.value ? stopShare() : setPicker(true))} title={sharing.value ? tx.stopShare : tx.share} aria-label={sharing.value ? tx.stopShare : tx.share}>
         <Icon name="screen" size={18} />
       </button>
