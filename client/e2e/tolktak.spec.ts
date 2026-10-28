@@ -1,4 +1,4 @@
-import { expect, test, type WebSocketRoute } from '@playwright/test';
+import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 import { expectFlowing, groupIn, joinRoom, openClient, person, stats } from './helpers';
 import { loginToken, register, startStack, type Stack } from './stack';
 
@@ -24,6 +24,7 @@ test('DM: realtime delivery, unread badge, reply', async ({ browser }) => {
   await expect(bobItem.locator('.badge')).toHaveText('1');
   await bobItem.click();
   await expect(bob.locator('.msg-text', { hasText: 'Привет, Боб!' })).toBeVisible();
+  await expect(bob.locator('.new-divider')).toBeVisible();
   await expect(bobItem.locator('.badge')).toHaveCount(0);
   await bob.locator('.composer textarea').fill('Привет!');
   await bob.keyboard.press('Enter');
@@ -147,4 +148,91 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   await expect(carol.locator('.nav-sub')).toHaveCount(2);
 
   for (const p of [alice, bob, carol]) await p.context().close();
+});
+
+test('signing out leaves voice, also while the join request is in flight', async ({ browser }) => {
+  const token = await loginToken(stack.api, 'carol');
+  await fetch(stack.api + '/api/v1/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ name: 'Выход', members: [], room_name: 'Общая' }),
+  });
+  const logOut = async (p: Page) => {
+    await p.click('.self-id');
+    await p.locator('.self-menu button.danger-text').click();
+    await p.click('.modal .danger-btn');
+    await expect(p.locator('input[name=username]')).toBeVisible();
+  };
+
+  const inCall = await openClient(browser, stack, 'carol');
+  await joinRoom(inCall, 'Выход');
+  const left = inCall.waitForResponse('**/api/v1/voice/leave');
+  await logOut(inCall);
+  expect((await left).status(), 'the room must be left while the token is still valid').toBe(204);
+  await inCall.context().close();
+
+  const joining = await openClient(browser, stack, 'carol');
+  let joinSent!: () => void;
+  let releaseJoin!: () => void;
+  const sent = new Promise<void>((r) => (joinSent = r));
+  const released = new Promise<void>((r) => (releaseJoin = r));
+  await joining.route('**/api/v1/voice/join', async (route) => {
+    const res = await route.fetch();
+    joinSent();
+    await released;
+    await route.fulfill({ response: res });
+  });
+  await joining.locator('.rail-btn.group', { hasText: 'ВЫ' }).click();
+  await joining.locator('.room-join', { hasText: 'Общая' }).click();
+  await sent;
+  await logOut(joining);
+  releaseJoin();
+  await joining.waitForTimeout(3000);
+  expect(await joining.evaluate(() => (globalThis as any).__tolktak.room === null), 'no LiveKit room after signing out').toBe(true);
+  await joining.context().close();
+});
+
+test('message previews, the keyboard message menu and labels after midnight', async ({ browser }) => {
+  const alice = await loginToken(stack.api, 'alice');
+  const call = (path: string, body: unknown) =>
+    fetch(stack.api + '/api/v1' + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + alice },
+      body: JSON.stringify(body),
+    }).then((r) => r.json());
+  const { channel } = await call('/dms', { user_id: ids.carol });
+  await call(`/channels/${channel.id}/messages`, { text: 'Открой **config_file.py** и _снова_ проверь snake_case * 2', nonce: crypto.randomUUID() });
+
+  const ctx = await browser.newContext({ locale: 'ru-RU' });
+  const carol = await ctx.newPage();
+  const now = new Date();
+  await carol.clock.install({ time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 30) });
+  await carol.goto(stack.web);
+  await carol.fill('input[name=server]', stack.api);
+  await carol.fill('input[name=username]', 'carol');
+  await carol.fill('input[name=password]', 'password123');
+  await carol.click('button[type=submit]');
+  const aliceItem = carol.locator('.side-item', { hasText: 'Alice' });
+  await expect(aliceItem.locator('.side-item-sub')).toHaveText('Открой config_file.py и снова проверь snake_case * 2');
+
+  await aliceItem.click();
+  const msg = carol.locator('.msg', { hasText: 'snake_case' });
+  await msg.hover();
+  const more = msg.locator('.msg-actions button[aria-label="Ещё"]');
+  await more.focus();
+  await carol.keyboard.press('Enter');
+  const box = (await more.boundingBox())!;
+  const menu = (await carol.locator('.menu').boundingBox())!;
+  expect(Math.abs(menu.y - (box.y + box.height)), 'the menu opens under the button').toBeLessThan(box.height);
+  await carol.keyboard.press('Escape');
+  await expect(carol.locator('.menu')).toHaveCount(0);
+  await expect(more).toBeFocused();
+
+  const time = msg.locator('.msg-time');
+  await expect(time).not.toContainText('вчера');
+  await carol.clock.runFor(60_000);
+  // Before the socket's watchdog, now behind the clock, reconnects and redraws everything.
+  await expect(time).toContainText('вчера', { timeout: 2000 });
+  await expect(carol.locator('.day-divider', { hasText: 'Вчера' })).toBeVisible({ timeout: 2000 });
+  await ctx.close();
 });

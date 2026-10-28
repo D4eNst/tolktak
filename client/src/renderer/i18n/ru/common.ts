@@ -49,7 +49,7 @@ const ru: typeof en = {
     password: 'Пароль',
     signingIn: 'Входим…',
     signIn: 'Войти',
-    register: 'Нет аккаунта? Создать по приглашению',
+    register: 'Нет аккаунта? Регистрация на сайте сервера',
     showPassword: 'Показать пароль',
     hidePassword: 'Скрыть пароль',
     capsLock: 'Включён Caps Lock',

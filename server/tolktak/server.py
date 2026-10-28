@@ -16,8 +16,8 @@ from .updates import Updater
 log = logging.getLogger("tolktak")
 
 # Voice rooms map to LiveKit rooms named "g<group>r<room>" or "dm<channel>".
-_GROUP_ROOM = re.compile(r"g([0-9]+)r([0-9]+)")
-_DM_ROOM = re.compile(r"dm([0-9]+)")
+_GROUP_ROOM = re.compile(r"g([1-9][0-9]*)r([1-9][0-9]*)")
+_DM_ROOM = re.compile(r"dm([1-9][0-9]*)")
 
 
 def group_room_name(gid: int, rid: int) -> str:
@@ -61,11 +61,12 @@ class Server:
         parsed = parse_room_name(room)
         if parsed is None:
             return []
-        kind, a, _ = parsed
+        kind, a, b = parsed
         try:
             if kind == "dm":
                 return await chat.channel_members(a)
-            return (await groups.group_by_id(a))["members"]
+            g = await groups.group_by_id(a)
+            return g["members"] if any(r["id"] == b for r in g["rooms"]) else []
         except NotFound:
             return []
 

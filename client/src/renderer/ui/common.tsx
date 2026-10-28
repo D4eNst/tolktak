@@ -392,6 +392,7 @@ export function MenuHost() {
   const { ref, pos } = useClampedPosition(m?.x ?? 0, m?.y ?? 0, [m]);
   useEffect(() => {
     if (!m) return;
+    const opener = document.activeElement;
     ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus();
     const close = () => (menuState.value = null);
     const k = (e: KeyboardEvent) => {
@@ -409,6 +410,7 @@ export function MenuHost() {
       window.removeEventListener('blur', close);
       window.removeEventListener('keydown', k);
       window.removeEventListener('resize', close);
+      if (document.activeElement === document.body && opener instanceof HTMLElement) opener.focus();
     };
   }, [m]);
   if (!m) return null;
@@ -493,11 +495,15 @@ export const dateFormats = computed(() => {
   };
 });
 
+// Memoised message rows read it, so their labels change at midnight.
+const today = signal(new Date().toDateString());
+setInterval(() => (today.value = new Date().toDateString()), 60_000);
+
 export function timeLabel(ms: number) {
   const d = new Date(ms);
   const now = new Date();
   const hm = dateFormats.value.time.format(d);
-  if (d.toDateString() === now.toDateString()) return hm;
+  if (d.toDateString() === today.value) return hm;
   if (isYesterday(d, now)) return t().common.time.yesterdayAt(hm);
   return dateFormats.value.dayMonth.format(d) + ' ' + hm;
 }
@@ -505,7 +511,7 @@ export function timeLabel(ms: number) {
 export function dayLabel(ms: number) {
   const d = new Date(ms);
   const now = new Date();
-  if (d.toDateString() === now.toDateString()) return t().common.time.today;
+  if (d.toDateString() === today.value) return t().common.time.today;
   if (isYesterday(d, now)) return t().common.time.yesterday;
   return (d.getFullYear() === now.getFullYear() ? dateFormats.value.day : dateFormats.value.dayYear).format(d);
 }

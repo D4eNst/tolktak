@@ -110,7 +110,7 @@ function AvatarMenu() {
               class="danger-text"
               onClick={async () => {
                 close();
-                if (await confirmDialog(tx.logOutConfirm, { ok: tx.logOut, danger: true })) logout();
+                if (await confirmDialog(tx.logOutConfirm, { ok: tx.logOut, danger: true })) leaveVoice().finally(logout);
               }}
             >
               <Icon name="logout" size={16} /> {tx.logOut}

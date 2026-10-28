@@ -7,7 +7,7 @@ export const downloadCopy = {
     downloadFile: 'Скачать', recommended: 'Ваша система', sizeUnit: 'МБ',
     notes: {
       windows: 'Windows 10 и 11, x64. Установщик с выбором языка и папки.',
-      macos: 'Сборки для Apple Silicon и Intel.',
+      macos: 'Сборки для Apple Silicon и Intel. Приложение не заверено Apple, поэтому при первом запуске macOS его заблокирует: «Системные настройки» → «Конфиденциальность и безопасность» → «Все равно открыть».',
       linux: 'Сборки для x64. AppImage или пакет .deb для Debian, Ubuntu и совместимых дистрибутивов.',
     },
     macProcessor: 'Тип процессора указан в меню Apple → «Об этом Mac».',
@@ -57,7 +57,7 @@ export const downloadCopy = {
     downloadFile: 'Download', recommended: 'Your system', sizeUnit: 'MB',
     notes: {
       windows: 'Windows 10 and 11, x64. The installer includes language and install location options.',
-      macos: 'Builds for Apple Silicon and Intel.',
+      macos: 'Builds for Apple Silicon and Intel. The app is not notarized by Apple, so macOS blocks its first launch: System Settings → Privacy & Security → Open Anyway.',
       linux: 'Builds for x64. An AppImage or a .deb package for Debian, Ubuntu and compatible distributions.',
     },
     macProcessor: 'The processor type is listed in the Apple menu → About This Mac.',

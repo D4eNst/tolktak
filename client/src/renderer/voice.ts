@@ -200,6 +200,7 @@ export async function joinVoice(target: CallTarget, label: string, opts: { ringi
   }
   leaving = false;
   const { url, token, room: roomName } = await api().joinVoice(target);
+  if (!session.value) return;
   call.value = { room: roomName, label, target, status: opts.ringing ? 'ringing' : 'connecting' };
   bridge.setInCall(true);
   try {
@@ -296,7 +297,7 @@ export async function leaveVoice() {
   lastBytes.clear();
   if (c) {
     playTone('leave');
-    session.value?.api.leaveVoice(c.room).catch(() => {});
+    await session.value?.api.leaveVoice(c.room).catch(() => {});
   }
 }
 
@@ -426,8 +427,11 @@ async function rejoin() {
     if (call.value?.room !== c.room) break;
     try {
       const { url, token } = await api().joinVoice(c.target);
+      if (call.value?.room !== c.room) break;
       await room?.disconnect().catch(() => {});
       await connect(url, token, true);
+      if (call.value?.room !== c.room) break;
+      if (room?.state === ConnectionState.Disconnected) continue;
       toast(t().core.voice.rejoined);
       break;
     } catch {

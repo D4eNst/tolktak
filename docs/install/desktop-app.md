@@ -10,6 +10,8 @@
 
 [Download the app](https://tolktak.d4enst.ru/en/download/)
 
+The macOS app is not notarized by Apple, so macOS blocks it the first time it starts. Open System Settings → Privacy & Security, find the message about TolkTak and click Open Anyway. Repeat this after downloading a new version.
+
 ## Registration and sign-in
 
 1. Open the server address in a browser and create an account. If registration is invite-only, the operator will need to provide an invite code.

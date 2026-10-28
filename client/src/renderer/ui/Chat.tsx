@@ -389,7 +389,7 @@ const MessageRow = memo(function MessageRow({ m: live, fresh, grouped, canPin, c
       toast(errorText(e), 'error');
     }
   };
-  const menu = (e: MouseEvent) => {
+  const menu = (e: Parameters<typeof openMenu>[0]) => {
     if (m.deleted) return;
     const sel = window.getSelection()?.toString();
     const tm = t().chat.message;
@@ -486,7 +486,14 @@ const MessageRow = memo(function MessageRow({ m: live, fresh, grouped, canPin, c
               <Icon name="edit" size={18} />
             </button>
           )}
-          <button onClick={menu} title={t().chat.message.more} aria-label={t().chat.message.more}>
+          <button
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              menu(e.detail ? e : { clientX: r.left, clientY: r.bottom + 4 });
+            }}
+            title={t().chat.message.more}
+            aria-label={t().chat.message.more}
+          >
             <Icon name="more" size={18} />
           </button>
         </div>
@@ -538,8 +545,9 @@ function useRecorder(onDone: (blob: Blob) => void) {
   const start = async () => {
     if (starting.current) return;
     starting.current = true;
+    let stream: MediaStream | undefined;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       if (!alive.current) return stream.getTracks().forEach((track) => track.stop());
       const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 48000 });
       const chunks: Blob[] = [];
@@ -561,7 +569,7 @@ function useRecorder(onDone: (blob: Blob) => void) {
       mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
       mr.onstop = () => {
         cancelAnimationFrame(st.raf);
-        stream.getTracks().forEach((track) => track.stop());
+        st.stream.getTracks().forEach((track) => track.stop());
         ctx.close();
         setRec(null);
         ref.current = null;
@@ -570,6 +578,7 @@ function useRecorder(onDone: (blob: Blob) => void) {
       };
       mr.start(250);
     } catch (e) {
+      stream?.getTracks().forEach((track) => track.stop());
       toast(t().chat.composer.micUnavailable(errorText(e)), 'error');
     } finally {
       starting.current = false;
@@ -1267,7 +1276,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
                       <span>{dayLabel(m.created_at)}</span>
                     </div>
                   )}
-                  {!m.deleted && before && before.id <= readMark && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
+                  {!m.deleted && (before ? before.id <= readMark : !cm?.hasOlder) && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
                   <RowBoundary>
                     <MessageRow m={m} fresh={m.created_at > openedAt} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} editing={editing === m.id} setEditing={setEditing} />
                   </RowBoundary>
