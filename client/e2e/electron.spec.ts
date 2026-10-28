@@ -2,7 +2,7 @@ import { _electron as electron, expect, test } from '@playwright/test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { expectFlowing, joinRoom } from './helpers';
+import { expectFlowing, joinRoom, mainWindow } from './helpers';
 import { loginToken, register, startStack, type Stack } from './stack';
 
 let stack: Stack;
@@ -27,7 +27,7 @@ test('Electron client: login, voice, window share via own picker, H.264', async 
       args: [path.join(__dirname, '..'), '--no-sandbox', '--lang=ru', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--no-proxy-server'],
       env: { ...process.env, TOLKTAK_USER_DATA: mkdtempSync(path.join(tmpdir(), 'tt-electron-')) } as Record<string, string>,
     });
-    const w = await app.firstWindow();
+    const w = await mainWindow(app);
     await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
     w.on('console', (m) => m.type() === 'error' && console.log(`[electron ${user}]`, m.text()));
     // Both windows share one desktop, and the one without focus would hide video to save power.
@@ -49,16 +49,16 @@ test('Electron client: login, voice, window share via own picker, H.264', async 
   await expectFlowing(bob, ids.alice, 'microphone', 20);
 
   await bob.click('button[aria-label="Камера"]');
+  await bob.click('.modal button.primary');
   await expect(win.locator('.tile video')).toHaveCount(1);
-  await win.click('button[aria-label="Демонстрация"]');
+  await win.click('.capsule button[aria-label="Показать экран"]');
   await win.click('.tabs button:has-text("Экраны")');
   await expect(win.locator('.source').first()).toBeVisible();
   const n = await win.locator('.source').count();
   await win.locator('.source').first().click();
   await win.locator('.share-options input[type=checkbox]').first().uncheck(); // no audio capture on Linux
   await win.click('.modal button.primary');
-  await expect(win.locator('.stream-card')).toHaveCount(1);
-  await bob.locator('.stream-card').click();
+  await expect(bob.locator('.theater')).toBeVisible();
   await expectFlowing(bob, ids.alice, 'screen_share', 40);
   const series: string[] = [];
   for (let i = 0; i < 12; i++) {

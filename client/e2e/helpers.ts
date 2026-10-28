@@ -1,10 +1,18 @@
-import { expect, type Browser, type Page } from '@playwright/test';
+import { expect, type Browser, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'node:path';
 import type { Stack } from './stack';
+
+/** The desktop app's main window: the launch window opens before it. */
+export async function mainWindow(app: ElectronApplication) {
+  let w: Page | undefined;
+  await expect.poll(() => (w = app.windows().find((x) => x.url().endsWith('/index.html')))).toBeTruthy();
+  return w!;
+}
 
 export async function openClient(browser: Browser, stack: Stack, username: string, password = 'password123'): Promise<Page> {
   const ctx = await browser.newContext({ locale: 'ru-RU', permissions: ['microphone', 'camera'] });
   await ctx.addInitScript({ path: path.join(__dirname, 'fake-display.js') });
+  await ctx.addInitScript(() => localStorage.setItem('tolktak.tour', '1'));
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${username} pageerror]`, e.message));
   page.on('console', (m) => m.type() === 'error' && console.log(`[${username} console]`, m.text()));

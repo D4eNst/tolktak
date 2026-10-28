@@ -122,7 +122,7 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   test.info().annotations.push({ type: 'audio', description: JSON.stringify({ a2b, b2a }) });
 
   // No process loopback in a browser: opt in.
-  await alice.click('button[aria-label="Демонстрация"]');
+  await alice.click('.capsule button[aria-label="Показать экран"]');
   await alice.locator('.warn-box input[type=checkbox]').check();
   await alice.click('.modal button.primary');
   // One stream: everyone sees it big, with its sound («Крупно» by default).
@@ -141,7 +141,7 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   await expectFlowing(carol, ids.alice, 'screen_share', 40);
   await expectFlowing(carol, ids.alice, 'screen_share_audio', 50);
 
-  await alice.click('button[aria-label="Выйти из комнаты"]');
+  await alice.click('.capsule button[aria-label="Выйти из голоса"]');
   await expect(bob.locator('.theater')).toHaveCount(0);
   await expect(bob.locator('.tile')).toHaveCount(2);
   await expectFlowing(bob, ids.carol, 'microphone', 20);
@@ -158,7 +158,7 @@ test('signing out leaves voice, also while the join request is in flight', async
     body: JSON.stringify({ name: 'Выход', members: [], room_name: 'Общая' }),
   });
   const logOut = async (p: Page) => {
-    await p.click('.self-id');
+    await p.click('.topbar-avatar');
     await p.locator('.self-menu button.danger-text').click();
     await p.click('.modal .danger-btn');
     await expect(p.locator('input[name=username]')).toBeVisible();
@@ -182,8 +182,9 @@ test('signing out leaves voice, also while the join request is in flight', async
     await released;
     await route.fulfill({ response: res });
   });
-  await joining.locator('.rail-btn.group', { hasText: 'ВЫ' }).click();
-  await joining.locator('.room-join', { hasText: 'Общая' }).click();
+  await joining.locator('.nav-tabs button', { hasText: 'Группы' }).click();
+  await groupIn(joining, 'Выход').click();
+  await joining.locator('.nav-row', { hasText: 'Общая' }).click();
   await sent;
   await logOut(joining);
   releaseJoin();
@@ -212,8 +213,8 @@ test('message previews, the keyboard message menu and labels after midnight', as
   await carol.fill('input[name=username]', 'carol');
   await carol.fill('input[name=password]', 'password123');
   await carol.click('button[type=submit]');
-  const aliceItem = carol.locator('.side-item', { hasText: 'Alice' });
-  await expect(aliceItem.locator('.side-item-sub')).toHaveText('Открой config_file.py и снова проверь snake_case * 2');
+  const aliceItem = await person(carol, 'Alice');
+  await expect(aliceItem.locator('.nav-person-sub')).toHaveText('Открой config_file.py и снова проверь snake_case * 2');
 
   await aliceItem.click();
   const msg = carol.locator('.msg', { hasText: 'snake_case' });

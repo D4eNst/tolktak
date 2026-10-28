@@ -23,7 +23,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => stack?.stop());
 
 async function share(p: Page, opts: { switching?: boolean } = {}) {
-  await p.click('button[aria-label="Демонстрация"]');
+  await p.click('.capsule button[aria-label="Показать экран"]');
   await p.locator('.warn-box input[type=checkbox]').check();
   await p.click('.modal button.primary');
   await expect(p.locator('.modal')).toHaveCount(0);
@@ -54,7 +54,7 @@ test('toggles, source switch, two parallel streams', async ({ browser }) => {
   await share(alice);
   await expect(carol.locator('.theater')).toBeVisible();
   await expectFlowing(carol, ids.alice, 'screen_share', 40);
-  await alice.click('button[aria-label="Демонстрация"]');
+  await alice.click('.call-controls button[aria-label="Демонстрация"]');
   await expect(alice.locator('.modal h2')).toHaveText('Сменить источник');
   await alice.locator('.warn-box input[type=checkbox]').check();
   await alice.click('.modal button.primary');
