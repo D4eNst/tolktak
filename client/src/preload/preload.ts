@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('tolktak', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke('settings:set', patch),
   appInfo: () => ipcRenderer.invoke('app:info'),
+  ready: () => ipcRenderer.invoke('app:ready'),
+  windowColors: (c: { app: string; island: string; symbol: string }) => ipcRenderer.invoke('app:colors', c),
   captureSources: () => ipcRenderer.invoke('capture:sources'),
   selectCapture: (choice: { id: string; audio: string }) => ipcRenderer.invoke('capture:select', choice),
   lastCaptureAudio: () => ipcRenderer.invoke('capture:lastAudio'),

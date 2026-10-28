@@ -173,6 +173,20 @@ function installDisplayMediaHandler() {
   });
 }
 
+function toBrowser(url: string) {
+  if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+  return { action: 'deny' as const };
+}
+
+let revealMain = () => {};
+let colors = { app: '#0b1327', island: '#131d37', symbol: '#97a3c5' };
+const popped = new Set<BrowserWindow>();
+
+function paintWindow(w: BrowserWindow, bg: string) {
+  w.setBackgroundColor(bg);
+  if (process.platform !== 'darwin') w.setTitleBarOverlay({ color: bg, symbolColor: colors.symbol });
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
@@ -198,10 +212,15 @@ function createWindow() {
     },
   });
   win.removeMenu();
-  win.once('ready-to-show', () => {
+  // The launch window stays until the page has drawn the desk or the sign-in, not just loaded.
+  let revealed = false;
+  revealMain = () => {
+    if (revealed) return;
+    revealed = true;
     if (!process.argv.includes('--hidden')) win?.show();
     closeLaunchWindow();
-  });
+  };
+  win.once('ready-to-show', () => setTimeout(() => revealMain(), 15_000));
   win.loadFile(path.join(__dirname, 'index.html'));
 
   win.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -213,18 +232,24 @@ function createWindow() {
         overrideBrowserWindowOptions: {
           minWidth: 320,
           minHeight: 240,
-          backgroundColor: '#0b1327',
+          backgroundColor: colors.island,
           autoHideMenuBar: true,
           icon: path.join(__dirname, 'assets', 'icon.png'),
           // No title bar of its own: the window's head is the bar, as in the main window.
           titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
           ...(process.platform === 'darwin'
             ? { trafficLightPosition: { x: 14, y: 15 } }
-            : { titleBarOverlay: { color: '#131d37', symbolColor: '#97a3c5', height: 46 } }),
+            : { titleBarOverlay: { color: colors.island, symbolColor: colors.symbol, height: 46 } }),
         },
       };
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
-    return { action: 'deny' };
+    return toBrowser(url);
+  });
+  // Popped-out windows show the same chats, so their links leave for the browser too.
+  win.webContents.on('did-create-window', (child) => {
+    popped.add(child);
+    child.on('closed', () => popped.delete(child));
+    child.webContents.on('will-navigate', (e) => e.preventDefault());
+    child.webContents.setWindowOpenHandler(({ url }) => toBrowser(url));
   });
   win.on('close', (e) => {
     if (!quitting && (process.platform === 'darwin' || settings.minimizeToTray !== false)) {
@@ -305,6 +330,13 @@ function installIpc() {
   // fetch() cannot read large assets from file://.
   const assets = new Set(['dfn/df_bg.wasm', 'dfn/model.tar.gz']);
   handle('asset:read', (name: string) => (assets.has(name) ? readFileSync(path.join(__dirname, 'assets', name)) : null));
+  handle('app:ready', () => revealMain());
+  handle('app:colors', (c: typeof colors) => {
+    if (![c?.app, c?.island, c?.symbol].every((x) => typeof x === 'string' && /^#[0-9a-f]{6}$/i.test(x))) return;
+    colors = { app: c.app, island: c.island, symbol: c.symbol };
+    if (win) paintWindow(win, colors.app);
+    popped.forEach((w) => paintWindow(w, colors.island));
+  });
   handle('app:info', () => ({
     version: app.getVersion(),
     platform: process.platform,

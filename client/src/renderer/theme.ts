@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals';
+import { bridge } from './bridge';
 
 export const THEMES = [
   { id: 'petrol', light: false },
@@ -84,6 +85,18 @@ export function paint(doc: Document) {
   root.setAttribute('data-theme', t.id);
   for (const k of CUSTOM_KEYS) root.style.removeProperty(k);
   if (t.id === 'custom') for (const [k, v] of Object.entries(customVars(t.custom))) root.style.setProperty(k, v);
+  if (doc === document) bridge.windowColors({ app: resolve('--bg-app'), island: resolve('--bg-island'), symbol: resolve('--muted') }).catch(() => {});
+}
+
+/** A token as #rrggbb, the form the window's own title bar takes. */
+function resolve(token: string) {
+  const el = document.createElement('i');
+  el.style.color = `var(${token})`;
+  document.documentElement.append(el);
+  const ctx = document.createElement('canvas').getContext('2d')!;
+  ctx.fillStyle = getComputedStyle(el).color;
+  el.remove();
+  return ctx.fillStyle;
 }
 
 export function setTheme(patch: Partial<Saved>) {

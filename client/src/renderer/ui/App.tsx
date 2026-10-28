@@ -119,6 +119,12 @@ export function App() {
     };
   }, []);
 
+  const ready = !booting.value;
+  useEffect(() => {
+    // A timer, not a frame: the main window is still hidden, and hidden windows get no frames.
+    if (ready) setTimeout(() => bridge.ready(), 50);
+  }, [ready]);
+
   const unread = totalUnread.value;
   useEffect(() => {
     bridge.setBadge(unread, unread ? badgeImage(unread) : '').catch(() => {});

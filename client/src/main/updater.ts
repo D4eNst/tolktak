@@ -41,10 +41,11 @@ export function installUpdater(getWindow: () => BrowserWindow | null) {
   });
 }
 
-/** Resolves when the main window may open. Never resolves when the app quits to install. */
+/** Resolves when the main window may open; the launch window stays until it is drawn. Never resolves when the app quits to install. */
 export async function checkBeforeLaunch(server: string, hidden: boolean) {
-  if (!enabled || !server || hidden) return;
+  if (hidden) return;
   const from = app.getVersion();
+  if (!enabled || !server) return show({ kind: 'start', from });
   show({ kind: 'check', from });
   const s = await fetchServerVersion(server);
   if (!s) {

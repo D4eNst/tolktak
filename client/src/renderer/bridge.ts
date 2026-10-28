@@ -27,6 +27,8 @@ type Bridge = {
   getSettings(): Promise<DesktopSettings>;
   setSettings(patch: Partial<DesktopSettings>): Promise<boolean>;
   appInfo(): Promise<AppInfo>;
+  ready(): Promise<void>;
+  windowColors(c: { app: string; island: string; symbol: string }): Promise<void>;
   captureSources(): Promise<CaptureSource[]>;
   selectCapture(choice: { id: string; audio: AudioMode }): Promise<boolean>;
   lastCaptureAudio(): Promise<{ device: string; pid?: number; exe?: string } | null>;
@@ -75,6 +77,8 @@ const browserFallback: Bridge = {
     }
     return true;
   },
+  async ready() {},
+  async windowColors() {},
   async appInfo() {
     return { version: 'web', platform: 'web', windowsBuild: 0, processLoopback: false };
   },
