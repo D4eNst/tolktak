@@ -89,7 +89,7 @@ export function messagePreview(m: { text: string; deleted?: boolean; attachments
   const text = unmark(
     m.text
       .replace(/```[\s\S]*?```/g, p.code)
-      .replace(/\|\|[\s\S]+?\|\|/g, '▒▒▒')
+      .replace(/\|\|[\s\S]+?\|\|/g, p.spoiler)
       .replace(/^(?:>\s?)+/gm, ''),
   )
     .replace(/\s+/g, ' ')

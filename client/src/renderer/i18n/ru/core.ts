@@ -5,6 +5,7 @@ const ru: typeof en = {
     deleted: 'сообщение удалено',
     sticker: 'Стикер',
     code: '[код]',
+    spoiler: '[спойлер]',
     photo: 'Фото',
     photos: (n) => `Фото (${n})`,
     voiceMessage: 'Голосовое сообщение',

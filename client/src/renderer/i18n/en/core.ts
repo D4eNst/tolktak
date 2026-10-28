@@ -3,6 +3,7 @@ export default {
     deleted: 'message deleted',
     sticker: 'Sticker',
     code: '[code]',
+    spoiler: '[spoiler]',
     photo: 'Photo',
     photos: (n: number) => `Photos (${n})`,
     voiceMessage: 'Voice message',
