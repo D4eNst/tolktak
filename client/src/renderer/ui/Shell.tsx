@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import { cmd } from '../keys';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Group, Room, TextChannel } from '../api';
 import { platform } from '../bridge';
 import { t } from '../i18n';
@@ -55,6 +55,21 @@ function VoiceCapsule() {
   const [picker, setPicker] = useState(false);
   const tx = t().desk.voice;
   const ts = t().shell.self;
+  const box = useRef<HTMLDivElement>(null);
+  const last = useRef({ width: 0, inCall: !!c });
+  const grow = useRef<Animation | null>(null);
+  useLayoutEffect(() => {
+    const el = box.current!;
+    const prev = last.current;
+    const running = grow.current?.playState === 'running';
+    const from = running ? el.getBoundingClientRect().width : prev.width;
+    grow.current?.cancel();
+    last.current = { width: el.offsetWidth, inCall: !!c };
+    if ((!running && prev.inCall === !!c) || !from || from === last.current.width || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    el.style.overflow = 'hidden';
+    grow.current = el.animate([{ width: from + 'px' }, { width: last.current.width + 'px' }], { duration: 260, easing: 'ease-out' });
+    grow.current.onfinish = () => (el.style.overflow = '');
+  });
   const toggles = (
     <>
       <button class={'icon-btn' + (micOn.value ? '' : ' off')} onClick={toggleMic} title={micOn.value ? ts.micOff : ts.micOn} aria-label={ts.micLabel} aria-pressed={!micOn.value}>
@@ -67,13 +82,13 @@ function VoiceCapsule() {
   );
   if (!c)
     return (
-      <div class="capsule">
+      <div class="capsule" ref={box}>
         <span class="dot idle" />
         {toggles}
       </div>
     );
   return (
-    <div class="capsule">
+    <div class="capsule" ref={box}>
       <button class="capsule-room" onClick={openVoice} title={tx.back}>
         <span class={'dot ' + (c.status === 'connected' ? 'ok live' : 'wait')} />
         <span class="ellipsis">{c.label}</span>
