@@ -3,9 +3,6 @@ import type en from '../en/desk';
 const ru: typeof en = {
   search: 'Найти или открыть',
   voice: {
-    notInVoice: 'Не в голосе',
-    quiet: 'Тихо',
-    peek: (room: string) => `Сейчас говорят в «${room}»`,
     back: 'Вернуться в разговор',
     share: 'Показать экран',
     stopShare: 'Остановить показ',

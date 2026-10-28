@@ -50,16 +50,6 @@ const dragChat = (cid: number) => (e: DragEvent) => e.dataTransfer?.setData(CHAT
 
 // ---------- top bar ----------
 
-function busiestRoom() {
-  let best: { room: Room; members: number[] } | null = null;
-  for (const g of groups.value.values())
-    for (const r of g.rooms) {
-      const m = voiceRooms.value.get(roomKey(r)) ?? [];
-      if (m.length > (best?.members.length ?? 0)) best = { room: r, members: m.map((x) => x.user_id) };
-    }
-  return best;
-}
-
 function VoiceCapsule() {
   const c = call.value;
   const [picker, setPicker] = useState(false);
@@ -75,30 +65,13 @@ function VoiceCapsule() {
       </button>
     </>
   );
-  if (!c) {
-    const live = busiestRoom();
+  if (!c)
     return (
-      <div class="capsule idle">
-        {live ? (
-          <button class="capsule-room" onClick={() => openRoom(live.room.id)} title={tx.peek(live.room.name)}>
-            <span class="dot idle" />
-            <span class="capsule-faces">
-              {live.members.slice(0, 3).map((id) => (
-                <Avatar key={id} id={id} size={20} />
-              ))}
-            </span>
-            <span class="ellipsis capsule-live">{live.room.name}</span>
-          </button>
-        ) : (
-          <span class="capsule-room capsule-quiet" title={tx.notInVoice}>
-            <span class="dot idle" />
-            <span class="ellipsis">{tx.quiet}</span>
-          </span>
-        )}
+      <div class="capsule">
+        <span class="dot idle" />
         {toggles}
       </div>
     );
-  }
   return (
     <div class="capsule">
       <button class="capsule-room" onClick={openVoice} title={tx.back}>

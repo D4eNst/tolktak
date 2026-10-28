@@ -383,6 +383,7 @@ code {
   animation: breathe 2.8s ease-in-out infinite;
 }
 .dot.idle {
+  margin-right: 8px;
   background: var(--muted);
   opacity: 0.6;
 }
@@ -699,24 +700,6 @@ code {
 }
 .capsule-room:hover .ellipsis {
   text-decoration: underline;
-}
-.capsule.idle .capsule-room {
-  width: 204px;
-}
-.capsule-quiet {
-  color: var(--muted);
-  font-weight: 500;
-}
-.capsule-live {
-  color: var(--muted);
-  font-weight: 500;
-}
-.capsule-faces {
-  display: flex;
-  flex: none;
-}
-.capsule-faces > * + * {
-  margin-left: -6px;
 }
 .capsule .icon-btn {
   color: var(--text);
