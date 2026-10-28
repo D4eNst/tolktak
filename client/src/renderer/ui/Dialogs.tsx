@@ -3,6 +3,7 @@ import type { Group } from '../api';
 import { locale, t } from '../i18n';
 import { api, channels, errorText, go, groups, incomingCall, me, online, settingsOpen, switcherOpen, toast, userName, users } from '../state';
 import { call, leaveVoice, micOn, ringing, toggleMic } from '../voice';
+import { keyLabel } from '../keys';
 import { callPerson, confirmReset, enterRoom, openBeside, openPerson, openRoom, openVoice } from './desk';
 import { callPeopleOpen } from './Stage';
 import { toggleNav } from './Shell';
@@ -191,7 +192,7 @@ export function QuickSwitcher() {
       <div class="switcher" role="dialog" aria-label={ts.label}>
         <input
           autoFocus
-          placeholder={ts.placeholder}
+          placeholder={ts.placeholder(keyLabel('Mod Enter'))}
           value={q}
           onInput={(e) => setQ((e.target as HTMLInputElement).value)}
           onKeyDown={(e) => {

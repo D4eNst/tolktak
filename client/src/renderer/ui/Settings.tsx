@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { bridge, isDesktop, platform, type AppInfo, type DesktopSettings, type Hotkeys, type MediaAccess, type MediaKind } from '../bridge';
-import { accelFromEvent, accelFromMouse, accelLabel, hotkeys, hotkeysAreGlobal, setHotkey } from '../keys';
+import { accelFromEvent, accelFromMouse, accelLabel, hotkeys, hotkeysAreGlobal, keyLabel, setHotkey } from '../keys';
 import { api, errorText, logout, me, notificationsOn, serverUpdate, session, setNotifications, settingsOpen, type SettingsTab, toast } from '../state';
 import type { ChainStats, Denoise, VoiceChain } from '../audio/chain';
 import { call, micOn, toggleMic, chainSettings, createVoiceChain, micConstraints, micGain, micLevel, playTone, prefs, restartCamera, restartMic, setPrefs, switchDevices, applyGate, cameraOn } from '../voice';
@@ -613,21 +613,30 @@ export function SettingsDialog() {
               {isDesktop && <KeyCapture name="window" label={tx.keys.window} />}
               <h3 class="section-title">{tx.keys.inApp}</h3>
               <div class="shortcut-list">
-                <div>
-                  <span>{tx.keys.quickSwitcher}</span>
-                  <kbd>Ctrl K</kbd>
-                </div>
-                <div>
-                  <span>{tx.keys.callMic}</span>
-                  <kbd>Ctrl Shift M</kbd>
-                </div>
+                {(
+                  [
+                    [tx.keys.quickSwitcher, 'Mod K'],
+                    [tx.keys.callMic, 'Mod Shift M'],
+                    [tx.keys.back, platform === 'darwin' ? 'Mod [ · Mod ]' : 'Alt ← · Alt →'],
+                    [tx.keys.nextWindow, 'F6'],
+                    [tx.keys.moveWindow, platform === 'darwin' ? 'Mod Alt ←↑→↓' : 'Alt Shift ←↑→↓'],
+                    [tx.keys.closeTab, 'Ctrl W'],
+                    [tx.keys.foldNav, 'Mod \\'],
+                    [tx.keys.roomView, 'F'],
+                  ] as const
+                ).map(([label, keys]) => (
+                  <div key={label}>
+                    <span>{label}</span>
+                    <kbd>{keyLabel(keys)}</kbd>
+                  </div>
+                ))}
                 <div>
                   <span>{tx.keys.editLast}</span>
                   <kbd>↑</kbd>
                 </div>
                 <div>
                   <span>{tx.keys.formatting}</span>
-                  <kbd>Ctrl B</kbd> <kbd>Ctrl I</kbd> <kbd>Ctrl Shift X</kbd>
+                  <kbd>{keyLabel('Mod B')}</kbd> <kbd>{keyLabel('Mod I')}</kbd> <kbd>{keyLabel('Mod Shift X')}</kbd>
                 </div>
                 <div>
                   <span>{tx.keys.newLine}</span>

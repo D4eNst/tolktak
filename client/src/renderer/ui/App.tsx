@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { bridge } from '../bridge';
 import { t } from '../i18n';
-import { installHotkeys, loadHotkeys } from '../keys';
+import { installHotkeys, loadHotkeys, cmd } from '../keys';
 import { boot, booting, incomingCall, session, settingsOpen, switcherOpen, toasts, totalUnread, typing } from '../state';
 import { call, toggleMic } from '../voice';
 import { LightboxHost } from './Chat';
@@ -89,11 +89,11 @@ export function App() {
     const offKeys = installHotkeys();
     const keys = (e: KeyboardEvent) => {
       if (!session.value) return;
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+      if (cmd(e) && !e.shiftKey && e.code === 'KeyK') {
         e.preventDefault();
         switcherOpen.value = !switcherOpen.value;
       }
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyM' && call.value) {
+      if (cmd(e) && e.shiftKey && e.code === 'KeyM' && call.value) {
         e.preventDefault();
         toggleMic();
       }

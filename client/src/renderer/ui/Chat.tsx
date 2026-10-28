@@ -4,6 +4,7 @@ import { memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { ApiError, type FileMeta, type Message } from '../api';
 import { bridge } from '../bridge';
+import { cmd } from '../keys';
 import { t } from '../i18n';
 import {
   api,
@@ -838,13 +839,13 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
             } else if (e.key === 'ArrowUp' && !text && !edit) {
               e.preventDefault();
               onEditLast();
-            } else if (e.ctrlKey && !e.shiftKey && e.code === 'KeyB') {
+            } else if (cmd(e) && !e.shiftKey && e.code === 'KeyB') {
               e.preventDefault();
               wrapSelection(e.currentTarget, '**', setText);
-            } else if (e.ctrlKey && !e.shiftKey && e.code === 'KeyI') {
+            } else if (cmd(e) && !e.shiftKey && e.code === 'KeyI') {
               e.preventDefault();
               wrapSelection(e.currentTarget, '*', setText);
-            } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyX') {
+            } else if (cmd(e) && e.shiftKey && e.code === 'KeyX') {
               e.preventDefault();
               wrapSelection(e.currentTarget, '~~', setText);
             }

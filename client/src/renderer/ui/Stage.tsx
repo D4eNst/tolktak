@@ -495,6 +495,7 @@ export function CallPeople() {
   };
   return (
     <div class="call-people">
+      {self && row(self)}
       <div class="cp-head">
         <div class="cp-search">
           <Icon name="search" size={15} />
@@ -506,7 +507,6 @@ export function CallPeople() {
           )}
         </div>
       </div>
-      {self && row(self)}
       <div class="cp-sec">{tr.inCall(peers.value.length - 1)}</div>
       {others.map(row)}
       {query && !others.length && <div class="muted small cp-empty">{t().desk.nav.noMatch}</div>}

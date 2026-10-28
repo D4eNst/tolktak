@@ -46,7 +46,6 @@ export default {
     unpin: 'Stop keeping',
     toEdge: 'Hide behind the edge',
     edge: 'Windows behind the edge',
-    keyMove: 'Move with the keyboard',
     ownWindow: 'Open in its own window',
     backToDesk: 'Back to the desk',
     popOut: 'Open as a window beside',
@@ -72,10 +71,6 @@ export default {
     reset: 'Reset window changes',
   },
   hints: {
-    plainTabs: {
-      text: 'Only a window without tabs can drop its capsule',
-      more: 'A window with several tabs needs its capsule to show them. Move the extra tabs out, or close them, and try again.',
-    },
     folded: {
       text: 'Not enough room: a window became a tab',
       more: 'Windows cannot get narrower than their minimum (a call 420, a chat 320). When they do not all fit, the right ones become tabs of their neighbour. Widen the app or narrow the navigator and they spread out again by themselves.',
@@ -87,10 +82,6 @@ export default {
     shelf: {
       text: 'The window is minimised below',
       more: 'Minimised windows wait at the bottom. Click one to put it back.',
-    },
-    keyMove: {
-      text: 'Alt+Shift+arrows move the window',
-      more: 'The window in focus joins its neighbour that way as a tab. With no neighbour there and tabs in its frame, the tab splits off that way. F6 goes through the windows in turn.',
     },
     floating: {
       text: 'The window is detached',

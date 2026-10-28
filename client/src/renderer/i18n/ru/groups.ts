@@ -55,7 +55,7 @@ const ru: typeof en = {
   },
   switcher: {
     label: 'Быстрый переход',
-    placeholder: 'Люди, группы, каналы, комнаты или действие. Ctrl+Enter — открыть рядом',
+    placeholder: (beside: string) => `Люди, группы, каналы, комнаты или действие. ${beside} — открыть рядом`,
     group: 'группа',
     channel: (group) => `канал · ${group}`,
     voice: (group) => `голосовая · ${group}`,

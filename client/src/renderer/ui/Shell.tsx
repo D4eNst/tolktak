@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals';
+import { cmd } from '../keys';
 import { useEffect, useState } from 'preact/hooks';
 import type { Group, Room, TextChannel } from '../api';
 import { platform } from '../bridge';
@@ -544,7 +545,7 @@ export function Shell() {
   useEffect(() => {
     navFolded.value = !!loadDesk().navFolded;
     const keys = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === '\\') {
+      if (cmd(e) && !e.altKey && e.code === 'Backslash') {
         e.preventDefault();
         toggleNav();
       }

@@ -389,6 +389,8 @@ type Saved = {
   shelf?: string[];
   /** Where windows put on the shelf from floating were floating. */
   shelfFloat?: Record<string, Rect>;
+  /** Windows put on the shelf from behind the edge, to go back there. */
+  shelfEdge?: string[];
   opacity?: Record<string, number>;
   /** Windows drawn as one card, their title inside instead of a capsule above, only while alone in their frame: chosen by hand either way; the rest follow the default. */
   plain?: string[];
@@ -498,9 +500,13 @@ const capsule = signal<string[]>([]);
 const layoutTick = signal(0);
 /** By default the voice window and windows below the top row carry their title inside. */
 function isPlain(group: DockviewGroupPanel, id: string) {
-  if (group.panels.length !== 1 || group.api.location.type !== 'grid') return false;
-  if (plain.value.includes(id)) return true;
-  if (capsule.value.includes(id)) return false;
+  // Behind the edge a window is one card, glued to its title.
+  if (edge.value.includes(id)) return true;
+  if (group.api.location.type !== 'grid') return false;
+  // Chosen for one of its tabs: the frame follows it.
+  const ids = group.panels.map((p) => p.id);
+  if (ids.some((x) => plain.value.includes(x))) return true;
+  if (ids.some((x) => capsule.value.includes(x))) return false;
   void layoutTick.value;
   return id === 'voice' || id.startsWith('room:') || group.element.getBoundingClientRect().top - host!.getBoundingClientRect().top > 8;
 }
@@ -540,6 +546,9 @@ function restore(j: SerializedDockview) {
 
 function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOptions, size: { width?: number; height?: number } = { width: 360 }) {
   const { w } = parseId(id);
+  // A floating window takes no tabs and no neighbours: next to it means the edge of the grid.
+  const ref = position && typeof position !== 'string' && ('referencePanel' in position ? dock!.getPanel(String(typeof position.referencePanel === 'string' ? position.referencePanel : position.referencePanel.id))?.group : 'referenceGroup' in position ? position.referenceGroup : undefined);
+  if (ref && typeof ref !== 'string' && ref.api.location.type !== 'grid') position = 'right';
   return dock!.addPanel({
     id,
     component: id.split(':')[0],
@@ -726,7 +735,7 @@ function PopWindow({ id }: { id: string }) {
   const label = t().desk.menu.backToDesk;
   return (
     <div class="popout-win">
-      <div class="popout-head">
+      <div class={'popout-head ' + platform}>
         <div class="win-head">
           <w.Head arg={arg} />
         </div>
@@ -922,8 +931,8 @@ export function openBeside(cid: number) {
 }
 function shelve(id: string) {
   const g = dock?.getPanel(id)?.group;
-  const rect = g?.api.location.type === 'floating' ? floatRect(g) : undefined;
-  saveDesk({ shelfFloat: { ...loadDesk().shelfFloat, [id]: rect! } });
+  const rect = g?.api.location.type === 'floating' && !edge.value.includes(id) ? floatRect(g) : undefined;
+  saveDesk({ shelfFloat: { ...loadDesk().shelfFloat, [id]: rect! }, shelfEdge: [...(loadDesk().shelfEdge ?? []).filter((x) => x !== id), ...(edge.value.includes(id) ? [id] : [])] });
   setShelf([...shelf.value.filter((x) => x !== id), id]);
   dock?.getPanel(id)?.api.close();
   hint('shelf', 2);
@@ -933,7 +942,12 @@ function unshelve(id: string) {
   bringForward(id);
   const rect = loadDesk().shelfFloat?.[id];
   const p = dock?.getPanel(id);
-  if (rect && p) dock!.addFloatingGroup(p, rect);
+  const edged = loadDesk().shelfEdge ?? [];
+  if (p && edged.includes(id)) {
+    saveDesk({ shelfEdge: edged.filter((x) => x !== id) });
+    toEdge(p);
+    edgeOpen.value = id;
+  } else if (rect && p) dock!.addFloatingGroup(p, rect);
 }
 // ---------- behind the edge ----------
 
@@ -952,6 +966,13 @@ function toEdge(p: IDockviewPanel) {
   edgeOpen.value = null;
   fit(true);
 }
+/** Out from behind the edge into an ordinary floating window, where it stood. */
+function fromEdge(p: IDockviewPanel) {
+  setEdge(edge.value.filter((x) => x !== p.id));
+  const box = p.group.element.closest<HTMLElement>('.dv-resize-container');
+  box?.classList.remove('edge-win', 'edge-shut');
+  hint('floating', 2);
+}
 function placeEdges() {
   if (!dock || !host) return;
   // Docked back or closed: no longer behind the edge.
@@ -962,8 +983,8 @@ function placeEdges() {
     const box = dock.getPanel(id)!.group.element.closest<HTMLElement>('.dv-resize-container');
     if (!box) continue;
     // Left of the strip of tabs, so a tab stays clickable while its window is out.
-    const w = Math.min(box.offsetWidth || EDGE_WIDTH, W - 90);
-    Object.assign(box.style, { top: '0px', left: W - w - 34 + 'px', width: w + 'px', height: host.clientHeight + 'px' });
+    const w = Math.min(EDGE_WIDTH, W - 90);
+    Object.assign(box.style, { top: '10px', left: W - w - 40 + 'px', width: w + 'px', height: host.clientHeight - 20 + 'px' });
     box.classList.add('edge-win');
     box.classList.toggle('edge-shut', edgeOpen.value !== id);
   }
@@ -1020,10 +1041,10 @@ function dockBack(p: IDockviewPanel) {
   fit(true);
 }
 function togglePlain(group: DockviewGroupPanel, id: string) {
-  if (group.panels.length > 1) return hint('plainTabs');
   const on = !isPlain(group, id);
-  plain.value = on ? [...plain.value.filter((x) => x !== id), id] : plain.value.filter((x) => x !== id);
-  capsule.value = on ? capsule.value.filter((x) => x !== id) : [...capsule.value.filter((x) => x !== id), id];
+  const ids = group.panels.map((p) => p.id);
+  plain.value = on ? [...plain.value.filter((x) => !ids.includes(x)), ...ids] : plain.value.filter((x) => !ids.includes(x));
+  capsule.value = on ? capsule.value.filter((x) => !ids.includes(x)) : [...capsule.value.filter((x) => !ids.includes(x)), ...ids];
   saveDesk({ plain: plain.value, capsule: capsule.value });
 }
 function setOpacity(id: string, v: number) {
@@ -1186,10 +1207,14 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
   return [
     ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => toggleMax(group) } as MenuItem]),
     ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
+    ...(floating && !edge.value.includes(p.id) && p.id !== 'main' && p.id !== 'voice' && !p.id.startsWith('room:') ? [{ label: tx.toEdge, icon: 'chevronRight', run: () => toEdge(p) } as MenuItem] : []),
     { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
     { label: tx.ownWindow, icon: 'external', run: () => popOut(p.id) },
-    ...(!floating && p.id !== 'main' && p.id !== 'voice' && !p.id.startsWith('room:') ? [{ label: tx.toEdge, icon: 'chevronRight', run: () => toEdge(p) } as MenuItem] : []),
-    ...(!floating ? [{ label: tx.keyMove, icon: 'keyboard', run: () => hint('keyMove') } as MenuItem] : []),
+    ...(edge.value.includes(p.id)
+      ? [{ label: tx.float, icon: 'copy', run: () => fromEdge(p) } as MenuItem]
+      : !floating && p.id !== 'main' && p.id !== 'voice' && !p.id.startsWith('room:')
+        ? [{ label: tx.toEdge, icon: 'chevronRight', run: () => toEdge(p) } as MenuItem]
+        : []),
     ...(p.id.startsWith('room:')
       ? [
           pinned.value.includes(p.id)
@@ -1400,7 +1425,9 @@ export function Workspace() {
       // On macOS Option+arrow moves by word: a field with text keeps it.
       const wordJump = platform === 'darwin' && typing(e) && !!(e.target as HTMLInputElement).value;
       const arrow = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as const)[e.key as 'ArrowLeft'];
-      if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && arrow && !typing(e)) {
+      // Moving a window: ⌘⌥+arrow on macOS, Alt+Shift+arrow elsewhere.
+      const moving = platform === 'darwin' ? e.metaKey && e.altKey && !e.ctrlKey && !e.shiftKey : e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey;
+      if (moving && arrow && !typing(e)) {
         e.preventDefault();
         moveWindow(arrow);
         return;
@@ -1408,6 +1435,11 @@ export function Workspace() {
       if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !wordJump) {
         e.preventDefault();
         goBy(e.key === 'ArrowLeft' ? -1 : 1);
+      }
+      // ⌘[ and ⌘] as in every macOS app.
+      if (platform === 'darwin' && e.metaKey && !e.altKey && !e.ctrlKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+        e.preventDefault();
+        goBy(e.code === 'BracketLeft' ? -1 : 1);
       }
       if (e.code === 'KeyF' && !e.altKey && !e.ctrlKey && !e.metaKey && !typing(e) && call.value) toggleRoomMode();
       // F6: the next window, its text field focused when it has one.

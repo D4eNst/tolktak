@@ -132,3 +132,11 @@ export function installHotkeys(): () => void {
 }
 
 export const hotkeysAreGlobal = globalKeys;
+
+/** The command key of the platform: ⌘ on macOS, Ctrl elsewhere. */
+export const cmd = (e: KeyboardEvent | MouseEvent) => (platform === 'darwin' ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
+/** A shortcut as this platform writes it: `Mod` is ⌘ or Ctrl, `Alt` is ⌥ on macOS. */
+export function keyLabel(keys: string) {
+  if (platform !== 'darwin') return keys.replace(/Mod/g, 'Ctrl');
+  return keys.replace(/Mod ?/g, '⌘').replace(/Alt ?/g, '⌥').replace(/Shift ?/g, '⇧').replace(/Ctrl ?/g, '⌃');
+}

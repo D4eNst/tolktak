@@ -52,7 +52,7 @@ export default {
   },
   switcher: {
     label: 'Quick switcher',
-    placeholder: 'People, groups, channels, rooms or an action. Ctrl+Enter opens beside',
+    placeholder: (beside: string) => `People, groups, channels, rooms or an action. ${beside} opens beside`,
     group: 'group',
     channel: (group: string) => `channel · ${group}`,
     voice: (group: string) => `voice · ${group}`,

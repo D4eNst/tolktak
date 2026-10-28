@@ -773,8 +773,6 @@ code {
   min-height: 0;
   position: relative;
   margin: -5px;
-  /* Windows behind the edge slide out past it. */
-  overflow: clip;
 }
 .shelf {
   flex: none;
@@ -3370,14 +3368,10 @@ video.mirror {
 .call-people {
   display: flex;
   flex-direction: column;
-  padding: 0 8px 10px;
+  padding: 10px 8px;
 }
 .cp-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 10px 0 8px;
-  background: var(--bg-raised);
+  padding: 8px 0 2px;
 }
 .cp-search {
   height: 36px;
@@ -3386,8 +3380,7 @@ video.mirror {
   gap: 8px;
   padding: 0 6px 0 12px;
   border-radius: var(--r);
-  background: var(--bg-input);
-  box-shadow: inset 0 0 0 1px var(--line);
+  background: var(--bg-sunk);
   color: var(--muted);
 }
 .cp-search:focus-within {
@@ -4740,6 +4733,19 @@ label.radio .muted {
   border-bottom: 1px solid var(--line);
   background: var(--bg-island);
 }
+.popout-head {
+  -webkit-app-region: drag;
+}
+.popout-head.darwin {
+  padding-left: 84px;
+}
+.popout-head.win32,
+.popout-head.linux {
+  padding-right: 146px;
+}
+.popout-head button {
+  -webkit-app-region: no-drag;
+}
 .popout-head .win-head,
 .popout-head .win-actions {
   display: flex;
@@ -4755,10 +4761,26 @@ label.radio .muted {
 
 /* windows behind the right edge of the desk: a strip of tabs, each slides its window out */
 .workspace .dv-resize-container.edge-win {
-  transition: transform 220ms var(--ease);
+  transition:
+    transform 220ms var(--ease),
+    opacity 220ms var(--ease);
+}
+/* Fixed in place: no grip to drag it by and no edges to resize. */
+.workspace .edge-win > .dv-floating-titlebar,
+.workspace .edge-win > [class*='dv-resize-handle'] {
+  display: none;
+}
+.workspace .edge-win .dv-groupview {
+  height: 100% !important;
 }
 .workspace .dv-resize-container.edge-shut {
-  transform: translateX(calc(100% + 40px));
+  transform: translateX(48px);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform 220ms var(--ease),
+    opacity 220ms var(--ease),
+    visibility 0s linear 220ms;
   pointer-events: none;
 }
 .edge-tabs {

@@ -203,7 +203,18 @@ function createWindow() {
     if (url === 'about:blank' && frameName.startsWith('tolktak-pop'))
       return {
         action: 'allow',
-        overrideBrowserWindowOptions: { minWidth: 320, minHeight: 240, backgroundColor: '#0b1327', autoHideMenuBar: true, icon: path.join(__dirname, 'assets', 'icon.png') },
+        overrideBrowserWindowOptions: {
+          minWidth: 320,
+          minHeight: 240,
+          backgroundColor: '#0b1327',
+          autoHideMenuBar: true,
+          icon: path.join(__dirname, 'assets', 'icon.png'),
+          // No title bar of its own: the window's head is the bar, as in the main window.
+          titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+          ...(process.platform === 'darwin'
+            ? { trafficLightPosition: { x: 14, y: 15 } }
+            : { titleBarOverlay: { color: '#131d37', symbolColor: '#97a3c5', height: 46 } }),
+        },
       };
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
