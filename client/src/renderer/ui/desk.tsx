@@ -686,6 +686,41 @@ function fit(byUser = false) {
   if (folded && byUser) hint('folded');
 }
 /** Back to the intended desk before a change, so the change lands in it and not in the folded one. */
+type Node = { type: 'leaf' | 'branch'; data: Node[] | { views: string[]; activeView?: string; id: string }; size: number };
+/**
+ * The intended desk with window `id` put beside the windows the folded desk shows as one frame:
+ * below that frame now is below all the columns folded into it once there is room again. Null when they are not side by side there.
+ */
+export function intendBeside(j: SerializedDockview, views: string[], id: string, direction: 'above' | 'below' | 'left' | 'right'): SerializedDockview | null {
+  const copy = structuredClone(j);
+  const across = direction === 'above' || direction === 'below';
+  const after = direction === 'below' || direction === 'right';
+  const holds = (n: Node, v: string): boolean => (n.type === 'leaf' ? (n.data as { views: string[] }).views.includes(v) : (n.data as Node[]).some((k) => holds(k, v)));
+  const leaf: Node = { type: 'leaf', data: { views: [id], activeView: id, id: 'g' + Date.now() }, size: 0 };
+  const walk = (n: Node, vertical: boolean): boolean => {
+    if (n.type === 'leaf') return false;
+    const kids = n.data as Node[];
+    const hit = kids.map((k, i) => (views.some((v) => holds(k, v)) ? i : -1)).filter((i) => i >= 0);
+    if (!hit.length) return false;
+    if (hit.length === 1 && kids[hit[0]].type === 'branch' && views.every((v) => holds(kids[hit[0]], v))) return walk(kids[hit[0]], !vertical);
+    const [a, b] = [hit[0], hit[hit.length - 1]];
+    if (b - a + 1 !== hit.length) return false;
+    const range = kids.slice(a, b + 1);
+    const total = range.reduce((t, k) => t + k.size, 0);
+    if (vertical === across) {
+      leaf.size = Math.round(total / (range.length + 1));
+      kids.splice(after ? b + 1 : a, 0, leaf);
+    } else {
+      // A row of those columns and the new window under it (or beside, for a stack).
+      const inner: Node = range.length === 1 ? { ...range[0], size: 1 } : { type: 'branch', data: range, size: 1 };
+      leaf.size = 1;
+      kids.splice(a, range.length, { type: 'branch', data: after ? [inner, leaf] : [leaf, inner], size: total });
+    }
+    return true;
+  };
+  return walk(copy.grid.root as unknown as Node, copy.grid.orientation === 'VERTICAL') ? copy : null;
+}
+
 function unfoldNow() {
   if (!intended) return;
   const j = intended;
@@ -905,6 +940,26 @@ function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions =
   if (typeof position !== 'string' && 'referenceGroup' in position && typeof position.referenceGroup !== 'string') {
     const at = position.referenceGroup.activePanel?.id;
     position = at ? { referencePanel: at, direction: position.direction } : { direction: position.direction === 'within' ? 'right' : position.direction ?? 'right' };
+  }
+  // Folded for lack of room: the window goes where it was dropped on screen, and into the intended desk beside every window that frame stands for.
+  const at = typeof position !== 'string' && 'referencePanel' in position ? dock.getPanel(String(position.referencePanel)) : undefined;
+  const dir = typeof position !== 'string' ? position.direction : undefined;
+  if (intended && at && at.group.api.location.type === 'grid' && dir && dir !== 'within' && !dock.getPanel(id)) {
+    const next = intendBeside(intended, at.group.panels.map((p) => p.id), id, dir as 'above' | 'below' | 'left' | 'right');
+    if (next) {
+      fitting = true;
+      try {
+        addWindow(id, position).api.setActive();
+      } finally {
+        fitting = false;
+      }
+      const now = dock.toJSON();
+      // The intended desk knows the window's place; this is the window itself.
+      next.panels[id] = now.panels[id];
+      intended = next;
+      foldedShape = shape(now);
+      return fit(true);
+    }
   }
   unfoldNow();
   (dock.getPanel(id) ?? addWindow(id, position)).api.setActive();
