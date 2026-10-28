@@ -1684,7 +1684,7 @@ code {
   background: var(--ok);
 }
 .presence.off {
-  background: #5d6a8c;
+  background: var(--faint);
 }
 .avatar-btn {
   border-radius: 50%;
@@ -2367,7 +2367,7 @@ code {
   z-index: 60;
   display: grid;
   place-items: center;
-  background: rgba(5, 10, 22, 0.88);
+  background: color-mix(in srgb, color-mix(in srgb, var(--bg-app), black 50%) 88%, transparent);
   backdrop-filter: blur(10px);
   animation: backdrop-in 160ms var(--ease);
 }
@@ -2390,7 +2390,7 @@ code {
   max-width: 80vw;
   padding: 6px 6px 6px 16px;
   border-radius: 14px;
-  background: rgba(27, 39, 72, 0.9);
+  background: color-mix(in srgb, var(--bg-raised) 90%, transparent);
   border: 1px solid var(--line-strong);
 }
 
@@ -2607,7 +2607,7 @@ code {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: rgba(11, 19, 39, 0.8);
+  background: color-mix(in srgb, var(--bg-app) 80%, transparent);
   color: var(--text);
   opacity: 0;
   transition: opacity var(--t);
@@ -2648,7 +2648,7 @@ code {
   place-items: center;
   border-radius: var(--r-lg);
   border: 2px dashed var(--accent-line);
-  background: rgba(19, 29, 55, 0.92);
+  background: color-mix(in srgb, var(--bg-island) 92%, transparent);
   backdrop-filter: blur(4px);
   animation: backdrop-in 120ms;
   pointer-events: none;
@@ -2863,7 +2863,7 @@ code {
 .sc-chat {
   flex: 1;
   min-width: 0;
-  background: #2b3a66;
+  background: color-mix(in srgb, var(--bg-active), white 6%);
 }
 .sc-call {
   background: var(--ok);
@@ -2924,7 +2924,7 @@ code {
   z-index: 60;
   display: grid;
   place-items: center;
-  background: rgba(5, 10, 22, 0.55);
+  background: color-mix(in srgb, color-mix(in srgb, var(--bg-app), black 50%) 55%, transparent);
   backdrop-filter: blur(4px);
   animation: backdrop-in 280ms var(--ease);
 }
@@ -4380,7 +4380,7 @@ code {
   border-radius: 50%;
   overflow: hidden;
   background: var(--bg-raised);
-  box-shadow: 0 0 0 2px rgba(11, 19, 39, 0.8), 0 6px 18px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-app) 80%, transparent), 0 6px 18px rgba(0, 0, 0, 0.4);
 }
 .cam-bubble.more {
   width: calc(var(--bubble) * 0.7);
@@ -4452,7 +4452,7 @@ code {
   bottom: 10px;
   padding: 4px 10px;
   border-radius: var(--r-sm);
-  background: rgba(11, 19, 39, 0.7);
+  background: color-mix(in srgb, var(--bg-app) 70%, transparent);
   font-size: 13px;
   font-weight: 600;
 }
@@ -4542,7 +4542,7 @@ code {
   max-width: calc(100% - 60px);
   padding: 3px 10px;
   border-radius: 9px;
-  background: rgba(11, 19, 39, 0.8);
+  background: color-mix(in srgb, var(--bg-app) 80%, transparent);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -4553,7 +4553,7 @@ code {
   position: absolute;
   top: 8px;
   right: 8px;
-  background: rgba(11, 19, 39, 0.6);
+  background: color-mix(in srgb, var(--bg-app) 60%, transparent);
   opacity: 0;
   transition: opacity var(--t);
 }
@@ -4590,7 +4590,7 @@ video.mirror {
   margin: 0 0 16px;
   padding: 8px 10px;
   border-radius: 22px;
-  background: rgba(27, 39, 72, 0.94);
+  background: color-mix(in srgb, var(--bg-raised) 94%, transparent);
   border: 1px solid var(--line-strong);
   box-shadow: var(--shadow-sm);
   flex-wrap: wrap;
@@ -4661,7 +4661,7 @@ video.mirror {
   font-weight: 700;
   padding: 0 6px;
   border-radius: 6px;
-  background: rgba(11, 19, 39, 0.7);
+  background: color-mix(in srgb, var(--bg-app) 70%, transparent);
   color: var(--text);
 }
 
@@ -4895,7 +4895,7 @@ video.mirror {
   left: 14px;
   padding: 8px 12px;
   border-radius: 10px;
-  background: rgba(11, 19, 39, 0.85);
+  background: color-mix(in srgb, var(--bg-app) 85%, transparent);
   font-size: 12px;
   z-index: 7;
 }
@@ -4905,7 +4905,7 @@ video.mirror {
   right: 14px;
   padding: 4px 10px;
   border-radius: 10px;
-  background: rgba(11, 19, 39, 0.7);
+  background: color-mix(in srgb, var(--bg-app) 70%, transparent);
   font-size: 12px;
   color: var(--text-2);
   z-index: 7;
@@ -4919,7 +4919,7 @@ video.mirror {
   z-index: 40;
   display: grid;
   place-items: center;
-  background: rgba(5, 10, 22, 0.6);
+  background: color-mix(in srgb, color-mix(in srgb, var(--bg-app), black 50%) 60%, transparent);
   backdrop-filter: blur(6px);
   animation: backdrop-in 160ms var(--ease);
 }
@@ -5681,7 +5681,7 @@ video.mirror {
   display: grid;
   place-items: center;
   border-radius: inherit;
-  background: rgba(11, 19, 39, 0.55);
+  background: color-mix(in srgb, var(--bg-app) 55%, transparent);
   opacity: 0;
   transition: opacity var(--t);
 }
@@ -6007,7 +6007,7 @@ label.radio .muted {
   gap: 16px;
   padding: 14px 16px 14px 14px;
   border-radius: var(--r-xl);
-  background: rgba(27, 39, 72, 0.95);
+  background: color-mix(in srgb, var(--bg-raised) 95%, transparent);
   border: 1px solid var(--line-strong);
   box-shadow: var(--shadow), 0 0 0 6px rgba(79, 214, 156, 0.08);
   backdrop-filter: blur(12px);
@@ -6044,7 +6044,7 @@ label.radio .muted {
 .toast {
   padding: 10px 16px;
   border-radius: 14px;
-  background: rgba(32, 50, 92, 0.96);
+  background: color-mix(in srgb, var(--bg-active) 96%, transparent);
   border: 1px solid var(--line-strong);
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(10px);
