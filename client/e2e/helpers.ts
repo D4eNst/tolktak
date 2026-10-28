@@ -56,11 +56,21 @@ export async function expectFlowing(p: Page, from: number, source: string, minDe
   return after!;
 }
 
+/** A group in the navigator: its row in the list of groups, or its avatar in the strip once a group is open. */
+export const groupIn = (p: Page, name: string) => p.locator('.nav-grouprow', { hasText: name }).or(p.locator(`.nav-strip-item[aria-label="${name}"]`)).first();
+
+/** Someone in the navigator's «Люди» tab. */
+export async function person(p: Page, name: string) {
+  await p.locator('.nav-tabs button', { hasText: 'Люди' }).click();
+  return p.locator('.nav-person', { hasText: name });
+}
+
 export async function joinRoom(p: Page, groupName: string, roomName = 'Общая') {
-  await p.locator('.rail-btn.group', { hasText: groupName.slice(0, 2).toUpperCase() }).first().click();
-  await p.locator('.room-join', { hasText: roomName }).click();
+  await p.locator('.nav-tabs button', { hasText: 'Группы' }).click();
+  await groupIn(p, groupName).click();
+  await p.locator('.nav-row', { hasText: roomName }).click();
   await expect(p.locator('.stage')).toBeVisible();
-  await expect(p.locator('.voicebar-call .dot.ok')).toBeVisible();
+  await expect(p.locator('.capsule .dot.ok')).toBeVisible();
 }
 
 export async function expectFps(p: Page, from: number, source: string, minFps: number, timeout = 30_000) {

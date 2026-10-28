@@ -1,5 +1,5 @@
 import { expect, test, type WebSocketRoute } from '@playwright/test';
-import { expectFlowing, joinRoom, openClient, stats } from './helpers';
+import { expectFlowing, groupIn, joinRoom, openClient, person, stats } from './helpers';
 import { loginToken, register, startStack, type Stack } from './stack';
 
 let stack: Stack;
@@ -14,13 +14,13 @@ test.afterAll(async () => stack?.stop());
 test('DM: realtime delivery, unread badge, reply', async ({ browser }) => {
   const alice = await openClient(browser, stack, 'alice');
   const bob = await openClient(browser, stack, 'bob');
-  await alice.locator('.side-item', { hasText: 'Bob' }).click();
+  await (await person(alice, 'Bob')).click();
   await alice.locator('.composer textarea').fill('Привет, Боб!');
   await alice.keyboard.press('Enter');
   await expect(alice.locator('.msg-text', { hasText: 'Привет, Боб!' })).toBeVisible();
   await expect(alice.locator('.msg.pending')).toHaveCount(0);
 
-  const bobItem = bob.locator('.side-item', { hasText: 'Alice' });
+  const bobItem = await person(bob, 'Alice');
   await expect(bobItem.locator('.badge')).toHaveText('1');
   await bobItem.click();
   await expect(bob.locator('.msg-text', { hasText: 'Привет, Боб!' })).toBeVisible();
@@ -54,14 +54,14 @@ test('messages sent or received while the first page loads stay in the chat', as
     await released;
     await route.fulfill({ response: page });
   });
-  const bobItem = carol.locator('.side-item', { hasText: 'Bob' });
+  const bobItem = await person(carol, 'Bob');
   await bobItem.click();
   await fetched;
   await call(`/channels/${channel.id}/messages`, { text: 'во время загрузки', nonce: crypto.randomUUID() });
-  await expect(bobItem.locator('.side-item-sub')).toHaveText('во время загрузки');
+  await expect(bobItem.locator('.nav-person-sub')).toHaveText('во время загрузки');
   await carol.locator('.composer textarea').fill('отправлено при загрузке');
   await carol.keyboard.press('Enter');
-  await expect(bobItem.locator('.side-item-sub')).toHaveText('отправлено при загрузке');
+  await expect(bobItem.locator('.nav-person-sub')).toHaveText('отправлено при загрузке');
   releasePage();
 
   await expect(carol.locator('.msg-text', { hasText: 'до загрузки' })).toBeVisible();
@@ -101,19 +101,20 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   const alice = await openClient(browser, stack, 'alice');
   const bob = await openClient(browser, stack, 'bob');
 
-  await alice.click('.rail-btn.add');
+  await alice.locator('.nav-tabs button', { hasText: 'Группы' }).click();
+  await alice.locator('button', { hasText: /Создайте группу|Новая группа/ }).click();
   await alice.fill('.modal input[maxlength="60"]', 'Кино');
   for (const n of ['Bob', 'Carol']) await alice.locator('.user-row', { hasText: n }).click();
   await alice.click('.modal button.primary');
-  await expect(bob.locator('.rail-btn.group', { hasText: 'КИ' })).toBeVisible();
+  await expect(groupIn(bob, 'Кино')).toBeVisible();
 
   await joinRoom(alice, 'Кино');
   await joinRoom(bob, 'Кино');
   await expect(alice.locator('.tile')).toHaveCount(2);
   await expect(bob.locator('.tile')).toHaveCount(2);
   const carol = await openClient(browser, stack, 'carol');
-  await carol.locator('.rail-btn.group', { hasText: 'КИ' }).click();
-  await expect(carol.locator('.room-member')).toHaveCount(2);
+  await groupIn(carol, 'Кино').click();
+  await expect(carol.locator('.nav-sub')).toHaveCount(2);
 
   const a2b = await expectFlowing(bob, ids.alice, 'microphone', 20);
   const b2a = await expectFlowing(alice, ids.bob, 'microphone', 20);
@@ -123,10 +124,10 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   await alice.click('button[aria-label="Демонстрация"]');
   await alice.locator('.warn-box input[type=checkbox]').check();
   await alice.click('.modal button.primary');
-  await expect(alice.locator('.stream-card')).toHaveCount(1);
-  await expect(carol.locator('.room-member .live')).toHaveCount(1);
+  // One stream: everyone sees it big, with its sound («Крупно» by default).
+  await expect(alice.locator('.theater')).toBeVisible();
+  await expect(carol.locator('.nav-sub .live-icon')).toHaveCount(1);
 
-  await bob.locator('.stream-card').click();
   await expect(bob.locator('.theater')).toBeVisible();
   const video = await expectFlowing(bob, ids.alice, 'screen_share', 40);
   const sound = await expectFlowing(bob, ids.alice, 'screen_share_audio', 50);
@@ -134,20 +135,16 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   const out = (await stats(alice)).outbound.filter((o) => o.source === 'screen_share');
   test.info().annotations.push({ type: 'encoder', description: JSON.stringify(out) });
 
-  await carol.locator('.room-join', { hasText: 'Общая' }).click();
-  await expect(carol.locator('.stream-card')).toHaveCount(1);
-  const carolBefore = (await stats(carol)).inbound.find((x) => x.source === 'screen_share_audio');
-  expect(carolBefore, 'stream audio must not be received before watching').toBeUndefined();
-  await carol.locator('.stream-card').click();
+  await carol.locator('.nav-row', { hasText: 'Общая' }).click();
+  await expect(carol.locator('.theater')).toBeVisible();
   await expectFlowing(carol, ids.alice, 'screen_share', 40);
   await expectFlowing(carol, ids.alice, 'screen_share_audio', 50);
 
   await alice.click('button[aria-label="Выйти из комнаты"]');
   await expect(bob.locator('.theater')).toHaveCount(0);
-  await expect(bob.locator('.stream-card')).toHaveCount(0);
   await expect(bob.locator('.tile')).toHaveCount(2);
   await expectFlowing(bob, ids.carol, 'microphone', 20);
-  await expect(carol.locator('.room-member')).toHaveCount(2);
+  await expect(carol.locator('.nav-sub')).toHaveCount(2);
 
   for (const p of [alice, bob, carol]) await p.context().close();
 });
