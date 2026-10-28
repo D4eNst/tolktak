@@ -17,6 +17,7 @@ import type { Group, Room } from '../api';
 import { platform } from '../bridge';
 import { type Messages, t } from '../i18n';
 import {
+  addPopWindow,
   api,
   canModerate,
   channels,
@@ -41,7 +42,7 @@ import {
 } from '../state';
 import { call, joinVoice, peers, startCall } from '../voice';
 import { addChatPanel, ChatActions, ChatView, openPanel, setPanel, SidePanel } from './Chat';
-import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, Toggle } from './common';
+import { Avatar, confirmDialog, followInput, GroupAvatar, Icon, type MenuItem, openMenu, Toggle } from './common';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { CallPeople, callPeopleOpen, RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 import { startTour } from './Tour';
@@ -381,7 +382,6 @@ export const WINDOWS: Record<WindowId, Win> = {
 
 // ---------- storage: per server and account, on this device ----------
 
-/** Where the voice window stood when the last call ended. */
 type Rect = { x: number; y: number; width: number; height: number };
 /** Where the voice window stood when the last call ended: the whole desk then, the shape of the desk without it, and a neighbour to stand by if the desk changed since. */
 type VoicePlace = { desk?: SerializedDockview; shape?: string; position?: AddPanelPositionOptions; width?: number; height?: number; floating?: Rect };
@@ -417,6 +417,7 @@ export function loadDesk(): Saved {
   }
 }
 export function saveDesk(patch: Saved) {
+  if (!session.value) return;
   try {
     localStorage.setItem(storeKey(), JSON.stringify({ ...loadDesk(), ...patch }));
   } catch {
@@ -762,6 +763,8 @@ function popOut(id: string) {
   doc.body.append(root);
   if (id !== 'main') closeWindow(id);
   popped.set(own, w);
+  followInput(w);
+  addPopWindow(w);
   shownWindows.value = new Set([...shownWindows.value, own]);
   render(<PopWindow id={own} />, root);
   w.addEventListener('pagehide', () => {
@@ -849,7 +852,7 @@ function load() {
   }
   // The call's window lives only as long as the call, unless kept.
   for (const p of [...dock!.panels]) if (!call.value && (p.id === 'voice' || (p.id.startsWith('room:') && !kept(p.id)))) p.api.close();
-  if (call.value && !dock!.getPanel(callWindow())) showVoice(callWindow());
+  if (call.value && !dock!.getPanel(callWindow()) && !popped.has(callWindow())) showVoice(callWindow());
   callWin = call.value ? callWindow() : null;
   ensureMain();
   fit();
@@ -987,7 +990,6 @@ export function resetLayout() {
   saveDesk({ layout: undefined, shelf: [], voice: undefined });
   load();
 }
-export const windowShown = (id: WindowId) => !!dock?.getPanel(id);
 /** Asks first: someone who arranged their windows loses it all to a slip of the mouse otherwise. */
 export async function confirmReset() {
   const tx = t().desk.menu;
@@ -1304,13 +1306,7 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
 
 function GroupActions({ group }: { group: DockviewGroupPanel }) {
   // Created with the group, before its first panel arrives.
-  const [, rerender] = useState(0);
-  useEffect(() => {
-    const m = group.model;
-    const subs = [m.onDidActivePanelChange, m.onDidAddPanel, m.onDidRemovePanel].map((ev) => ev(() => rerender((n) => n + 1)));
-    rerender((n) => n + 1);
-    return () => subs.forEach((d) => d.dispose());
-  }, []);
+  useFrame(group);
   const id = group.activePanel?.id;
   const { w, arg } = id ? parseId(id) : { w: undefined, arg: undefined };
   const floating = group.api.location.type === 'floating';
@@ -1468,6 +1464,7 @@ export function Workspace() {
     window.addEventListener('beforeunload', saveLayout);
     return () => {
       saveLayout();
+      popped.forEach((w) => w.close());
       window.removeEventListener('beforeunload', saveLayout);
       subs.forEach((s) => s.dispose());
       resize.disconnect();

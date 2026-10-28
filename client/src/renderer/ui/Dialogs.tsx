@@ -117,7 +117,7 @@ export function QuickSwitcher() {
   const ts = t().groups.switcher;
   const items = useMemo<Item[]>(() => {
     const out: Item[] = [];
-    const dmOf = (uid: number) => [...channels.value.values()].find((c) => c.kind === 'dm' && c.peer_id === uid)?.id;
+    const dms = new Map([...channels.value.values()].filter((c) => c.kind === 'dm').map((c) => ['u' + c.peer_id, c]));
     for (const g of groups.value.values()) {
       out.push({ key: 'g' + g.id, label: g.name, hint: ts.group, icon: <GroupAvatar id={g.id} size={18} />, run: () => go({ kind: 'group', groupId: g.id }), beside: () => openBeside(g.channel_id) });
       for (const ch of g.text_channels ?? []) {
@@ -137,13 +137,14 @@ export function QuickSwitcher() {
     }
     for (const u of users.value.values()) {
       if (u.id === me.value?.id) continue;
+      const dm = dms.get('u' + u.id)?.id;
       out.push({
         key: 'u' + u.id,
         label: u.display_name,
         hint: '@' + u.username + (online.value.has(u.id) ? ts.online : ''),
         icon: <Avatar id={u.id} size={18} />,
         run: () => openPerson(u.id),
-        beside: dmOf(u.id) ? () => openBeside(dmOf(u.id)!) : undefined,
+        beside: dm ? () => openBeside(dm) : undefined,
       });
     }
     // Actions, after places and people: «выйти из звонка», «свернуть навигатор» and the like.
@@ -162,7 +163,6 @@ export function QuickSwitcher() {
     const s = q.trim().toLowerCase();
     // Without a query the list is places and people; actions show up once typed for.
     const pool = s ? out : out.filter((it) => !it.key.startsWith('a'));
-    const dms = new Map([...channels.value.values()].filter((c) => c.kind === 'dm').map((c) => ['u' + c.peer_id, c]));
     const scored = pool
       .map((it) => {
         const l = it.label.toLowerCase();

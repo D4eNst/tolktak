@@ -397,7 +397,10 @@ function ShareBar({ p, stats, setStats, fullscreen }: { p?: PeerView; stats?: bo
   );
 }
 
-const toggleFullscreen = (el: HTMLElement | null) => (document.fullscreenElement ? document.exitFullscreen() : el?.requestFullscreen());
+const toggleFullscreen = (el: HTMLElement | null) => {
+  const d = el?.ownerDocument ?? document;
+  return d.fullscreenElement ? d.exitFullscreen() : el?.requestFullscreen();
+};
 
 function Theater({ p }: { p: PeerView }) {
   const ref = useRef<HTMLDivElement>(null);

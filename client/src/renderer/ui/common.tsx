@@ -146,6 +146,8 @@ export function Modal({
   class?: string;
 }) {
   const [closing, setClosing] = useState(false);
+  const [opened] = useState(inputWindow);
+  const win = opened.closed ? window : opened;
   const ref = useRef<HTMLDivElement>(null);
   const close = () => {
     if (closing) return;
@@ -155,14 +157,14 @@ export function Modal({
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       // Escape closes only the top layer: menus and popovers sit above modals, and a later modal above an earlier one.
-      const top = !document.querySelector('.menu, .popover') && ref.current === [...document.querySelectorAll('.modal')].at(-1);
+      const top = !win.document.querySelector('.menu, .popover') && ref.current === [...win.document.querySelectorAll('.modal')].at(-1);
       if (e.key === 'Escape' && !e.defaultPrevented && top) {
         e.preventDefault();
         close();
       }
     };
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    win.addEventListener('keydown', k);
+    return () => win.removeEventListener('keydown', k);
   });
   // In <body>: an ancestor with a transform would become the containing block.
   return createPortal(
@@ -177,7 +179,7 @@ export function Modal({
         <div class="modal-body">{children}</div>
       </div>
     </div>,
-    document.body,
+    win.document.body,
   );
 }
 
@@ -362,17 +364,27 @@ export function Select<T extends string>({ value, options, onChange, label }: { 
 }
 
 export type MenuItem = { label: string; icon?: string; danger?: boolean; run: () => void; hint?: string } | 'sep';
-type MenuState = { x: number; y: number; items: MenuItem[]; header?: ComponentChildren };
+type MenuState = { x: number; y: number; items: MenuItem[]; header?: ComponentChildren; win: Window };
 const menuState = signal<MenuState | null>(null);
+
+let lastInput: Window = window;
+/** Menus and dialogs open in the window people last pressed in, a popped-out one included. */
+export function followInput(w: Window) {
+  const mark = () => (lastInput = w);
+  w.addEventListener('pointerdown', mark, true);
+  w.addEventListener('keydown', mark, true);
+}
+followInput(window);
+export const inputWindow = () => (lastInput.closed ? window : lastInput);
 
 export function openMenu(e: { clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void }, items: MenuItem[], header?: ComponentChildren) {
   e.preventDefault?.();
   e.stopPropagation?.();
-  menuState.value = { x: e.clientX, y: e.clientY, items, header };
+  menuState.value = { x: e.clientX, y: e.clientY, items, header, win: inputWindow() };
 }
 export function openMenuAt(el: Element, items: MenuItem[]) {
   const r = el.getBoundingClientRect();
-  menuState.value = { x: r.left, y: r.bottom + 4, items };
+  menuState.value = { x: r.left, y: r.bottom + 4, items, win: el.ownerDocument.defaultView ?? window };
 }
 
 function useClampedPosition(x: number, y: number, deps: unknown[]) {
@@ -382,7 +394,8 @@ function useClampedPosition(x: number, y: number, deps: unknown[]) {
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setPos({ x: Math.max(8, Math.min(x, innerWidth - r.width - 8)), y: Math.max(8, Math.min(y, innerHeight - r.height - 8)) });
+    const v = el.ownerDocument.defaultView ?? window;
+    setPos({ x: Math.max(8, Math.min(x, v.innerWidth - r.width - 8)), y: Math.max(8, Math.min(y, v.innerHeight - r.height - 8)) });
   }, deps);
   return { ref, pos };
 }
@@ -392,7 +405,8 @@ export function MenuHost() {
   const { ref, pos } = useClampedPosition(m?.x ?? 0, m?.y ?? 0, [m]);
   useEffect(() => {
     if (!m) return;
-    const opener = document.activeElement;
+    const w = m.win;
+    const opener = w.document.activeElement;
     ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus();
     const close = () => (menuState.value = null);
     const k = (e: KeyboardEvent) => {
@@ -401,20 +415,20 @@ export function MenuHost() {
         close();
       }
     };
-    window.addEventListener('mousedown', close);
-    window.addEventListener('blur', close);
-    window.addEventListener('keydown', k);
-    window.addEventListener('resize', close);
+    w.addEventListener('mousedown', close);
+    w.addEventListener('blur', close);
+    w.addEventListener('keydown', k);
+    w.addEventListener('resize', close);
     return () => {
-      window.removeEventListener('mousedown', close);
-      window.removeEventListener('blur', close);
-      window.removeEventListener('keydown', k);
-      window.removeEventListener('resize', close);
-      if (document.activeElement === document.body && opener instanceof HTMLElement) opener.focus();
+      w.removeEventListener('mousedown', close);
+      w.removeEventListener('blur', close);
+      w.removeEventListener('keydown', k);
+      w.removeEventListener('resize', close);
+      if (w.document.activeElement === w.document.body) (opener as HTMLElement | null)?.focus?.();
     };
   }, [m]);
   if (!m) return null;
-  return (
+  return createPortal(
     <div
       class="menu pop-in"
       ref={ref}
@@ -422,7 +436,7 @@ export function MenuHost() {
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role=menuitem]')];
-        const i = items.indexOf(document.activeElement as HTMLElement);
+        const i = items.indexOf(e.currentTarget.ownerDocument.activeElement as HTMLElement);
         const next = ({ ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: -1 } as Record<string, number>)[e.key];
         if (next === undefined) return;
         e.preventDefault();
@@ -450,25 +464,27 @@ export function MenuHost() {
           </button>
         ),
       )}
-    </div>
+    </div>,
+    m.win.document.body,
   );
 }
 
 export function Popover({ x, y, onClose, children, class: cls = '' }: { x: number; y: number; onClose: () => void; children: ComponentChildren; class?: string }) {
   const { ref, pos } = useClampedPosition(x, y, [x, y]);
   useEffect(() => {
+    const w = ref.current?.ownerDocument.defaultView ?? window;
     const off = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && onClose();
     const k = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('.menu')) {
+      if (e.key === 'Escape' && !e.defaultPrevented && !w.document.querySelector('.menu')) {
         e.preventDefault();
         onClose();
       }
     };
-    setTimeout(() => window.addEventListener('mousedown', off));
-    window.addEventListener('keydown', k);
+    setTimeout(() => w.addEventListener('mousedown', off));
+    w.addEventListener('keydown', k);
     return () => {
-      window.removeEventListener('mousedown', off);
-      window.removeEventListener('keydown', k);
+      w.removeEventListener('mousedown', off);
+      w.removeEventListener('keydown', k);
     };
   }, [onClose]);
   return (

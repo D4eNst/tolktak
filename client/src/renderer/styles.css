@@ -2189,6 +2189,9 @@ code {
 .spoiler * {
   color: inherit;
 }
+.spoiler:not(.open) * {
+  pointer-events: none;
+}
 .spoiler:not(.open):hover {
   background-color: color-mix(in srgb, var(--text) 13%, transparent);
 }

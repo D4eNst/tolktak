@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import { Component, type ComponentChildren } from 'preact';
-import { memo } from 'preact/compat';
+import { createPortal, memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { ApiError, type FileMeta, type Message } from '../api';
 import { bridge } from '../bridge';
@@ -31,7 +31,7 @@ import {
   userName,
   users,
 } from '../state';
-import { Avatar, confirmDialog, dateFormats, dayLabel, Icon, type MenuItem, openMenu, Popover, sizeLabel, timeLabel } from './common';
+import { Avatar, confirmDialog, dateFormats, dayLabel, Icon, inputWindow, type MenuItem, openMenu, Popover, sizeLabel, timeLabel } from './common';
 import { EMOJI_GROUPS, emojiGroupName, findSticker, QUICK_REACTIONS, recentEmoji, rememberEmoji, STICKER_PACKS, STICKER_RE, stickerPackName } from './emoji';
 import { isJumbo, Markdown } from './markdown';
 import { copyText, openProfile } from './Profile';
@@ -39,7 +39,7 @@ import { copyText, openProfile } from './Profile';
 const MAX_FILES = 10;
 const MAX_LENGTH = 4000;
 
-const lightbox = signal<{ images: FileMeta[]; index: number } | null>(null);
+const lightbox = signal<{ images: FileMeta[]; index: number; win: Window } | null>(null);
 
 export function LightboxHost() {
   const lb = lightbox.value;
@@ -50,12 +50,12 @@ export function LightboxHost() {
       if (e.key === 'ArrowRight') lightbox.value = { ...lb, index: (lb.index + 1) % lb.images.length };
       if (e.key === 'ArrowLeft') lightbox.value = { ...lb, index: (lb.index - 1 + lb.images.length) % lb.images.length };
     };
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    lb.win.addEventListener('keydown', k);
+    return () => lb.win.removeEventListener('keydown', k);
   }, [lb]);
   if (!lb) return null;
   const f = lb.images[lb.index];
-  return (
+  return createPortal(
     <div class="lightbox" onClick={() => (lightbox.value = null)}>
       <img src={fileUrl(f.id)} alt={f.name} onClick={(e) => e.stopPropagation()} />
       <div class="lightbox-bar" onClick={(e) => e.stopPropagation()}>
@@ -72,7 +72,8 @@ export function LightboxHost() {
           <Icon name="x" />
         </button>
       </div>
-    </div>
+    </div>,
+    lb.win.document.body,
   );
 }
 
@@ -169,10 +170,10 @@ function Attachments({ files }: { files: FileMeta[] }) {
                 key={f.id}
                 class="img-att"
                 style={single ? { width: `${Math.max(80, Math.round(w * scale))}px`, aspectRatio: `${w} / ${h}` } : undefined}
-                onClick={() => (lightbox.value = { images, index: i })}
+                onClick={() => (lightbox.value = { images, index: i, win: inputWindow() })}
                 onContextMenu={(e) =>
                   openMenu(e, [
-                    { label: t().chat.open, icon: 'maximize', run: () => (lightbox.value = { images, index: i }) },
+                    { label: t().chat.open, icon: 'maximize', run: () => (lightbox.value = { images, index: i, win: inputWindow() }) },
                     { label: t().chat.download, icon: 'download', run: () => download(f) },
                     { label: t().chat.copyLink, icon: 'link', run: () => copyText(fileUrl(f.id, f.name), t().chat.linkCopied) },
                   ])
@@ -302,8 +303,8 @@ function Reactions({ m }: { m: Message }) {
 
 const highlight = signal(0);
 
-function jumpTo(id: number) {
-  const el = document.querySelector(`.msg[data-id="${id}"]`);
+function jumpTo(id: number, from: Element) {
+  const el = (from.closest('.chat') ?? from.ownerDocument).querySelector(`.msg[data-id="${id}"]`);
   if (!el) {
     toast(t().chat.message.notLoaded);
     return;
@@ -325,7 +326,7 @@ function quote(m: Message) {
 
 function ReplyRef({ r }: { r: { id: number; author_id: number; text: string; deleted?: boolean; attachments?: FileMeta[] | number } }) {
   return (
-    <button class="msg-reply" onClick={() => jumpTo(r.id)} title={t().chat.message.reply}>
+    <button class="msg-reply" onClick={(e) => jumpTo(r.id, e.currentTarget)} title={t().chat.message.reply}>
       <Icon name="reply" size={13} />
       <b style={{ color: users.value.get(r.author_id)?.color }}>{userName(r.author_id)}</b>
       <span class="ellipsis">{r.deleted ? t().chat.message.replyDeleted : messagePreview(r) || t().chat.message.attachment}</span>
@@ -357,7 +358,11 @@ const MessageRow = memo(function MessageRow({ m: live, fresh, grouped, canPin, c
   const mine = m.author_id === me.value?.id;
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [leaving, setLeaving] = useState(false);
-  const [enter] = useState(() => (sentAt.has(m.nonce) ? Date.now() - sentAt.get(m.nonce)! : fresh ? 0 : -1));
+  const [enter] = useState(() => {
+    const sent = sentAt.get(m.nonce);
+    sentAt.delete(m.nonce);
+    return sent !== undefined ? Date.now() - sent : fresh ? 0 : -1;
+  });
   const row = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = row.current;
@@ -676,11 +681,12 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
       el?.focus();
       el?.setSelectionRange(edit.text.length, edit.text.length);
     });
+    const w = ta.current?.ownerDocument.defaultView ?? window;
     const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !document.querySelector('.modal-backdrop, .menu, .popover')) onEditEnd();
+      if (e.key === 'Escape' && !w.document.querySelector('.modal-backdrop, .menu, .popover')) onEditEnd();
     };
-    window.addEventListener('keydown', esc);
-    return () => window.removeEventListener('keydown', esc);
+    w.addEventListener('keydown', esc);
+    return () => w.removeEventListener('keydown', esc);
   }, [edit?.id]);
 
   useEffect(() => {
@@ -727,7 +733,7 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
   const ready = uploads.filter((u) => u.file).map((u) => u.file!);
   const saveEdit = async () => {
     const m = edit!;
-    const body = text.trim();
+    const body = (ta.current?.value ?? text).trim();
     onEditEnd();
     if (body === m.text || (!body && !m.attachments.length)) return;
     try {
@@ -738,7 +744,8 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
   };
   const submit = () => {
     if (edit) return saveEdit();
-    const body = text.trim();
+    // The field, not the state: a paste followed at once by Enter lands before the state catches up.
+    const body = (ta.current?.value ?? text).trim();
     if (busy) {
       toast(t().chat.composer.waitForUploads);
       return;
@@ -981,7 +988,7 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
   );
 }
 
-function MiniMessage({ m, onJump }: { m: Message; onJump: () => void }) {
+function MiniMessage({ m, onJump }: { m: Message; onJump: (e: MouseEvent & { currentTarget: HTMLButtonElement }) => void }) {
   return (
     <button class="mini-msg" onClick={onJump}>
       <Avatar id={m.author_id} size={28} />
@@ -1017,7 +1024,7 @@ function PinsPanel({ channelId, onClose }: { channelId: number; onClose: () => v
       <div class="chat-panel-list">
         {list === null && <div class="muted small pad">{t().chat.pins.loading}</div>}
         {list?.length === 0 && <div class="panel-empty">{t().chat.pins.empty}</div>}
-        {list?.map((m) => <MiniMessage key={m.id} m={m} onJump={() => jumpTo(m.id)} />)}
+        {list?.map((m) => <MiniMessage key={m.id} m={m} onJump={(e) => jumpTo(m.id, e.currentTarget)} />)}
       </div>
     </aside>
   );
@@ -1055,7 +1062,7 @@ function SearchPanel({ channelId, onClose }: { channelId: number; onClose: () =>
       <div class="chat-panel-list">
         {res === null && <div class="panel-empty">{t().chat.search.tooShort}</div>}
         {res?.length === 0 && <div class="panel-empty">{t().chat.search.empty}</div>}
-        {res?.map((m) => <MiniMessage key={m.id} m={m} onJump={() => jumpTo(m.id)} />)}
+        {res?.map((m) => <MiniMessage key={m.id} m={m} onJump={(e) => jumpTo(m.id, e.currentTarget)} />)}
       </div>
     </aside>
   );
@@ -1140,8 +1147,10 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
   const openedAt = useMemo(() => Date.now(), [channelId]);
   const gliding = useRef(0);
   // A new message at the bottom eases the list up by its height instead of jumping.
+  // A popped-out chat animates on its own window's frames: the main window's pause while it is covered.
+  const frames = () => listRef.current?.ownerDocument.defaultView ?? window;
   const glide = (el: HTMLDivElement, by: number) => {
-    cancelAnimationFrame(gliding.current);
+    frames().cancelAnimationFrame(gliding.current);
     const target = () => el.scrollHeight - el.clientHeight;
     // Travels only the new message's height, wherever the list was left.
     if (target() - el.scrollTop > by) el.scrollTop = target() - by;
@@ -1150,11 +1159,11 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
     const step = (now: number) => {
       const k = Math.min(1, (now - t0) / 420);
       el.scrollTop = from + (target() - from) * (1 - (1 - k) ** 2);
-      gliding.current = k < 1 ? requestAnimationFrame(step) : 0;
+      gliding.current = k < 1 ? frames().requestAnimationFrame(step) : 0;
     };
-    gliding.current = requestAnimationFrame(step);
+    gliding.current = frames().requestAnimationFrame(step);
   };
-  useEffect(() => () => cancelAnimationFrame(gliding.current), []);
+  useEffect(() => () => frames().cancelAnimationFrame(gliding.current), []);
   useEffect(() => {
     const sent = (e: Event) => {
       if ((e as CustomEvent<number>).detail !== channelId) return;
@@ -1171,10 +1180,11 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
 
   // Before paint, so a message read on arrival never shows as unread.
   useLayoutEffect(() => {
-    if (last && document.hasFocus() && stickToBottom.current) markRead(channelId, last.id);
+    const w = listRef.current?.ownerDocument.defaultView ?? window;
+    if (last && w.document.hasFocus() && stickToBottom.current) markRead(channelId, last.id);
     const onFocus = () => last && stickToBottom.current && markRead(channelId, last.id);
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    w.addEventListener('focus', onFocus);
+    return () => w.removeEventListener('focus', onFocus);
   }, [channelId, last?.id]);
 
   useLayoutEffect(() => {

@@ -122,13 +122,25 @@ bridge.onOccluded((v) => {
   updateActive();
 });
 
+const popWindows = new Set<Window>();
+/** The app has focus when the main window or one popped out of it has. */
+export const appFocused = () => document.hasFocus() || [...popWindows].some((w) => w.document.hasFocus());
+export function addPopWindow(w: Window) {
+  popWindows.add(w);
+  w.addEventListener('focus', updateActive);
+  w.addEventListener('blur', blurred);
+  w.addEventListener('pagehide', () => (popWindows.delete(w), updateActive()));
+}
+
 export const appActive = signal(document.hasFocus() && !document.hidden);
 const updateActive = () => {
-  const v = document.hasFocus() && !windowHidden.value;
+  const v = (document.hasFocus() && !windowHidden.value) || [...popWindows].some((w) => w.document.hasFocus());
   if (appActive.value !== v) appActive.value = v;
 };
+// Focus moving between the app's own windows blurs one before the other gains it.
+const blurred = () => setTimeout(updateActive);
 window.addEventListener('focus', updateActive);
-window.addEventListener('blur', updateActive);
+window.addEventListener('blur', blurred);
 document.addEventListener('visibilitychange', updateActive);
 updateActive();
 
@@ -292,7 +304,13 @@ export async function logout() {
 
 async function startSession(a: Api, user: User, server: ServerInfo) {
   session.value = { api: a, me: user, server };
-  await refreshAll();
+  try {
+    await refreshAll();
+  } catch (e) {
+    // A desk without people, chats or groups would stay empty: sign in again instead.
+    session.value = null;
+    throw e;
+  }
   rt = new Realtime(a, handleEvent, (st) => {
     const was = connection.value;
     connection.value = st;
@@ -484,7 +502,7 @@ function bumpChannel(m: Message) {
 function isChannelVisible(cid: number) {
   const v = view.value;
   const own = viewChannel(v) === cid && shownWindows.value.has('main');
-  return document.hasFocus() && (own || shownWindows.value.has('chat:' + cid));
+  return appFocused() && (own || shownWindows.value.has('chat:' + cid));
 }
 
 function onMessageCreated(m: Message) {
@@ -518,7 +536,7 @@ export function setNotifications(on: boolean) {
 }
 
 function notify(title: string, body: string) {
-  if (document.hasFocus() || !notificationsOn.value) return;
+  if (appFocused() || !notificationsOn.value) return;
   try {
     if (Notification.permission === 'granted') new Notification(title, { body, silent: false });
     else if (Notification.permission !== 'denied') Notification.requestPermission();

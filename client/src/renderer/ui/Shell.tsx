@@ -550,8 +550,9 @@ export function Shell() {
     return () => window.removeEventListener('keydown', keys);
   }, []);
   const folded = navFolded.value;
+  const clamp = (w: number) => Math.round(Math.min(NAV_MAX, Math.max(NAV_MIN, w)));
   const set = (w: number) => {
-    const n = Math.round(Math.min(NAV_MAX, Math.max(NAV_MIN, w)));
+    const n = clamp(w);
     setNav(n);
     saveDesk({ nav: n });
   };
@@ -559,10 +560,10 @@ export function Shell() {
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
     const x0 = e.clientX;
-    const w0 = nav;
-    const move = (m: PointerEvent) => set(w0 + m.clientX - x0);
+    let n = nav;
+    const move = (m: PointerEvent) => setNav((n = clamp(nav + m.clientX - x0)));
     el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', () => el.removeEventListener('pointermove', move), { once: true });
+    el.addEventListener('pointerup', () => (el.removeEventListener('pointermove', move), saveDesk({ nav: n })), { once: true });
   };
   return (
     <div class="shell" style={{ '--nav-w': (folded ? 64 : nav) + 'px' }}>
