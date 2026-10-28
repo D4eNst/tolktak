@@ -15,6 +15,7 @@ import {
   fileUrl,
   groups,
   loadOlder,
+  loadUntil,
   markRead,
   me,
   messagePreview,
@@ -303,13 +304,21 @@ function Reactions({ m }: { m: Message }) {
 
 const highlight = signal(0);
 
-function jumpTo(id: number, from: Element) {
-  const el = (from.closest('.chat') ?? from.ownerDocument).querySelector(`.msg[data-id="${id}"]`);
-  if (!el) {
-    toast(t().chat.message.notLoaded);
-    return;
+async function jumpTo(id: number, from: Element) {
+  const chat = from.closest<HTMLElement>('.chat');
+  const find = () => (chat ?? from.ownerDocument).querySelector(`.msg[data-id="${id}"]`);
+  let el = find();
+  const near = !!el;
+  if (!el && chat) {
+    const got = await loadUntil(Number(chat.dataset.channel), id);
+    // The rows render on the next frame.
+    if (got === 'found') await new Promise((r) => setTimeout(r, 60));
+    el = find();
+    if (!el) return toast(got === 'far' ? t().chat.message.tooFar : t().chat.message.gone);
   }
-  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (!el) return toast(t().chat.message.gone);
+  // A smooth ride through freshly loaded history reaches the top and loads more under it.
+  el.scrollIntoView({ block: 'center', behavior: near ? 'smooth' : 'instant' });
   highlight.value = id;
   setTimeout(() => highlight.value === id && (highlight.value = 0), 1600);
 }
@@ -326,7 +335,7 @@ function quote(m: Message) {
 
 function ReplyRef({ r }: { r: { id: number; author_id: number; text: string; deleted?: boolean; attachments?: FileMeta[] | number } }) {
   return (
-    <button class="msg-reply" onClick={(e) => jumpTo(r.id, e.currentTarget)} title={t().chat.message.reply}>
+    <button class="msg-reply" onClick={(e) => (r.deleted ? toast(t().chat.message.gone) : jumpTo(r.id, e.currentTarget))} title={t().chat.message.reply}>
       <Icon name="reply" size={13} />
       <b style={{ color: users.value.get(r.author_id)?.color }}>{userName(r.author_id)}</b>
       <span class="ellipsis">{r.deleted ? t().chat.message.replyDeleted : messagePreview(r) || t().chat.message.attachment}</span>
@@ -1237,6 +1246,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
   return (
     <section
       class="chat"
+      data-channel={channelId}
       onDragEnter={(e) => {
         if (!e.dataTransfer?.types.includes('Files')) return;
         dragDepth.current++;

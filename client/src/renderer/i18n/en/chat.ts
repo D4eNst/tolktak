@@ -43,7 +43,8 @@ export default {
     attachment: 'Attachment',
     edited: ' (edited)',
     profileOf: (name: string) => `${name}'s profile`,
-    notLoaded: 'The message is further up in the history. Scroll up to load it.',
+    gone: 'This message was deleted',
+    tooFar: 'This message is too far back in the history',
   },
   composer: {
     format: 'Formatting',

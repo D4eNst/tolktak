@@ -572,19 +572,37 @@ export async function openChannel(cid: number) {
   }
 }
 
-export async function loadOlder(cid: number) {
+export async function loadOlder(cid: number, limit = 50) {
   const cm = cmFor(cid);
   if (cm.loading || !cm.hasOlder || !cm.items.length) return;
   setIn(messages, cid, { ...cm, loading: true });
   try {
-    const { messages: older } = await api().messages(cid, { before: cm.items[0].id, limit: 50 });
+    const { messages: older } = await api().messages(cid, { before: cm.items[0].id, limit });
     const now = cmFor(cid);
     if (now.items[0]?.id !== cm.items[0].id) return;
-    setIn(messages, cid, { ...now, items: [...older, ...now.items], hasOlder: older.length === 50, loading: false });
+    setIn(messages, cid, { ...now, items: [...older, ...now.items], hasOlder: older.length === limit, loading: false });
   } catch (e) {
     setIn(messages, cid, { ...cmFor(cid), loading: false });
     toast(errorText(e), 'error');
   }
+}
+
+/** Loads older pages until a message is in the list: 'gone' when the history has passed it, 'far' after 2000 messages. */
+// shortcut: pages back through everything in between, upgrade to a history window around the message when chats grow long.
+export async function loadUntil(cid: number, id: number): Promise<'found' | 'gone' | 'far'> {
+  for (let page = 0; page < 20; ) {
+    const cm = cmFor(cid);
+    if (cm.items.some((m) => m.id === id)) return 'found';
+    if (!cm.hasOlder || !cm.items.length || cm.items[0].id < id) return 'gone';
+    if (cm.loading) {
+      await new Promise((r) => setTimeout(r, 100));
+      continue;
+    }
+    await loadOlder(cid, 100);
+    if (cmFor(cid).loading) return 'far';
+    page++;
+  }
+  return cmFor(cid).items.some((m) => m.id === id) ? 'found' : 'far';
 }
 
 export async function sendMessage(cid: number, text: string, opts: { replyTo?: number; attachments?: FileMeta[]; retryNonce?: string } = {}) {
