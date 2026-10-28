@@ -227,7 +227,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 ::selection {
-  background: rgba(255, 140, 90, 0.35);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 ::-webkit-scrollbar {
   width: 10px;
@@ -416,11 +416,11 @@ code {
 .primary {
   background: var(--grad);
   color: var(--accent-ink);
-  box-shadow: 0 4px 14px rgba(255, 110, 80, 0.25);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .primary:hover:not(:disabled) {
   filter: brightness(1.07);
-  box-shadow: 0 6px 22px rgba(255, 110, 80, 0.35);
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 35%, transparent);
   transform: translateY(-1px);
 }
 .primary:active:not(:disabled),
@@ -616,7 +616,7 @@ code {
 @keyframes flash {
   0%,
   60% {
-    background: rgba(255, 181, 71, 0.16);
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
   }
 }
 @keyframes dots {
@@ -1856,7 +1856,7 @@ code {
 /* ---------- main ---------- */
 
 .banner {
-  background: linear-gradient(90deg, rgba(255, 195, 90, 0.18), rgba(255, 195, 90, 0.08));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 18%, transparent), color-mix(in srgb, var(--warn) 8%, transparent));
   color: var(--warn);
   padding: 7px 16px;
   font-size: 13px;
@@ -1864,7 +1864,7 @@ code {
 }
 @keyframes glow {
   50% {
-    box-shadow: 0 0 0 6px rgba(255, 122, 89, 0.15);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 15%, transparent);
   }
 }
 .empty {
@@ -2024,7 +2024,7 @@ code {
   animation: flash 1.6s var(--ease);
 }
 .msg.pinned {
-  background: linear-gradient(90deg, rgba(255, 181, 71, 0.06), transparent 40%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent 40%);
 }
 .msg.editing {
   background: var(--accent-soft);
@@ -2088,7 +2088,7 @@ code {
 .mini-msg-text a {
   color: var(--link);
   text-decoration: none;
-  border-bottom: 1px solid rgba(255, 191, 122, 0.35);
+  border-bottom: 1px solid color-mix(in srgb, var(--link) 35%, transparent);
   transition: border-color var(--t);
 }
 .msg-text a:hover {
@@ -2211,14 +2211,14 @@ code {
   }
 }
 .mention {
-  background: rgba(255, 140, 90, 0.16);
+  background: color-mix(in srgb, var(--link) 16%, transparent);
   color: var(--link);
   border-radius: 5px;
   padding: 0 3px;
   font-weight: 600;
 }
 .mention.me {
-  background: rgba(255, 181, 71, 0.25);
+  background: color-mix(in srgb, var(--warn) 25%, transparent);
   color: color-mix(in srgb, var(--warn) 70%, var(--text));
 }
 .msg-text.deleted,
@@ -4836,7 +4836,7 @@ code {
   flex-direction: column;
   min-height: 0;
   background:
-    radial-gradient(80% 60% at 50% 0%, rgba(255, 122, 89, 0.06), transparent 70%),
+    radial-gradient(80% 60% at 50% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%),
     var(--bg-sunk);
 }
 .stage-body {
@@ -5967,7 +5967,7 @@ video.mirror {
 .key-capture.listening {
   border-color: var(--accent);
   color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(255, 122, 89, 0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
   animation: glow 1.4s infinite;
 }
 .shortcut-list > div {
@@ -6309,8 +6309,8 @@ label.radio .muted {
   margin-top: 8px;
   padding: 10px 12px;
   border-radius: var(--r-sm);
-  background: rgba(255, 195, 90, 0.08);
-  border: 1px solid rgba(255, 195, 90, 0.2);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 20%, transparent);
   color: color-mix(in srgb, var(--warn) 70%, var(--text));
 }
 .access-notice {
