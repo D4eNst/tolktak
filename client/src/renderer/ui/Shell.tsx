@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import { cmd } from '../keys';
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Group, Room, TextChannel } from '../api';
 import { platform } from '../bridge';
 import { t } from '../i18n';
@@ -55,51 +55,29 @@ function VoiceCapsule() {
   const [picker, setPicker] = useState(false);
   const tx = t().desk.voice;
   const ts = t().shell.self;
-  const box = useRef<HTMLDivElement>(null);
-  const last = useRef({ width: 0, inCall: !!c });
-  const grow = useRef<Animation | null>(null);
-  useLayoutEffect(() => {
-    const el = box.current!;
-    const prev = last.current;
-    const running = grow.current?.playState === 'running';
-    const from = running ? el.getBoundingClientRect().width : prev.width;
-    grow.current?.cancel();
-    last.current = { width: el.offsetWidth, inCall: !!c };
-    if ((!running && prev.inCall === !!c) || !from || from === last.current.width || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    el.style.overflow = 'hidden';
-    grow.current = el.animate([{ width: from + 'px' }, { width: last.current.width + 'px' }], { duration: 260, easing: 'ease-out' });
-    grow.current.onfinish = () => (el.style.overflow = '');
-  });
-  const toggles = (
-    <>
+  // The label outlives the call so it can fade out while the capsule closes.
+  const label = useRef('');
+  if (c) label.current = c.label;
+  return (
+    <div class={'capsule' + (c ? ' in-call' : '')}>
+      <button class="capsule-room" onClick={openVoice} title={c ? tx.back : undefined} tabIndex={c ? 0 : -1} aria-hidden={!c}>
+        <span class={'dot ' + (!c ? 'idle' : c.status === 'connected' ? 'ok live' : 'wait')} />
+        <span class="capsule-label ellipsis">{label.current}</span>
+      </button>
       <button class={'icon-btn' + (micOn.value ? '' : ' off')} onClick={toggleMic} title={micOn.value ? ts.micOff : ts.micOn} aria-label={ts.micLabel} aria-pressed={!micOn.value}>
         <Icon name={micOn.value ? 'mic' : 'micOff'} size={18} />
       </button>
       <button class={'icon-btn' + (deafened.value ? ' off' : '')} onClick={toggleDeafen} title={deafened.value ? ts.soundOn : ts.soundOff} aria-label={ts.soundLabel} aria-pressed={deafened.value}>
         <Icon name={deafened.value ? 'headphonesOff' : 'headphones'} size={18} />
       </button>
-    </>
-  );
-  if (!c)
-    return (
-      <div class="capsule" ref={box}>
-        <span class="dot idle" />
-        {toggles}
-      </div>
-    );
-  return (
-    <div class="capsule" ref={box}>
-      <button class="capsule-room" onClick={openVoice} title={tx.back}>
-        <span class={'dot ' + (c.status === 'connected' ? 'ok live' : 'wait')} />
-        <span class="ellipsis">{c.label}</span>
-      </button>
-      {toggles}
-      <button class={'icon-btn' + (sharing.value ? ' accent' : '')} onClick={() => (sharing.value ? stopShare() : setPicker(true))} title={sharing.value ? tx.stopShare : tx.share} aria-label={sharing.value ? tx.stopShare : tx.share}>
-        <Icon name="screen" size={18} />
-      </button>
-      <button class="icon-btn leave" onClick={leaveVoice} title={tx.leave} aria-label={tx.leave}>
-        <Icon name="phoneOff" size={18} />
-      </button>
+      <span class="capsule-extra" aria-hidden={!c}>
+        <button class={'icon-btn' + (sharing.value ? ' accent' : '')} onClick={() => (sharing.value ? stopShare() : setPicker(true))} title={sharing.value ? tx.stopShare : tx.share} aria-label={sharing.value ? tx.stopShare : tx.share} tabIndex={c ? 0 : -1}>
+          <Icon name="screen" size={18} />
+        </button>
+        <button class="icon-btn leave" onClick={leaveVoice} title={tx.leave} aria-label={tx.leave} tabIndex={c ? 0 : -1}>
+          <Icon name="phoneOff" size={18} />
+        </button>
+      </span>
       {picker && <SharePicker onClose={() => setPicker(false)} />}
     </div>
   );

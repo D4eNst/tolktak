@@ -382,11 +382,6 @@ code {
 .dot.live {
   animation: breathe 2.8s ease-in-out infinite;
 }
-.dot.idle {
-  margin-right: 8px;
-  background: var(--muted);
-  opacity: 0.6;
-}
 @keyframes breathe {
   50% {
     box-shadow: 0 0 0 6px rgba(79, 214, 156, 0.06);
@@ -689,16 +684,96 @@ code {
 .chip:hover {
   background: var(--bg-active);
 }
+/* One shape for both states: outside a call the room label and the call buttons fold to nothing.
+   Opening, the width leads and the content follows; closing, the content leaves first. */
+.capsule {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
 .capsule-room {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 132px;
+  width: 9px;
   min-width: 0;
-  margin-right: 6px;
+  margin-right: 8px;
   font-weight: 600;
+  cursor: default;
+  transition:
+    width 360ms var(--ease-in-out) 60ms,
+    margin 360ms var(--ease-in-out) 60ms;
 }
-.capsule-room:hover .ellipsis {
+.capsule-label {
+  opacity: 0;
+  transform: translateX(-6px);
+  filter: blur(3px);
+  transition:
+    opacity 140ms ease,
+    transform 200ms ease,
+    filter 140ms ease;
+}
+.capsule-extra {
+  display: flex;
+  gap: 2px;
+  width: 0;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  transition: width 360ms var(--ease-in-out) 60ms;
+}
+.capsule-extra > .icon-btn {
+  flex: none;
+  opacity: 0;
+  transform: scale(0.6);
+  filter: blur(3px);
+  transition:
+    opacity 120ms ease,
+    transform 180ms ease,
+    filter 120ms ease;
+}
+.capsule.in-call .capsule-room {
+  width: 132px;
+  margin-right: 6px;
+  cursor: pointer;
+  transition:
+    width 440ms var(--ease-out),
+    margin 440ms var(--ease-out);
+}
+.capsule.in-call .capsule-label {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition:
+    opacity 320ms ease 140ms,
+    transform 520ms var(--ease-out) 140ms,
+    filter 320ms ease 140ms;
+}
+.capsule.in-call .capsule-extra {
+  width: 70px;
+  transition: width 440ms var(--ease-out);
+}
+.capsule.in-call .capsule-extra > .icon-btn {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition:
+    opacity 280ms ease 200ms,
+    transform 520ms var(--ease-out) 200ms,
+    filter 280ms ease 200ms;
+}
+.capsule.in-call .capsule-extra > .icon-btn + .icon-btn {
+  transition-delay: 260ms;
+}
+.capsule-room .dot {
+  transition:
+    background-color 400ms ease,
+    box-shadow 400ms ease,
+    opacity 400ms ease;
+}
+.dot.idle {
+  background: var(--muted);
+  opacity: 0.6;
+}
+.capsule-room:not([aria-hidden='true']):hover .capsule-label {
   text-decoration: underline;
 }
 .capsule .icon-btn {
