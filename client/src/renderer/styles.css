@@ -2555,7 +2555,8 @@ code {
 .img-grid {
   display: grid;
   gap: 4px;
-  max-width: 440px;
+  max-width: min(440px, 100%);
+  grid-template-columns: minmax(0, 1fr);
   border-radius: var(--r);
   overflow: hidden;
 }
@@ -2592,7 +2593,7 @@ code {
   filter: brightness(1.05);
 }
 .video-att {
-  max-width: 440px;
+  max-width: min(440px, 100%);
   max-height: 320px;
   border-radius: var(--r);
   background: #000;
@@ -2800,6 +2801,12 @@ code {
 }
 .composer textarea:focus {
   box-shadow: none;
+}
+.composer textarea:placeholder-shown,
+.composer textarea::placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .composer .icon-btn {
   height: 34px;
