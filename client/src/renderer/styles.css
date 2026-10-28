@@ -2917,6 +2917,999 @@ code {
   }
 }
 
+/* ---------- introduction ---------- */
+.tour-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 10, 22, 0.55);
+  backdrop-filter: blur(4px);
+  animation: backdrop-in 280ms var(--ease);
+}
+.tour-backdrop.closing {
+  animation: backdrop-in 200ms var(--ease) reverse forwards;
+}
+.tour {
+  width: 434px;
+  max-width: calc(100vw - 32px);
+  padding: 16px 16px 14px;
+  border-radius: var(--r-xl);
+  background: var(--bg-island);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  animation: tour-in 460ms var(--ease);
+}
+.tour-backdrop.closing .tour {
+  animation: tour-out 200ms var(--ease) forwards;
+}
+@keyframes tour-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+@keyframes tour-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+.tour-step {
+  animation: tour-step 380ms var(--ease);
+}
+@keyframes tour-step {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--dir) * 16px));
+  }
+}
+.tour h2 {
+  margin: 16px 2px 6px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.tour p {
+  margin: 0 2px;
+  min-height: 62px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.tour-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.tour-skip {
+  padding: 8px 4px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.tour-skip:hover {
+  color: var(--text);
+}
+.tour-dots {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.tour-dots button {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border-radius: 3px;
+  background: var(--line-strong);
+  transition:
+    width 360ms var(--ease),
+    background 360ms var(--ease);
+}
+.tour-dots button:hover {
+  background: var(--faint);
+}
+.tour-dots button.on {
+  width: 18px;
+  background: var(--accent);
+}
+
+/* The sketch: a 400×224 desk drawn with blocks; every step loops over 6.4 s. */
+.tour-scene {
+  position: relative;
+  display: block;
+  width: 400px;
+  max-width: 100%;
+  height: 224px;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--bg-app);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.tour-scene * {
+  position: absolute;
+  display: block;
+  animation-duration: 6.4s;
+  animation-iteration-count: infinite;
+  animation-timing-function: cubic-bezier(0.45, 0, 0.25, 1);
+}
+.ts-top {
+  inset: 0 0 auto;
+  height: 22px;
+}
+.ts-logo {
+  left: 12px;
+  top: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--grad);
+}
+.ts-search {
+  left: 30px;
+  top: 6px;
+  width: 96px;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--bg-island);
+}
+.ts-cap {
+  right: 26px;
+  top: 4px;
+  width: 36px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--bg-island);
+}
+.ts-cap::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  width: 13px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--faint);
+}
+.ts-capdot {
+  left: 6px;
+  top: 4.5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.6;
+}
+.ts-ava {
+  right: 8px;
+  top: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--user-0);
+}
+.ts-nav {
+  left: 8px;
+  top: 28px;
+  width: 84px;
+  height: 188px;
+  border-radius: 8px;
+  background: var(--bg-island);
+}
+.ts-row {
+  left: 10px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-active);
+}
+.ts-row.room {
+  left: 20px;
+}
+.ts-row.room::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--faint);
+}
+.ts-hl {
+  left: 4px;
+  top: 11px;
+  width: 76px;
+  height: 14px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  opacity: 0;
+}
+.ts-win {
+  top: 28px;
+  height: 188px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--bg-island);
+}
+.ts-a {
+  left: 98px;
+  width: 294px;
+}
+.ts-name {
+  left: 10px;
+  top: 9px;
+  width: 56px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--text-2);
+  opacity: 0.45;
+}
+.ts-dots {
+  right: 8px;
+  top: 6px;
+  width: 14px;
+  height: 12px;
+  border-radius: 4px;
+  background: radial-gradient(circle, var(--text-2) 1.2px, transparent 1.6px) 0 50% / 4.6px 100% repeat-x;
+  opacity: 0.7;
+}
+.tour-scene .ts-msgs {
+  left: 10px;
+  right: 10px;
+  top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.tour-scene .ts-msg {
+  position: static;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tour-scene .ts-msg > * {
+  position: static;
+}
+.ts-msg i {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  opacity: 0.85;
+}
+.ts-msg b {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-active);
+}
+.ts-zone {
+  border-radius: 8px;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+  opacity: 0;
+}
+.ts-cursor {
+  z-index: 3;
+  left: 50px;
+  top: 46px;
+  transform-origin: 0 0;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+}
+
+/* 1. picking in the navigator fills the main window */
+.t-nav .ts-cursor {
+  animation-name: t1-cursor;
+}
+.t-nav .ts-hl {
+  opacity: 1;
+  animation-name: t1-hl;
+}
+.t-nav .ts-a .ts-msgs {
+  animation-name: t1-msgs;
+}
+.t-nav .ts-a .ts-name {
+  animation-name: t1-name;
+}
+@keyframes t1-cursor {
+  0%,
+  8% {
+    top: 46px;
+  }
+  18%,
+  28% {
+    top: 64px;
+  }
+  46%,
+  58% {
+    top: 100px;
+  }
+  76%,
+  100% {
+    top: 46px;
+  }
+  21%,
+  25%,
+  51%,
+  55%,
+  81%,
+  85% {
+    transform: none;
+  }
+  23%,
+  53%,
+  83% {
+    transform: scale(0.8);
+  }
+}
+@keyframes t1-hl {
+  0%,
+  22% {
+    top: 11px;
+  }
+  26%,
+  52% {
+    top: 29px;
+  }
+  56%,
+  82% {
+    top: 65px;
+  }
+  86%,
+  100% {
+    top: 11px;
+  }
+}
+@keyframes t1-msgs {
+  0%,
+  22%,
+  52%,
+  82% {
+    opacity: 1;
+    transform: none;
+  }
+  23.5%,
+  53.5%,
+  83.5% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  30%,
+  60%,
+  90%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes t1-name {
+  0%,
+  23% {
+    width: 56px;
+  }
+  24%,
+  53% {
+    width: 88px;
+  }
+  54%,
+  83% {
+    width: 40px;
+  }
+  84%,
+  100% {
+    width: 56px;
+  }
+}
+
+/* 2. a window is dragged by its title below the other one */
+.t-move .ts-a {
+  width: 144px;
+  animation-name: t2-a;
+}
+.t-move .ts-b {
+  z-index: 2;
+  left: 248px;
+  width: 144px;
+  animation-name: t2-b;
+}
+.t-move .ts-zone {
+  left: 98px;
+  top: 126px;
+  width: 294px;
+  height: 90px;
+  animation-name: t2-zone;
+}
+.t-move .ts-cursor {
+  left: 330px;
+  top: 140px;
+  animation-name: t2-cursor;
+}
+@keyframes t2-cursor {
+  0% {
+    left: 330px;
+    top: 140px;
+  }
+  16%,
+  22% {
+    left: 300px;
+    top: 36px;
+  }
+  52%,
+  76% {
+    left: 240px;
+    top: 156px;
+  }
+  92%,
+  100% {
+    left: 330px;
+    top: 140px;
+  }
+  19%,
+  58% {
+    transform: none;
+  }
+  22%,
+  55% {
+    transform: scale(0.8);
+  }
+}
+@keyframes t2-b {
+  0%,
+  22% {
+    left: 248px;
+    top: 28px;
+    width: 144px;
+    height: 188px;
+    opacity: 1;
+    box-shadow: none;
+  }
+  52%,
+  56% {
+    left: 194px;
+    top: 148px;
+    width: 92px;
+    height: 62px;
+    opacity: 0.85;
+    box-shadow: var(--shadow-sm);
+  }
+  64%,
+  84% {
+    left: 98px;
+    top: 126px;
+    width: 294px;
+    height: 90px;
+    opacity: 1;
+    box-shadow: none;
+  }
+  89% {
+    left: 98px;
+    top: 126px;
+    width: 294px;
+    height: 90px;
+    opacity: 0;
+  }
+  90% {
+    left: 248px;
+    top: 28px;
+    width: 144px;
+    height: 188px;
+    opacity: 0;
+  }
+  97%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes t2-a {
+  0%,
+  57% {
+    width: 144px;
+    height: 188px;
+    opacity: 1;
+  }
+  65%,
+  84% {
+    width: 294px;
+    height: 92px;
+    opacity: 1;
+  }
+  89% {
+    width: 294px;
+    height: 92px;
+    opacity: 0;
+  }
+  90% {
+    width: 144px;
+    height: 188px;
+    opacity: 0;
+  }
+  97%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes t2-zone {
+  0%,
+  30%,
+  62%,
+  100% {
+    opacity: 0;
+  }
+  40%,
+  56% {
+    opacity: 1;
+  }
+}
+
+/* 3. a chat dragged out of the navigator opens beside the main window */
+.t-beside .ts-a {
+  animation-name: t3-a;
+}
+.t-beside .ts-c {
+  left: 248px;
+  width: 144px;
+  opacity: 0;
+  animation-name: t3-c;
+}
+.t-beside .ts-c .ts-name {
+  width: 74px;
+}
+.t-beside .ts-chip {
+  z-index: 2;
+  left: 16px;
+  top: 93px;
+  width: 58px;
+  height: 14px;
+  border-radius: 5px;
+  background: var(--bg-active);
+  box-shadow:
+    inset 0 0 0 1px var(--accent-line),
+    var(--shadow-sm);
+  opacity: 0;
+  animation-name: t3-chip;
+}
+.t-beside .ts-zone {
+  left: 248px;
+  top: 28px;
+  width: 144px;
+  height: 188px;
+  animation-name: t2-zone;
+}
+.t-beside .ts-cursor {
+  left: 200px;
+  top: 180px;
+  animation-name: t3-cursor;
+}
+@keyframes t3-cursor {
+  0% {
+    left: 200px;
+    top: 180px;
+  }
+  16%,
+  22% {
+    left: 44px;
+    top: 100px;
+  }
+  52%,
+  78% {
+    left: 300px;
+    top: 118px;
+  }
+  94%,
+  100% {
+    left: 200px;
+    top: 180px;
+  }
+  19%,
+  57% {
+    transform: none;
+  }
+  22%,
+  54% {
+    transform: scale(0.8);
+  }
+}
+@keyframes t3-chip {
+  0%,
+  21% {
+    left: 16px;
+    top: 93px;
+    opacity: 0;
+  }
+  24% {
+    left: 16px;
+    top: 93px;
+    opacity: 1;
+  }
+  52% {
+    left: 272px;
+    top: 111px;
+    opacity: 1;
+  }
+  57%,
+  100% {
+    left: 272px;
+    top: 111px;
+    opacity: 0;
+  }
+}
+@keyframes t3-a {
+  0%,
+  56% {
+    width: 294px;
+  }
+  64%,
+  82% {
+    width: 144px;
+  }
+  94%,
+  100% {
+    width: 294px;
+  }
+}
+@keyframes t3-c {
+  0%,
+  56% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  64%,
+  82% {
+    opacity: 1;
+    transform: none;
+  }
+  92%,
+  100% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+/* 4. joining a room: the capsule lights up and the call window comes in where settings say */
+.t-call.tm-replace {
+  --cl: 98px;
+  --cw: 150px;
+  --al: 254px;
+  --aw: 138px;
+}
+.t-call.tm-beside {
+  --cl: 254px;
+  --cw: 138px;
+  --al: 98px;
+  --aw: 150px;
+}
+.t-call.tm-full {
+  --cl: 98px;
+  --cw: 294px;
+  --al: 392px;
+  --aw: 0px;
+}
+.t-call .ts-a {
+  animation-name: t4-a;
+}
+.t-call .ts-call {
+  left: var(--cl);
+  width: var(--cw);
+  opacity: 0;
+  animation-name: t4-call;
+}
+.t-call .ts-call .ts-name {
+  width: 44px;
+}
+.t-call .ts-tiles {
+  inset: 26px 8px 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.t-call .ts-tiles i {
+  position: relative;
+  border-radius: 6px;
+  background: rgba(61, 220, 151, 0.1);
+}
+.t-call .ts-tiles i::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  background: var(--user-3);
+}
+.t-call .ts-tiles i + i::after {
+  background: var(--user-1);
+}
+.t-call .ts-cap {
+  animation-name: t4-cap;
+}
+.t-call .ts-capdot {
+  animation-name: t4-dot;
+}
+.t-call .ts-cursor {
+  left: 220px;
+  top: 180px;
+  animation-name: t4-cursor;
+}
+@keyframes t4-cursor {
+  0% {
+    left: 220px;
+    top: 180px;
+  }
+  14%,
+  22% {
+    left: 44px;
+    top: 126px;
+  }
+  46%,
+  58% {
+    left: 352px;
+    top: 12px;
+  }
+  76%,
+  100% {
+    left: 220px;
+    top: 180px;
+  }
+  19%,
+  24%,
+  49%,
+  54% {
+    transform: none;
+  }
+  21.5%,
+  51.5% {
+    transform: scale(0.8);
+  }
+}
+@keyframes t4-a {
+  0%,
+  23% {
+    left: 98px;
+    width: 294px;
+  }
+  33%,
+  86% {
+    left: var(--al);
+    width: var(--aw);
+  }
+  96%,
+  100% {
+    left: 98px;
+    width: 294px;
+  }
+}
+@keyframes t4-call {
+  0%,
+  23% {
+    opacity: 0;
+    transform: scale(0.94);
+    box-shadow: none;
+  }
+  33%,
+  50% {
+    opacity: 1;
+    transform: none;
+    box-shadow: none;
+  }
+  54% {
+    box-shadow: inset 0 0 0 2px rgba(61, 220, 151, 0.55);
+  }
+  64%,
+  86% {
+    opacity: 1;
+    transform: none;
+    box-shadow: none;
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+@keyframes t4-cap {
+  0%,
+  23%,
+  96%,
+  100% {
+    width: 36px;
+  }
+  33%,
+  86% {
+    width: 62px;
+  }
+}
+@keyframes t4-dot {
+  0%,
+  23%,
+  96%,
+  100% {
+    background: var(--muted);
+    opacity: 0.6;
+    box-shadow: none;
+  }
+  33%,
+  86% {
+    background: var(--ok);
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(61, 220, 151, 0.2);
+  }
+}
+
+/* 5. the «…» menu, and a window hidden behind the edge */
+.t-menu .ts-a {
+  animation-name: t5-a;
+}
+.t-menu .ts-menu {
+  z-index: 2;
+  left: 250px;
+  top: 44px;
+  width: 136px;
+  padding: 5px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  box-shadow:
+    inset 0 0 0 1px var(--line-strong),
+    var(--shadow-sm);
+  transform-origin: 100% 0;
+  opacity: 0;
+  animation-name: t5-menu;
+}
+.t-menu .ts-menu > span {
+  position: relative;
+  height: 18px;
+  padding: 0 7px;
+  font-size: 9.5px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.ts-mhl {
+  left: 5px;
+  right: 5px;
+  top: 5px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--bg-hover);
+  opacity: 0;
+  animation-name: t5-mhl;
+}
+.ts-edgetab {
+  right: 0;
+  top: 72px;
+  width: 6px;
+  height: 44px;
+  border-radius: 4px 0 0 4px;
+  background: var(--bg-raised);
+  box-shadow: inset 1.5px 0 0 var(--accent-line);
+  opacity: 0;
+  animation-name: t5-tab;
+}
+.t-menu .ts-cursor {
+  left: 300px;
+  top: 170px;
+  animation-name: t5-cursor;
+}
+@keyframes t5-cursor {
+  0% {
+    left: 300px;
+    top: 170px;
+  }
+  16%,
+  24% {
+    left: 376px;
+    top: 34px;
+  }
+  36% {
+    left: 330px;
+    top: 62px;
+  }
+  48%,
+  70% {
+    left: 330px;
+    top: 89px;
+  }
+  90%,
+  100% {
+    left: 300px;
+    top: 170px;
+  }
+  19%,
+  24%,
+  56%,
+  61% {
+    transform: none;
+  }
+  21.5%,
+  58.5% {
+    transform: scale(0.8);
+  }
+}
+@keyframes t5-menu {
+  0%,
+  22% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.92);
+  }
+  28%,
+  60% {
+    opacity: 1;
+    transform: none;
+  }
+  65%,
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes t5-mhl {
+  0%,
+  33% {
+    top: 5px;
+    opacity: 0;
+  }
+  38% {
+    top: 5px;
+    opacity: 1;
+  }
+  48%,
+  100% {
+    top: 41px;
+    opacity: 1;
+  }
+}
+@keyframes t5-a {
+  0%,
+  62% {
+    transform: none;
+  }
+  74%,
+  88% {
+    transform: translateX(310px);
+  }
+  98%,
+  100% {
+    transform: none;
+  }
+}
+@keyframes t5-tab {
+  0%,
+  68%,
+  94%,
+  100% {
+    opacity: 0;
+  }
+  76%,
+  88% {
+    opacity: 1;
+  }
+}
+
+/* With less motion each sketch stands still on its telling moment. */
+@media (prefers-reduced-motion: reduce) {
+  .tour-scene * {
+    animation-duration: 6.4s !important;
+    animation-play-state: paused !important;
+    animation-delay: var(--still) !important;
+  }
+  .tour-scene.t-nav {
+    --still: -2.4s;
+  }
+  .tour-scene.t-move,
+  .tour-scene.t-beside {
+    --still: -4.6s;
+  }
+  .tour-scene.t-call {
+    --still: -2.6s;
+  }
+  .tour-scene.t-menu {
+    --still: -3.3s;
+  }
+}
+
 /* a room you are not in */
 .room-lobby {
   height: 100%;

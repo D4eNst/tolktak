@@ -44,6 +44,7 @@ import { addChatPanel, ChatActions, ChatView, openPanel, setPanel, SidePanel } f
 import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, Toggle } from './common';
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { CallPeople, callPeopleOpen, RoomModeToggle, Stage, toggleRoomMode } from './Stage';
+import { startTour } from './Tour';
 
 export type WindowId = 'main' | 'voice' | 'room' | 'people' | 'profile' | 'chat' | 'callpeople';
 /** `arg` is what a window is fixed to, from its id `type:arg`: `chat:12` is channel 12. */
@@ -1666,6 +1667,12 @@ export function WindowsSettings() {
           <Icon name="reset" size={16} /> {t().desk.menu.reset}
         </button>
         <p class="hint">{tx.resetHint}</p>
+      </div>
+      <div>
+        <button class="secondary" onClick={startTour}>
+          <Icon name="play" size={16} /> {t().desk.tour.replay}
+        </button>
+        <p class="hint">{t().desk.tour.replayHint}</p>
       </div>
     </>
   );

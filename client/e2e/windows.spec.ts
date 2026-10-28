@@ -56,6 +56,7 @@ async function launch(user: string, micWav?: string): Promise<{ app: ElectronApp
   app.process().stderr?.on('data', (d) => log.push(String(d)));
   (app as any).__log = log;
   const w = await app.firstWindow();
+  await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
   // Noise suppression would remove a steady tone, and UI sounds would add one.
   await w.evaluate((raw) => localStorage.setItem('tolktak.voice', JSON.stringify(raw ? { sounds: false, noiseSuppression: false, echoCancellation: false, autoGainControl: false } : { sounds: false })), !!micWav);
   await w.reload();
@@ -247,6 +248,7 @@ test('gpu / hardware encoder probe', async () => {
     const app = await electron.launch({ args: [ROOT, ...flags], env: { ...process.env, TOLKTAK_USER_DATA: mkdtempSync(path.join(work, 'gpu-')) } as Record<string, string> });
     try {
       const w = await app.firstWindow();
+      await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
       await w.waitForTimeout(1500);
       const feature = await app.evaluate(({ app }) => app.getGPUFeatureStatus());
       const info: any = await app.evaluate(({ app }) => app.getGPUInfo('complete'));
@@ -314,6 +316,7 @@ test('webrtc hardware encode in a real call', async () => {
     const app = await electron.launch({ args: [ROOT, ...flags], env: { ...process.env, TOLKTAK_USER_DATA: mkdtempSync(path.join(work, 'hw-')) } as Record<string, string> });
     try {
       const w = await app.firstWindow();
+      await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
       await w.waitForTimeout(1500);
       out[name] = await w.evaluate(async () => {
         const res: Record<string, unknown> = {};

@@ -86,6 +86,24 @@ export default {
       more: 'Drag it by the bar on top, resize it by its edges. Opacity and “Put back” are in its “…” menu. You can also drag its title back among the other windows.',
     },
   },
+  tour: {
+    skip: 'Skip',
+    next: 'Next',
+    start: 'Start',
+    stepOf: (n: number, all: number) => `Step ${n} of ${all}`,
+    replay: 'Show the introduction again',
+    replayHint: 'Five short steps on how the desk works.',
+    steps: {
+      nav: { title: 'Navigator and the main window', text: 'Your groups and people are on the left. Whatever you pick opens in the main window.' },
+      move: { title: 'Windows move', text: 'Grab a window by its title and drop it to a side or below. Drop it on another window and it becomes a tab.' },
+      beside: {
+        title: 'Beside, not instead',
+        text: (search: string, beside: string) => `Drag a chat or a room from the navigator onto the desk and it opens beside. In search ${search}, ${beside} does the same.`,
+      },
+      call: { title: 'The call is always at hand', text: 'A call lives in the capsule at the top: mic, sound and leave. Click its name to get back to the call window.' },
+      menu: { title: 'The «…» window menu', text: 'Pin, float, hide behind the edge or open separately. If the desk gets tangled, «Reset window changes» is there too.' },
+    },
+  },
   settings: {
     call: 'Where a call opens',
     callReplace: 'In place of the chat',

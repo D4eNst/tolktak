@@ -11,6 +11,7 @@ import { Login } from './Login';
 import { ProfileHost } from './Profile';
 import { SettingsDialog } from './Settings';
 import { Shell, TitleBar } from './Shell';
+import { Tour } from './Tour';
 
 function Toasts() {
   return (
@@ -140,6 +141,7 @@ export function App() {
       {session.value && switcherOpen.value && <QuickSwitcher />}
       {session.value && settingsOpen.value && <SettingsDialog />}
       {session.value && incomingCall.value && <IncomingCallDialog />}
+      {session.value && <Tour />}
       <ProfileHost />
       <LightboxHost />
       <MenuHost />

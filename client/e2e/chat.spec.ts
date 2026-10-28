@@ -126,6 +126,7 @@ test('chat, groups and profiles in the desktop client', async ({ browser }) => {
     env: { ...process.env, TOLKTAK_USER_DATA: mkdtempSync(path.join(tmpdir(), 'tt-chat-')) } as Record<string, string>,
   });
   const w = await app.firstWindow();
+  await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1440, 900));
   w.on('pageerror', (e) => console.log('[pageerror]', e.message));
   await expect(w.locator('.login-card')).toBeVisible();

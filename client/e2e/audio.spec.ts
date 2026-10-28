@@ -109,6 +109,7 @@ test('voice processing: noise suppression and leveller on the wire', async () =>
       env: { ...process.env, TOLKTAK_USER_DATA: mkdtempSync(path.join(tmpdir(), 'tt-audio-')) } as Record<string, string>,
     });
     const w = await app.firstWindow();
+    await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
     w.on('console', (m) => m.type() === 'error' && console.log(`[electron ${user}]`, m.text()));
     await w.fill('input[name=server]', stack.api);
     await w.fill('input[name=username]', user);
