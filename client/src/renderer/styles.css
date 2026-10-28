@@ -4764,9 +4764,7 @@ label.radio .muted {
 
 /* windows behind the right edge of the desk: a strip of tabs, each slides its window out */
 .workspace .dv-resize-container.edge-win {
-  transition:
-    transform 220ms var(--ease),
-    opacity 220ms var(--ease);
+  transition: transform 240ms var(--ease);
 }
 /* Fixed in place: no grip to drag it by and no edges to resize. */
 .workspace .edge-win > .dv-floating-titlebar,
@@ -4777,13 +4775,11 @@ label.radio .muted {
   height: 100% !important;
 }
 .workspace .dv-resize-container.edge-shut {
-  transform: translateX(48px);
-  opacity: 0;
+  transform: translateX(calc(100% + 60px));
   visibility: hidden;
   transition:
-    transform 220ms var(--ease),
-    opacity 220ms var(--ease),
-    visibility 0s linear 220ms;
+    transform 240ms var(--ease),
+    visibility 0s linear 240ms;
   pointer-events: none;
 }
 .edge-tabs {

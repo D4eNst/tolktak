@@ -630,6 +630,8 @@ function fit(byUser = false) {
   fitting = true;
   let folded = false;
   try {
+    // A window added a moment ago has no size yet: measure the desk as dockview will lay it out.
+    relayout();
     for (const wide of [true, false]) {
       const tried = new Set<DockviewGroupPanel>();
       let rebuilt = false;
@@ -899,6 +901,11 @@ function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions =
   const own = popped.get(id);
   if (own) return own.focus();
   if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
+  // Unfolding rebuilds the groups: aim at a window, which survives it, not at its group.
+  if (typeof position !== 'string' && 'referenceGroup' in position && typeof position.referenceGroup !== 'string') {
+    const at = position.referenceGroup.activePanel?.id;
+    position = at ? { referencePanel: at, direction: position.direction } : { direction: position.direction === 'within' ? 'right' : position.direction ?? 'right' };
+  }
   unfoldNow();
   (dock.getPanel(id) ?? addWindow(id, position)).api.setActive();
   fit(true);
