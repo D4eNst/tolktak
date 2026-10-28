@@ -45,6 +45,7 @@ import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, Togg
 import { copyText, openProfile, ProfileCard } from './Profile';
 import { CallPeople, callPeopleOpen, RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 import { startTour } from './Tour';
+import { paint, theme } from '../theme';
 
 export type WindowId = 'main' | 'voice' | 'room' | 'people' | 'profile' | 'chat' | 'callpeople';
 /** `arg` is what a window is fixed to, from its id `type:arg`: `chat:12` is channel 12. */
@@ -735,6 +736,10 @@ const popped = new Map<string, Window>();
 /** Popped windows whose «back to the desk» was pressed: they return to the desk when their window closes. */
 const returning = new Set<string>();
 window.addEventListener('beforeunload', () => popped.forEach((w) => w.close()));
+effect(() => {
+  theme.value;
+  popped.forEach((w) => paint(w.document));
+});
 
 // shortcut: popped windows are not remembered across restarts; save them with the layout when people ask for it.
 function popOut(id: string) {
@@ -750,7 +755,8 @@ function popOut(id: string) {
   base.href = location.href;
   doc.head.append(base);
   for (const el of document.head.querySelectorAll('link[rel="stylesheet"], style')) doc.head.append(el.cloneNode(true));
-  for (const a of ['data-theme', 'lang']) doc.documentElement.setAttribute(a, document.documentElement.getAttribute(a) ?? '');
+  doc.documentElement.lang = document.documentElement.lang;
+  paint(doc);
   const root = doc.createElement('div');
   root.className = 'popout';
   doc.body.append(root);

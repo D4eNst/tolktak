@@ -54,7 +54,7 @@ export const toasts = signal<Toast[]>([]);
 export const incomingCall = signal<IncomingCall | null>(null);
 export const switcherOpen = signal(false);
 export const settingsOpen = signal<false | SettingsTab>(false);
-export type SettingsTab = 'profile' | 'voice' | 'video' | 'keys' | 'watch' | 'windows' | 'app' | 'server';
+export type SettingsTab = 'profile' | 'voice' | 'video' | 'keys' | 'watch' | 'windows' | 'look' | 'app' | 'server';
 export const replyTo = signal<Map<number, Message>>(new Map());
 export const drafts = signal<Map<number, string>>(new Map());
 

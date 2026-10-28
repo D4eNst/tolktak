@@ -1,6 +1,9 @@
 import { render } from 'preact';
 import './styles.css';
+import { paint } from './theme';
 import { App } from './ui/App';
+
+paint(document);
 
 // `autofocus` works only on page load, and dialogs are inserted later.
 new MutationObserver((records) => {
