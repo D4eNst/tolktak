@@ -4,7 +4,7 @@ import { memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { ApiError, type FileMeta, type Message } from '../api';
 import { bridge } from '../bridge';
-import { cmd } from '../keys';
+import { cmd, keyLabel } from '../keys';
 import { t } from '../i18n';
 import {
   api,
@@ -287,7 +287,9 @@ function Reactions({ m }: { m: Message }) {
           title={r.users.map(userName).join(', ')}
         >
           <span class="reaction-emoji">{r.emoji}</span>
-          <span class="reaction-n">{r.users.length}</span>
+          <span key={r.users.length} class="reaction-n">
+            {r.users.length}
+          </span>
         </button>
       ))}
       <button class="reaction add" onClick={(e) => setPicker({ x: e.clientX, y: e.clientY - 330 })} aria-label={t().chat.message.addReaction}>
@@ -321,8 +323,22 @@ function quote(m: Message) {
   setReply(m.channel_id, m);
 }
 
+function ReplyRef({ r }: { r: { id: number; author_id: number; text: string; deleted?: boolean; attachments?: FileMeta[] | number } }) {
+  return (
+    <button class="msg-reply" onClick={() => jumpTo(r.id)} title={t().chat.message.reply}>
+      <Icon name="reply" size={13} />
+      <b style={{ color: users.value.get(r.author_id)?.color }}>{userName(r.author_id)}</b>
+      <span class="ellipsis">{r.deleted ? t().chat.message.replyDeleted : messagePreview(r) || t().chat.message.attachment}</span>
+    </button>
+  );
+}
+
+// When each own message left the composer, so its row picks up the entrance where the pending row left it.
+const sentAt = new Map<string, number>();
+
 type RowProps = {
   m: Message;
+  fresh: boolean;
   grouped: boolean;
   canPin: boolean;
   canDelete: boolean;
@@ -331,20 +347,26 @@ type RowProps = {
 };
 
 // Memoised, so its props must keep their identity between renders of the chat.
-const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, editing, setEditing }: RowProps) {
+const MessageRow = memo(function MessageRow({ m, fresh, grouped, canPin, canDelete, editing, setEditing }: RowProps) {
   const mine = m.author_id === me.value?.id;
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const [enter] = useState(() => (sentAt.has(m.nonce) ? Date.now() - sentAt.get(m.nonce)! : fresh ? 0 : -1));
+  const wasDeleted = useRef(m.deleted);
   const author = users.value.get(m.author_id);
   const sticker = STICKER_RE.exec(m.text);
   const st = sticker ? findSticker(sticker[1]) : undefined;
 
   const del = async () => {
     if (!(await confirmDialog(t().chat.message.deleteConfirm, { text: t().chat.message.deleteConfirmText, ok: t().chat.message.delete, danger: true }))) return;
+    setLeaving(true);
     try {
-      upsertMessage((await api().deleteMessage(m.id)).message);
+      const [{ message }] = await Promise.all([api().deleteMessage(m.id), new Promise((r) => setTimeout(r, 220))]);
+      upsertMessage(message);
     } catch (e) {
       toast(errorText(e), 'error');
     }
+    setLeaving(false);
   };
   const pin = async () => {
     try {
@@ -374,19 +396,21 @@ const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, edi
 
   return (
     <div
-      class={'msg' + (grouped ? ' grouped' : '') + (mine ? ' mine' : '') + (editing ? ' editing' : '') + (highlight.value === m.id ? ' flash' : '') + (m.pinned_at ? ' pinned' : '')}
+      class={
+        'msg' +
+        (grouped ? ' grouped' : '') +
+        (mine ? ' mine' : '') +
+        (editing ? ' editing' : '') +
+        (highlight.value === m.id ? ' flash' : '') +
+        (m.pinned_at ? ' pinned' : '') +
+        (enter >= 0 && enter < 400 ? ' enter' : '') +
+        (leaving ? ' leaving' : '')
+      }
+      style={enter > 0 ? { animationDelay: `-${enter}ms` } : undefined}
       data-id={m.id}
       onContextMenu={menu}
       onDblClick={(e) => !m.deleted && !(e.target as HTMLElement).closest('a,button,.spoiler,img,audio,video') && setReply(m.channel_id, m)}
     >
-      {m.reply && (
-        <button class="msg-reply" onClick={() => jumpTo(m.reply!.id)}>
-          <Icon name="reply" size={14} />
-          <Avatar id={m.reply.author_id} size={16} />
-          <b>{userName(m.reply.author_id)}</b>
-          <span class="ellipsis">{m.reply.deleted ? t().chat.message.replyDeleted : messagePreview(m.reply) || t().chat.message.attachment}</span>
-        </button>
-      )}
       <div class="msg-gutter">
         {grouped ? (
           <span class="msg-time-hover">{dateFormats.value.time.format(m.created_at)}</span>
@@ -408,10 +432,11 @@ const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, edi
                 <Icon name="pin" size={12} />
               </span>
             )}
+            {m.reply && <ReplyRef r={m.reply} />}
           </div>
         )}
         {m.deleted ? (
-          <div class="msg-text deleted">{t().chat.message.deleted}</div>
+          <div class={'msg-text deleted' + (wasDeleted.current ? '' : ' gone')}>{t().chat.message.deleted}</div>
         ) : st ? (
           <div class={'sticker anim-' + st.anim}>{st.emoji}</div>
         ) : (
@@ -427,12 +452,15 @@ const MessageRow = memo(function MessageRow({ m, grouped, canPin, canDelete, edi
       </div>
       {!m.deleted && !editing && (
         <div class="msg-actions">
-          {QUICK_REACTIONS.map((e) => (
-            <button key={e} class="qr" onClick={() => react(m, e)} title={t().chat.message.reactWith(e)}>
-              {e}
-            </button>
-          ))}
-          <button onClick={(e) => setPicker({ x: e.clientX - 300, y: e.clientY + 16 })} title={t().chat.message.reaction} aria-label={t().chat.message.reaction}>
+          {/* Quick reactions fan out of the reaction button while it is hovered. */}
+          <span class="qr-tray">
+            {QUICK_REACTIONS.map((e, i) => (
+              <button key={e} class="qr" style={{ '--i': QUICK_REACTIONS.length - i }} onClick={() => react(m, e)} title={t().chat.message.reactWith(e)}>
+                {e}
+              </button>
+            ))}
+          </span>
+          <button class="qr-open" onClick={(e) => setPicker({ x: e.clientX - 300, y: e.clientY + 16 })} title={t().chat.message.reaction} aria-label={t().chat.message.reaction}>
             <Icon name="smilePlus" size={18} />
           </button>
           <button onClick={() => setReply(m.channel_id, m)} title={t().chat.message.reply} aria-label={t().chat.message.reply}>
@@ -547,6 +575,31 @@ function useRecorder(onDone: (blob: Blob) => void) {
   return { rec, start, stop };
 }
 
+function quoteSelection(el: HTMLTextAreaElement, set: (v: string) => void) {
+  const { value } = el;
+  const a = value.lastIndexOf('\n', el.selectionStart - 1) + 1;
+  const b = el.selectionEnd;
+  const quoted = value
+    .slice(a, b)
+    .split('\n')
+    .map((l) => '> ' + l)
+    .join('\n');
+  set(value.slice(0, a) + quoted + value.slice(b));
+  requestAnimationFrame(() => {
+    el.focus();
+    el.setSelectionRange(a, a + quoted.length);
+  });
+}
+
+const FORMATS = [
+  ['bold', '**', 'Mod B'],
+  ['italic', '*', 'Mod I'],
+  ['strike', '~~', 'Mod Shift X'],
+  ['eyeOff', '||', ''],
+  ['code', '`', ''],
+  ['quote', '> ', ''],
+] as const;
+
 function wrapSelection(el: HTMLTextAreaElement, mark: string, set: (v: string) => void) {
   const { selectionStart: a, selectionEnd: b, value } = el;
   const sel = value.slice(a, b);
@@ -572,6 +625,7 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
   const [emoji, setEmoji] = useState<{ x: number; y: number } | null>(null);
   const [mention, setMention] = useState<{ q: string; at: number; idx: number } | null>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
+  const [selected, setSelected] = useState(false);
   const reply = replyTo.value.get(channelId);
   const recorder = useRecorder((blob) => {
     const name = `voice-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm`;
@@ -758,7 +812,7 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
         <div class="reply-bar">
           <Icon name="reply" size={16} />
           <span>
-            {t().chat.composer.replyingTo} <b>{userName(reply.author_id)}</b>: <span class="muted">{messagePreview(reply).slice(0, 120)}</span>
+            {t().chat.composer.replyingTo} <b style={{ color: users.value.get(reply.author_id)?.color }}>{userName(reply.author_id)}</b>: <span class="muted">{messagePreview(reply).slice(0, 120)}</span>
           </span>
           <button class="icon-btn tiny" onClick={() => setReply(channelId, null)} aria-label={t().chat.composer.cancelReply}>
             <Icon name="x" size={14} />
@@ -772,6 +826,21 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
               <Avatar id={u.id} size={22} />
               <span>{u.display_name}</span>
               <span class="muted small">@{u.username}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {selected && (
+        <div class="fmt-bar" role="toolbar" aria-label={t().chat.composer.format} onMouseDown={(e) => e.preventDefault()}>
+          {FORMATS.map(([icon, mark, keys], i) => (
+            <button
+              key={icon}
+              style={{ '--i': i }}
+              title={t().chat.composer.formats[i] + (keys ? ' · ' + keyLabel(keys) : '')}
+              aria-label={t().chat.composer.formats[i]}
+              onClick={() => (mark === '> ' ? quoteSelection(ta.current!, setText) : wrapSelection(ta.current!, mark, setText))}
+            >
+              <Icon name={icon} size={15} />
             </button>
           ))}
         </div>
@@ -795,6 +864,8 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
           rows={1}
           placeholder={t().chat.composer.placeholder(title)}
           value={text}
+          onSelect={(e) => setSelected(e.currentTarget.selectionStart !== e.currentTarget.selectionEnd)}
+          onBlur={() => setSelected(false)}
           onInput={(e) => {
             const el = e.target as HTMLTextAreaElement;
             setText(el.value);
@@ -1040,6 +1111,8 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
   }, [channelId]);
   // Where reading stopped when the channel opened: the divider stays there while new messages are read.
   const readMark = useMemo(() => channels.value.get(channelId)?.last_read_id ?? 0, [channelId]);
+  // Messages newer than this arrived while the chat was open, and play their entrance.
+  const openedAt = useMemo(() => Date.now(), [channelId]);
   useEffect(() => {
     const sent = (e: Event) => {
       if ((e as CustomEvent<number>).detail !== channelId) return;
@@ -1156,39 +1229,51 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
                   )}
                   {prev && prev.id <= readMark && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
                   <RowBoundary>
-                    <MessageRow m={m} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} editing={editing === m.id} setEditing={setEditing} />
+                    <MessageRow m={m} fresh={m.created_at > openedAt} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} editing={editing === m.id} setEditing={setEditing} />
                   </RowBoundary>
                 </div>
               );
             })}
-            {pending.map((p) => (
-              <div class={'msg pending ' + p.status} key={p.nonce}>
-                <div class="msg-gutter">
-                  <Avatar id={me.value!.id} size={38} />
+            {pending.map((p, i) => {
+              sentAt.set(p.nonce, p.created_at);
+              const last = items[items.length - 1];
+              // Laid out as the message will be once it is stored, so nothing moves when it is.
+              const grouped = !p.reply_to && (i > 0 || (!!last && last.author_id === me.value?.id && !last.deleted && p.created_at - last.created_at < 5 * 60_000));
+              const r = p.reply_to ? items.find((x) => x.id === p.reply_to) : undefined;
+              return (
+                <div class={'msg pending mine enter ' + p.status + (grouped ? ' grouped' : '')} key={p.nonce}>
+                  <div class="msg-gutter">{!grouped && <Avatar id={me.value!.id} size={38} />}</div>
+                  <div class="msg-main">
+                    {!grouped && (
+                      <div class="msg-head">
+                        <span class="msg-author" style={{ color: me.value!.color }}>
+                          {userName(me.value!.id)}
+                        </span>
+                        <span class="msg-time">{t().chat.view.sending}</span>
+                        {r && <ReplyRef r={r} />}
+                      </div>
+                    )}
+                    {p.text && (
+                      <div class="msg-text">
+                        <Markdown text={p.text} />
+                      </div>
+                    )}
+                    {p.attachments.length > 0 && <div class="small muted">{t().chat.view.attachments(p.attachments.length)}</div>}
+                    {p.status === 'failed' && (
+                      <div class="small error">
+                        {t().chat.view.notSent}{' '}
+                        <button class="link" onClick={() => sendMessage(channelId, p.text, { retryNonce: p.nonce, replyTo: p.reply_to, attachments: p.attachments })}>
+                          {t().chat.view.retry}
+                        </button>{' '}
+                        <button class="link" onClick={() => discardPending(channelId, p.nonce)}>
+                          {t().chat.view.discard}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div class="msg-main">
-                  {p.text && (
-                    <div class="msg-text">
-                      <Markdown text={p.text} />
-                    </div>
-                  )}
-                  {p.attachments.length > 0 && <div class="small muted">{t().chat.view.attachments(p.attachments.length)}</div>}
-                  {p.status === 'failed' ? (
-                    <div class="small error">
-                      {t().chat.view.notSent}{' '}
-                      <button class="link" onClick={() => sendMessage(channelId, p.text, { retryNonce: p.nonce, replyTo: p.reply_to, attachments: p.attachments })}>
-                        {t().chat.view.retry}
-                      </button>{' '}
-                      <button class="link" onClick={() => discardPending(channelId, p.nonce)}>
-                        {t().chat.view.discard}
-                      </button>
-                    </div>
-                  ) : (
-                    <div class="small muted">{t().chat.view.sending}</div>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {!atBottom && (
               <button
                 class="to-bottom pop-in"

@@ -46,7 +46,7 @@ export const EMOJI_GROUPS: { id: EmojiGroupId; icon: string; list: string }[] = 
   },
 ];
 
-export const QUICK_REACTIONS = ['👍', '❤️', '😂'];
+export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '🔥'];
 export const STREAM_REACTIONS = ['🔥', '😂', '😱', '❤️', '👏', '🍿', '💀', '🤯'];
 
 export type Sticker = { id: string; emoji: string; anim: 'bounce' | 'wiggle' | 'pulse' | 'spin' | 'float' };

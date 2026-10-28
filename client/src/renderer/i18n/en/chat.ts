@@ -46,6 +46,8 @@ export default {
     notLoaded: 'The message is further up in the history. Scroll up to load it.',
   },
   composer: {
+    format: 'Formatting',
+    formats: ['Bold', 'Italic', 'Strikethrough', 'Spoiler', 'Code', 'Quote'],
     placeholder: (title: string) => `Message ${title}`,
     label: 'Message',
     attach: 'Attach files',
@@ -100,5 +102,6 @@ export default {
   },
   markdown: {
     spoiler: 'Spoiler. Click to reveal',
+    copyCode: 'Copy code',
   },
 };

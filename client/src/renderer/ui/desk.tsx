@@ -273,7 +273,7 @@ addChatPanel('profile', (cid, close) => {
 function ChatBody({ cid }: { cid?: number }) {
   const ch = cid ? channels.value.get(cid) : undefined;
   const g = ch?.group_id ? groups.value.get(ch.group_id) : undefined;
-  if (cid && ch?.peer_id) return <ChatView channelId={cid} title={userName(ch.peer_id)} icon={<Avatar id={ch.peer_id} size={34} showPresence />} />;
+  if (cid && ch?.peer_id) return <ChatView channelId={cid} title={userName(ch.peer_id)} icon={<Avatar id={ch.peer_id} size={64} showPresence />} />;
   if (cid && g) return <ChatView channelId={cid} title={groupChannelName(g, cid)} icon={<Icon name="hash" size={28} />} canModerate={canModerate(g)} />;
   return <Empty text={t().desk.empty.pickChat} />;
 }

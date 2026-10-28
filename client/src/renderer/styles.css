@@ -10,6 +10,7 @@
   --shadow: 0 14px 44px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --t: 160ms;
   --font: 'Onest Variable', 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -666,6 +667,8 @@ code {
   *::after {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
+  }  .spoiler {
+    animation: none;
   }
 }
 
@@ -1922,8 +1925,16 @@ code {
   color: var(--accent);
 }
 .chat-start-icon .avatar-btn,
-.chat-start-icon .head-hash {
+.chat-start-icon .head-hash,
+.chat-start-icon:has(> .avatar) {
   background: none;
+}
+.chat-start-icon > .avatar .presence {
+  width: 24%;
+  height: 24%;
+  right: 1px;
+  bottom: 1px;
+  box-shadow: 0 0 0 3px var(--bg-island);
 }
 .chat-start h2 {
   margin: 12px 0 4px;
@@ -2083,17 +2094,35 @@ code {
   border-bottom-color: var(--link);
 }
 .msg-text blockquote {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
   margin: 4px 0;
-  padding: 2px 0 2px 12px;
-  border-left: 3px solid var(--accent-line);
+  padding: 3px 12px 3px 13px;
+  border-radius: 4px 10px 10px 4px;
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
   color: var(--text-2);
+}
+.msg-text blockquote::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent-line);
 }
 .msg-text ul,
 .msg-text ol {
   margin: 2px 0;
   padding-left: 22px;
 }
+.msg-text li::marker {
+  color: var(--muted);
+}
 .code-block {
+  position: relative;
   margin: 6px 0;
   padding: 10px 12px;
   border-radius: var(--r-sm);
@@ -2107,29 +2136,74 @@ code {
   background: none;
   padding: 0;
 }
-.spoiler {
-  background: #3a3342;
-  color: transparent;
-  border-radius: 4px;
-  text-align: start;
-  cursor: pointer;
+.code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--bg-sunk);
+  opacity: 0;
   transition:
-    background 200ms,
-    color 200ms;
+    opacity var(--t),
+    background var(--t),
+    color var(--t);
+}
+.code-block:hover .code-copy,
+.code-copy:focus-visible {
+  opacity: 1;
+}
+.code-copy:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+/* A spoiler is a patch of drifting haze over the words; opening it, the haze settles and the words come into focus. */
+.spoiler {
+  border-radius: 5px;
+  padding: 0 2px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  cursor: pointer;
+  color: transparent;
+  text-shadow: 0 0 7px color-mix(in srgb, var(--text) 70%, transparent);
+  filter: blur(2.5px);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--text) 10%, transparent) 30%, color-mix(in srgb, var(--text) 22%, transparent) 50%, color-mix(in srgb, var(--text) 10%, transparent) 70%) 0 0 / 300% 100%;
+  animation: haze 3.2s ease-in-out infinite alternate;
+  transition:
+    filter 460ms var(--ease-out),
+    color 460ms var(--ease-out),
+    text-shadow 460ms var(--ease-out),
+    background-color 460ms var(--ease-out);
 }
 .spoiler * {
-  visibility: hidden;
+  color: inherit;
 }
 .spoiler:hover {
-  background: #463e50;
+  filter: blur(2px);
+}
+.spoiler:focus-visible {
+  outline: 2px solid var(--accent-line);
+  filter: none;
 }
 .spoiler.open {
-  background: color-mix(in srgb, var(--text) 7%, transparent);
-  color: inherit;
   cursor: text;
+  color: inherit;
+  text-shadow: none;
+  filter: none;
+  animation: none;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
-.spoiler.open * {
-  visibility: visible;
+@keyframes haze {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
 }
 .mention {
   background: rgba(255, 140, 90, 0.16);
@@ -2152,65 +2226,64 @@ code {
   font-style: normal;
 }
 .msg.pending .msg-text {
-  opacity: 0.6;
+  opacity: 0.72;
 }
 .msg.pending.failed .msg-text {
   color: var(--danger);
+  opacity: 1;
 }
+/* What a message answers sits in its header line, after the time. */
 .msg-reply {
-  grid-column: 1 / -1;
-  display: flex;
+  align-self: center;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin: 0 0 2px 22px;
-  padding-left: 18px;
+  gap: 5px;
   min-width: 0;
-  font-size: 12.5px;
+  max-width: min(60%, 420px);
+  height: 20px;
+  padding: 0 8px 0 6px;
+  border-radius: 10px;
+  font-size: 12px;
   color: var(--muted);
-  text-align: left;
-  position: relative;
+  background: color-mix(in srgb, var(--text) 4.5%, transparent);
+  transition:
+    background var(--t),
+    color var(--t);
 }
-.msg-reply::before {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 50%;
-  width: 14px;
-  height: 10px;
-  border: 2px solid var(--line-strong);
-  border-right: 0;
-  border-bottom: 0;
-  border-top-left-radius: 6px;
-}
-.msg-reply > svg:first-child {
-  display: none;
+.msg-reply svg {
+  flex: none;
+  color: var(--faint);
 }
 .msg-reply b {
-  color: var(--text-2);
   flex: none;
+  font-weight: 650;
 }
 .msg-reply:hover {
-  color: var(--text);
+  color: var(--text-2);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
+/* The actions grow out of the hovered row itself: no card, the row's own tone with a soft edge over the text. */
 .msg-actions {
+  --row: color-mix(in srgb, var(--text) 2.5%, var(--bg-island));
   position: absolute;
-  top: -16px;
-  right: 18px;
+  top: 2px;
+  right: 10px;
   display: flex;
   align-items: center;
   gap: 1px;
-  padding: 3px;
-  border-radius: var(--r);
-  background: var(--bg-raised);
-  border: 1px solid var(--line-strong);
-  box-shadow: var(--shadow-sm);
+  padding: 2px 2px 2px 28px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, transparent, var(--row) 24px);
   opacity: 0;
-  transform: translateY(4px) scale(0.98);
+  transform: translateX(6px);
   pointer-events: none;
   transition:
-    opacity 140ms var(--ease),
-    transform 140ms var(--ease);
+    opacity 160ms var(--ease-out),
+    transform 260ms var(--ease-out);
   z-index: 2;
+}
+.msg.grouped .msg-actions {
+  top: -2px;
 }
 .msg:hover .msg-actions,
 .msg:has(:focus-visible) .msg-actions {
@@ -2219,27 +2292,51 @@ code {
   pointer-events: auto;
 }
 .msg-actions button {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   border-radius: 8px;
   color: var(--muted);
   transition:
     background var(--t),
-    color var(--t),
-    transform var(--t) var(--spring);
+    color var(--t);
 }
 .msg-actions button:hover {
-  background: var(--bg-hover);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text);
+}
+.qr-tray {
+  display: flex;
+  gap: 1px;
+  max-width: 0;
+  overflow: hidden;
+  transition: max-width 280ms var(--ease-out);
+}
+.msg-actions:has(.qr-open:hover, .qr-tray:hover, .qr-tray :focus-visible) .qr-tray {
+  max-width: 200px;
+}
+.msg-actions:has(.qr-tray:hover) .qr-open {
   color: var(--text);
 }
 .msg-actions .qr {
+  flex: none;
   font-size: 17px;
+  opacity: 0;
+  transform: translateX(10px) scale(0.6);
+  transition:
+    opacity 180ms var(--ease-out),
+    transform 280ms var(--ease-out);
+}
+.msg-actions:has(.qr-open:hover, .qr-tray:hover, .qr-tray :focus-visible) .qr {
+  opacity: 1;
+  transform: none;
+  transition-delay: calc(var(--i) * 28ms);
 }
 .msg-actions .qr:hover {
-  transform: scale(1.2);
   background: none;
+  transform: translateY(-1px) scale(1.2);
+  transition-delay: 0ms;
 }
 
 /* reactions */
@@ -2247,47 +2344,113 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 4px;
+  margin-top: 5px;
 }
 .reaction {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 8px;
-  border-radius: 13px;
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  font-size: 12.5px;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 5.5%, transparent);
+  box-shadow: inset 0 0 0 1px transparent;
+  font-size: 12px;
   color: var(--text-2);
   transition:
     background var(--t),
-    border-color var(--t),
-    transform var(--t) var(--spring);
-  animation: pop 240ms var(--spring);
+    box-shadow var(--t),
+    color var(--t);
+  animation: reaction-in 280ms var(--ease-out);
 }
 .reaction:hover {
-  border-color: var(--line-strong);
-  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--text) 9%, transparent);
 }
 .reaction.mine {
   background: var(--accent-soft);
-  border-color: var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
   color: var(--link);
 }
 .reaction-emoji {
-  font-size: 15px;
+  font-size: 14px;
+  transition: transform 220ms var(--ease-out);
+}
+.reaction:active .reaction-emoji {
+  transform: scale(0.8);
 }
 .reaction-n {
-  font-weight: 700;
+  display: inline-block;
+  min-width: 1ch;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  animation: count-in 260ms var(--ease-out);
 }
 .reaction.add {
+  width: 24px;
+  padding: 0;
+  justify-content: center;
+  background: none;
+  color: var(--faint);
   opacity: 0;
-  color: var(--muted);
+  animation: none;
+}
+.reaction.add:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 .msg:hover .reaction.add,
 .reaction.add:focus-visible {
   opacity: 1;
+}
+@keyframes reaction-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+@keyframes count-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+
+/* entrances and exits */
+.msg.enter {
+  animation: msg-in 360ms var(--ease-out) backwards;
+}
+.msg.mine.enter {
+  animation-name: msg-sent;
+}
+.msg-main > * {
+  transition:
+    opacity 220ms var(--ease-out),
+    filter 220ms var(--ease-out);
+}
+.msg.leaving .msg-main > :not(.msg-head) {
+  opacity: 0;
+  filter: blur(3px);
+}
+.msg-text.gone {
+  animation: gone-in 420ms var(--ease-out);
+}
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes msg-sent {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}
+@keyframes gone-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
 }
 
 /* stickers */
@@ -2705,6 +2868,43 @@ code {
 .reply-bar svg {
   color: var(--accent);
   flex: none;
+}
+.fmt-bar {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 6px;
+  z-index: 3;
+  display: flex;
+  gap: 1px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-sm);
+  animation: fmt-in 200ms var(--ease-out);
+}
+.fmt-bar button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-2);
+  animation: fmt-in 240ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i) * 18ms);
+  transition:
+    background var(--t),
+    color var(--t);
+}
+.fmt-bar button:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+@keyframes fmt-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 .upload-tray {
   display: flex;
