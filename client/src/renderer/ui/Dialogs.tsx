@@ -121,7 +121,6 @@ export function QuickSwitcher() {
     for (const g of groups.value.values()) {
       out.push({ key: 'g' + g.id, label: g.name, hint: ts.group, icon: <GroupAvatar id={g.id} size={18} />, run: () => go({ kind: 'group', groupId: g.id }), beside: () => openBeside(g.channel_id) });
       for (const ch of g.text_channels ?? []) {
-        if (ch.id === g.channel_id) continue;
         out.push({ key: 't' + ch.id, label: ch.name, hint: ts.channel(g.name), icon: <Icon name="hash" size={16} />, run: () => go({ kind: 'group', groupId: g.id, channelId: ch.id }), beside: () => openBeside(ch.id) });
       }
       for (const r of g.rooms) {
