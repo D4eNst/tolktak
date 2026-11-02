@@ -19,7 +19,7 @@
     "dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
-    "electron-updater": "6.8.10",
+    "electron-updater": "6.8.11",
     "koffi": "2.16.2"
   },
   "devDependencies": {
@@ -29,10 +29,10 @@
     "@sapphi-red/web-noise-suppressor": "^0.4.1",
     "@types/node": "^24.19.2",
     "electron": "45.0.0",
-    "electron-builder": "26.17.0",
+    "electron-builder": "26.18.0",
     "esbuild": "0.28.2",
     "livekit-client": "2.23.0",
-    "preact": "11.0.1",
+    "preact": "11.0.2",
     "rcedit": "5.0.2",
     "typescript": "7.0.2"
   },
