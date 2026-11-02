@@ -45,7 +45,7 @@ services:
 
   livekit:
     profiles: [livekit]
-    image: livekit/livekit-server:v1.13.10
+    image: livekit/livekit-server:v1.13.11
     restart: unless-stopped
     environment:
       LIVEKIT_CONFIG: |
