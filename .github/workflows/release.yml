@@ -59,6 +59,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12 != '' }}
+          EP_DRAFT: 'true'
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: client/release/TolkTak-*
@@ -132,8 +133,7 @@ jobs:
 
   # The install guide downloads these from the latest release.
   deploy-files:
-    needs: desktop
-    if: ${{ !cancelled() }}
+    needs: [desktop, server-image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
