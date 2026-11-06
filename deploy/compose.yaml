@@ -136,7 +136,7 @@ services:
   # the Docker socket: remove `updater` from COMPOSE_PROFILES to update by hand instead.
   updater:
     profiles: [updater]
-    image: docker:28-cli
+    image: docker:29-cli
     restart: unless-stopped
     working_dir: /deploy
     entrypoint: [sh, /updater.sh]
