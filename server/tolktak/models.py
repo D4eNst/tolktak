@@ -13,6 +13,10 @@ class User(Model):
     avatar = fields.TextField(default="")
     about = fields.TextField(default="")
     status = fields.TextField(default="")
+    username_folded = fields.TextField(default="")
+    display_name_folded = fields.TextField(default="")
+    contacts_version = fields.BigIntField(default=0)
+    profile_revision = fields.BigIntField(default=0)
 
     class Meta:
         table = "users"
@@ -47,6 +51,7 @@ class Channel(Model):
     kind = fields.TextField()
     dm_key = fields.TextField(null=True)
     created_at = fields.BigIntField()
+    history_version = fields.BigIntField(default=0)
 
     class Meta:
         table = "channels"
@@ -88,6 +93,9 @@ class GroupMember(Model):
 
 class Room(Model):
     id = fields.BigIntField(primary_key=True)
+    moderation_version = fields.BigIntField(default=0)
+    call_id = fields.BigIntField(default=0)
+    call_active = fields.IntField(default=0)
     group_id = fields.BigIntField()
     name = fields.TextField()
     position = fields.IntField()
@@ -108,6 +116,7 @@ class Message(Model):
     deleted = fields.IntField(default=0)
     reply_to = fields.BigIntField(null=True)
     pinned_at = fields.BigIntField(null=True)
+    revision = fields.BigIntField(default=0)
 
     class Meta:
         table = "messages"

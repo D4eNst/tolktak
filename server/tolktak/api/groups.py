@@ -3,8 +3,9 @@ from enum import IntEnum
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import Field
 
-from ..errors import ApiError
+from ..errors import ApiError, FileMissing, Forbidden
 from ..realtime import event
 from ..server import Server, background, current_user, group_room_name
 from ..store import chat, groups, valid_name
@@ -43,18 +44,15 @@ async def publish_group(s: Server, gid: int) -> None:
     s.hub.send_to(g["members"], event("group.updated", g))
 
 
-async def remove_group(s: Server, g: dict) -> None:
-    fids = await chat.attachments_in([c["id"] for c in g["text_channels"]])
-    await groups.delete_group(g["id"])
-    await remove_unused_files(s, fids)
-
-
 def kick_rooms(s: Server, g: dict, uid: int | None) -> None:
-    for room in g["rooms"]:
-        name = group_room_name(g["id"], room["id"])
-        for m in s.hub.voice_members(name):
-            if uid is None or m.user_id == uid:
-                background(remove_from_sfu(s, name, m.user_id))
+    names = {group_room_name(g["id"], room["id"]) for room in g["rooms"]}
+    names.update(name for name in [*s.hub.voice_rooms(), *s.moderation.bridges] if name.startswith(f"g{g['id']}r"))
+    for name in names:
+        identities = {m.user_id for m in s.hub.voice_members(name)}
+        identities.update(s.moderation.bridges.get(name, {}).values())
+        for member in identities:
+            if uid is None or member == uid:
+                background(remove_from_sfu(s, name, member))
 
 
 @router.get("/groups")
@@ -75,7 +73,7 @@ async def create_group(request: Request, user: User):
     name, ok = valid_name(req.name, 60)
     if not ok:
         raise ApiError(400, "bad_name", "Group name must be 1-60 characters")
-    if len(req.members) > MAX_GROUP_MEMBERS:
+    if len(req.members) > MAX_GROUP_MEMBERS or len({user["id"], *req.members}) > MAX_GROUP_MEMBERS:
         raise ApiError(400, "too_many_members", "A group can have at most 200 members")
     room_name, ok = valid_name(req.room_name, 40)
     if not ok:
@@ -116,7 +114,10 @@ async def update_group(request: Request, user: User):
             raise ApiError(400, "bad_avatar", "Group picture must be an image you uploaded")
         patch["avatar"] = req.avatar
     await load_group(gid, user["id"], Need.MOD)
-    await groups.update_group(gid, **patch)
+    try:
+        await groups.update_group(gid, user["id"], **patch)
+    except FileMissing:
+        raise ApiError(400, "bad_avatar", "Group picture must be an image you uploaded") from None
     await publish_group(server(request), gid)
     return no_content()
 
@@ -126,9 +127,10 @@ async def delete_group(request: Request, user: User):
     gid = path_id(request)
     g = await load_group(gid, user["id"], Need.OWNER)
     s = server(request)
-    await remove_group(s, g)
+    fids, members = await groups.delete_group(gid, user["id"])
+    await remove_unused_files(s, fids)
     kick_rooms(s, g, None)
-    s.hub.send_to(g["members"], event("group.deleted", {"id": gid}))
+    s.hub.send_to(members, event("group.deleted", {"id": gid}))
     return no_content()
 
 
@@ -143,7 +145,7 @@ async def add_members(request: Request, user: User):
     g = await load_group(gid, user["id"], Need.MOD)
     if len(g["members"]) + len(req.user_ids) > MAX_GROUP_MEMBERS:
         raise ApiError(400, "too_many_members", "A group can have at most 200 members")
-    await groups.add_group_members(gid, req.user_ids)
+    await groups.add_group_members(gid, req.user_ids, user["id"])
     await publish_group(server(request), gid)
     return no_content()
 
@@ -162,19 +164,13 @@ async def remove_member(request: Request, user: User):
                 raise ApiError(403, "cannot_kick_owner", "The group owner cannot be removed")
             case "mod" if g["owner_id"] != me:
                 raise ApiError(403, "cannot_kick_moderator", "Only the group owner can remove a moderator")
-    await groups.remove_group_member(gid, uid)
+    deleted, fids = await groups.remove_group_member(gid, uid, me)
     s = server(request)
     kick_rooms(s, g, uid)
-    if len(g["members"]) == 1:
-        # Last member left: the group disappears.
-        await remove_group(s, g)
+    if deleted:
+        await remove_unused_files(s, fids)
         s.hub.send_to([uid], event("group.deleted", {"id": gid}))
         return no_content()
-    if uid == g["owner_id"]:
-        try:
-            await groups.transfer_ownership(gid)
-        except Exception:
-            log.exception("transfer ownership")
     s.hub.send_to([uid], event("group.deleted", {"id": gid}))
     await publish_group(s, gid)
     return no_content()
@@ -194,7 +190,7 @@ async def create_room(request: Request, user: User):
     g = await load_group(gid, user["id"], Need.MOD)
     if len(g["rooms"]) >= 20:
         raise ApiError(400, "too_many_rooms", "A group can have at most 20 rooms")
-    room = await groups.create_room(gid, name)
+    room = await groups.create_room(gid, name, user["id"])
     await publish_group(server(request), gid)
     return json_response({"room": room}, 201)
 
@@ -211,7 +207,7 @@ async def rename_room(request: Request, user: User):
     if not ok:
         raise ApiError(400, "bad_name", "Room name must be 1-40 characters")
     room, g = await room_for_mod(request, user["id"])
-    await groups.rename_room(room["id"], name)
+    await groups.rename_room(room["id"], name, user["id"])
     await publish_group(server(request), g["id"])
     return no_content()
 
@@ -221,11 +217,12 @@ async def delete_room(request: Request, user: User):
     room, g = await room_for_mod(request, user["id"])
     if len(g["rooms"]) <= 1:
         raise ApiError(400, "last_room", "A group must keep at least one room")
-    await groups.delete_room(room["id"])
+    await groups.delete_room(room["id"], user["id"])
     s = server(request)
     name = group_room_name(g["id"], room["id"])
-    for m in s.hub.voice_members(name):
-        background(remove_from_sfu(s, name, m.user_id))
+    identities = {m.user_id for m in s.hub.voice_members(name)} | set(s.moderation.bridges.get(name, {}).values())
+    for uid in identities:
+        background(remove_from_sfu(s, name, uid))
     await publish_group(s, g["id"])
     return no_content()
 
@@ -244,7 +241,7 @@ async def set_role(request: Request, user: User):
     g = await load_group(gid, user["id"], Need.OWNER)
     if uid == g["owner_id"]:
         raise ApiError(400, "owner_role_fixed", "The owner's role cannot be changed")
-    await groups.set_group_role(gid, uid, req.role)
+    await groups.set_group_role(gid, uid, req.role, user["id"])
     await publish_group(server(request), gid)
     return no_content()
 
@@ -259,7 +256,7 @@ async def create_text_channel(request: Request, user: User):
     g = await load_group(gid, user["id"], Need.MOD)
     if len(g["text_channels"]) >= 30:
         raise ApiError(400, "too_many_channels", "A group can have at most 30 chats")
-    cid, position = await groups.create_text_channel(gid, name)
+    cid, position = await groups.create_text_channel(gid, name, user["id"])
     s = server(request)
     s.hub.send_to(g["members"], event("channel.created", chat.channel_summary(cid, "group", group_id=gid)))
     await publish_group(s, gid)
@@ -281,7 +278,7 @@ async def rename_text_channel(request: Request, user: User):
     if not ok:
         raise ApiError(400, "bad_name", "Chat name must be 1-40 characters")
     cid, g = await text_channel_for_mod(request, user["id"])
-    await groups.rename_text_channel(cid, name)
+    await groups.rename_text_channel(cid, name, user["id"])
     await publish_group(server(request), g["id"])
     return no_content()
 
@@ -292,9 +289,37 @@ async def delete_text_channel(request: Request, user: User):
     if cid == g["channel_id"]:
         raise ApiError(400, "main_channel", "The main group chat cannot be deleted")
     fids = await chat.attachments_in([cid])
-    await groups.delete_text_channel(cid)
+    await groups.delete_text_channel(cid, user["id"])
     s = server(request)
     await remove_unused_files(s, fids)
     s.hub.send_to(g["members"], event("channel.deleted", {"id": cid}))
     await publish_group(s, g["id"])
     return no_content()
+
+
+class OrderReq(Body):
+    ids: list[Annotated[int, Field(strict=True, gt=0, lt=1 << 63)]]
+
+
+async def reorder(request: Request, user: dict, resource: str):
+    req = await read_json(request, OrderReq)
+    if len(set(req.ids)) != len(req.ids):
+        raise ApiError(400, "bad_request", "Order IDs must be unique")
+    gid = path_id(request)
+    try:
+        changed = await groups.set_order(gid, user["id"], req.ids, resource)
+    except Forbidden:
+        raise ApiError(403, "moderators_only", "Only the group owner or moderators can do this") from None
+    if changed:
+        await publish_group(server(request), gid)
+    return no_content()
+
+
+@router.put("/groups/{id}/channel-order")
+async def channel_order(request: Request, user: User):
+    return await reorder(request, user, "channels")
+
+
+@router.put("/groups/{id}/room-order")
+async def room_order(request: Request, user: User):
+    return await reorder(request, user, "rooms")

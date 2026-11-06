@@ -1,4 +1,4 @@
-"""Runs SQLite on the event loop thread: aiosqlite's thread hops cost more than the queries."""
+"""Avoid thread hops for short SQLite queries; checkpoint off the event loop."""
 
 import asyncio
 import contextlib
@@ -68,9 +68,9 @@ class InlineSqliteClient(SqliteClient):
         conn.row_factory = sqlite3.Row
         for pragma, val in self.pragmas.items():
             conn.execute(f"PRAGMA {pragma}={val}").close()
-        # Checkpoints are run by checkpoint_loop, off the event loop.
+        # The background loop handles checkpoints.
         conn.execute("PRAGMA wal_autocheckpoint=0").close()
-        # Case-insensitive lookups compare UPPER() of both sides, and SQLite's own folds only ASCII.
+        # Legacy lookups need Unicode UPPER; SQLite supplies only ASCII.
         conn.create_function("upper", 1, _upper, deterministic=True)
         self._connection = _Connection(conn)  # type: ignore[assignment]
         await self._post_connect()

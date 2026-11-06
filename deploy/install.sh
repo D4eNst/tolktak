@@ -112,7 +112,7 @@ case $(choose "How will people reach the server?" \
     set_env TOLKTAK_DOMAIN "$domain"
     url=https://$domain
     ports="7881/tcp and 7882/udp, plus your proxy's 443/tcp"
-    proxy="In your proxy, send $url to 127.0.0.1:8080 and its /rtc path to 127.0.0.1:7880: https://github.com/D4eNst/tolktak/blob/main/docs/guides/reverse-proxy.md"
+    proxy="In your proxy, send all paths, including /rtc, at $url to 127.0.0.1:8080: https://github.com/D4eNst/tolktak/blob/main/docs/guides/reverse-proxy.md"
     ;;
   3)
     guess=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1) }')
@@ -121,12 +121,11 @@ case $(choose "How will people reach the server?" \
     # Caddy is not started, but compose.yaml requires a value.
     set_env TOLKTAK_DOMAIN "$ip"
     set_env TOLKTAK_BIND 0.0.0.0
-    set_env LIVEKIT_BIND 0.0.0.0
     set_env TOLKTAK_TRUST_PROXY 0
     set_env LIVEKIT_USE_EXTERNAL_IP false
     set_env LIVEKIT_NODE_IP "$ip"
     url=http://$ip:8080
-    ports="8080/tcp, 7880/tcp, 7881/tcp, 7882/udp"
+    ports="8080/tcp, 7881/tcp, 7882/udp"
     ;;
 esac
 

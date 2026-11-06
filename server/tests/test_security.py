@@ -8,7 +8,7 @@ from conftest import decode_jwt, post_webhook
 from tolktak import db, realtime
 from tolktak.api import voice, ws
 from tolktak.api.files import remove_old_unused_files
-from tolktak.errors import Forbidden
+from tolktak.errors import FileMissing
 from tolktak.server import parse_room_name
 from tolktak.sniff import image_size
 from tolktak.store import chat, users
@@ -452,7 +452,7 @@ def test_a_file_being_deleted_cannot_be_attached(make_env, monkeypatch):
         try:
             await chat.create_message(cid, a_id, "n2", "", 0, [fid])
             attached.append(True)
-        except Forbidden:
+        except FileMissing:
             attached.append(False)
 
     monkeypatch.setattr(e.server.files, "delete", attach_meanwhile)

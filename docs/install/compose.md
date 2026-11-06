@@ -75,7 +75,7 @@ The other settings in `.env` are optional; see the [configuration reference](../
 | 7881 | TCP | Calls when a participant's network blocks UDP |
 | 7882 | UDP | Voice, video and screen sharing |
 
-Open them in the server's firewall and in your hosting provider's firewall. With your own reverse proxy, 80 and 443 are its ports; over plain HTTP, open 8080/TCP and 7880/TCP instead of them. See [Firewall and ports](../guides/firewall.md).
+Open them in the server's firewall and in your hosting provider's firewall. With your own reverse proxy, 80 and 443 are its ports; over plain HTTP, open 8080/TCP instead of them. See [Firewall and ports](../guides/firewall.md).
 
 ## 4. Start
 
@@ -106,9 +106,9 @@ To use your own service instead, remove it from the list, set what replaces it i
 
 - **PostgreSQL** that you already run, or a managed one: remove `postgres` and set `TOLKTAK_DATABASE_URL`. See [PostgreSQL](../guides/postgres.md).
 - **S3** from a provider, such as AWS S3, Cloudflare R2 or Backblaze B2: remove `garage` and set the `TOLKTAK_S3_*` variables. To keep files on the server's disk instead, set an empty `TOLKTAK_S3_BUCKET=`. See [S3 storage](../guides/s3.md).
-- **A reverse proxy** that already serves ports 80 and 443, such as nginx: remove `caddy`. TolkTak listens on `127.0.0.1:8080` and LiveKit on `127.0.0.1:7880`. Send the domain to the first and the path `/rtc` to the second, as in [Reverse proxy](../guides/reverse-proxy.md). If port 8080 or 7880 is taken, set `TOLKTAK_PORT` or `LIVEKIT_PORT`.
+- **A reverse proxy** that already serves ports 80 and 443, such as nginx: remove `caddy`. TolkTak listens on `127.0.0.1:8080`; send every path, including `/rtc`, there, as in [Reverse proxy](../guides/reverse-proxy.md). If port 8080 is taken, set `TOLKTAK_PORT`. LiveKit HTTP is available only on the internal Docker network.
 
-- **LiveKit** elsewhere, such as LiveKit Cloud: remove `livekit` and set `LIVEKIT_PUBLIC_URL`, `LIVEKIT_INTERNAL_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`. See [Configuration](../operations/configuration.md#livekit).
+- **LiveKit** elsewhere: remove `livekit` and set `LIVEKIT_INTERNAL_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`. Set `TOLKTAK_SIGNALING_PRIVATE=0` until its HTTP/WebSocket signaling is inaccessible to participants; only then assert `TOLKTAK_SIGNALING_PRIVATE=1`. Public LiveKit services without a private signaling boundary do not support enforced moderation. See [Configuration](../operations/configuration.md#livekit).
 
 Keep your settings in `.env`: an upgrade replaces `compose.yaml`. For a change that `.env` does not cover, put it in `compose.override.yaml` next to it; Compose merges that file automatically and upgrades leave it alone.
 

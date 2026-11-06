@@ -35,15 +35,17 @@ The server refuses to start, with a clear message, if a required variable is mis
 | Variable | Default | Description |
 |---|---|---|
 | `TOLKTAK_EMBEDDED_LIVEKIT` | off; `1` in `d4enst/tolktak` | `1` makes the server start `livekit-server` itself, with keys generated on the first start and kept in `livekit-keys` in the data directory. `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and `LIVEKIT_INTERNAL_URL` are then not used. |
-| `LIVEKIT_PUBLIC_URL` | empty | Address the apps use to reach LiveKit. Empty: the server derives it from the address the app used, `wss://<domain>` over HTTPS or `ws://<host>:7880` over HTTP. Set it when LiveKit has its own address, for example `wss://lk.example.com`. |
+| `TOLKTAK_SIGNALING_PUBLIC_URL` | empty | Public WebSocket origin routed to the TolkTak app, including `/rtc`. Empty derives `wss://<domain>` or `ws://<app-host>:<app-port>` from the request. Never point this at LiveKit directly. |
+| `TOLKTAK_SIGNALING_PRIVATE` | off | Assert `1` only when all LiveKit HTTP/WS paths are private to the app. Compose sets this; embedded LiveKit binds HTTP to loopback automatically. Without this boundary, manual deployments omit the moderation capability and mutations return HTTP 503 `moderation_unavailable`. |
+| `LIVEKIT_PUBLIC_URL` | legacy, ignored | Kept for configuration compatibility; no longer advertised. Move a public app-origin override to `TOLKTAK_SIGNALING_PUBLIC_URL`. |
 | `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | required without the embedded LiveKit | Must match the keys in LiveKit's configuration. The secret must be at least 32 characters. |
 | `LIVEKIT_INTERNAL_URL` | `http://127.0.0.1:7880` | Address the server uses for LiveKit's API. `http://livekit:7880` in the Compose setup. |
 
-In the Compose setup, these four variables are set in `.env` like the others; `LIVEKIT_API_KEY` defaults to `tolktak` there.
+In the Compose setup, these variables are set in `.env` like the others; `LIVEKIT_API_KEY` defaults to `tolktak` there.
 
 The embedded LiveKit also reads LiveKit's own variables from the server's environment. The one most often needed is `NODE_IP`, the address LiveKit gives to the apps for calls. By default LiveKit discovers the public address through STUN; set `NODE_IP` for a server that participants reach through a local network, which turns the discovery off.
 
-The embedded LiveKit listens on TCP 7880 (signalling), TCP 7881 and UDP 7882 (calls), has TURN turned off and sends its webhook to the server's `TOLKTAK_LISTEN` port. The `livekit` service of the Compose setup works the same way, with the settings below. Other LiveKit options are described in the [LiveKit configuration reference](https://docs.livekit.io/home/self-hosting/deployment/); to change one, override `LIVEKIT_CONFIG` of the `livekit` service in `compose.override.yaml`.
+The embedded LiveKit listens on loopback TCP 7880 (private signalling), TCP 7881 and UDP 7882 (calls), has TURN turned off and sends its webhook to the server's `TOLKTAK_LISTEN` port. Compose keeps HTTP 7880 private on its Docker network, with only media ports published; see the settings below. Other LiveKit options are described in the [LiveKit configuration reference](https://docs.livekit.io/home/self-hosting/deployment/); to change one, override `LIVEKIT_CONFIG` of the `livekit` service in `compose.override.yaml`.
 
 ## Compose setup only
 
@@ -52,8 +54,8 @@ The embedded LiveKit listens on TCP 7880 (signalling), TCP 7881 and UDP 7882 (ca
 | `TOLKTAK_DOMAIN` | required | Domain name of the server. Caddy obtains its certificate. |
 | `TOLKTAK_VERSION` | `latest` | Tag of `d4enst/tolktak-server` to run. Pin a release such as `0.2.0` to upgrade only when you choose. |
 | `COMPOSE_PROFILES` | `livekit,postgres,garage,caddy,updater` | Bundled services to start. Remove one to use your own, see [Install with Docker Compose](../install/compose.md#your-own-database-storage-or-proxy), or `updater` to update by hand. |
-| `TOLKTAK_PORT`, `LIVEKIT_PORT` | `8080`, `7880` | Ports on `127.0.0.1` for your own reverse proxy. |
+| `TOLKTAK_PORT` | `8080` | App port on `127.0.0.1` for your own reverse proxy, including `/rtc`. LiveKit HTTP is not published. |
 | `LIVEKIT_TCP_PORT`, `LIVEKIT_UDP_PORT` | `7881`, `7882` | Call ports of the `livekit` service. |
 | `LIVEKIT_USE_EXTERNAL_IP`, `LIVEKIT_NODE_IP` | `true`, empty | LiveKit discovers the public address through STUN. On a local network, set `LIVEKIT_USE_EXTERNAL_IP=false` and the server's local address in `LIVEKIT_NODE_IP`. |
-| `TOLKTAK_BIND`, `LIVEKIT_BIND` | `127.0.0.1` | Interfaces of the TolkTak and LiveKit signalling ports. `0.0.0.0` serves plain HTTP directly, without a reverse proxy; then also set `TOLKTAK_TRUST_PROXY=0`, which is `1` in this setup. |
+| `TOLKTAK_BIND` | `127.0.0.1` | Interface of the app port, including call admission. `0.0.0.0` serves plain HTTP directly, without a reverse proxy; then also set `TOLKTAK_TRUST_PROXY=0`, which is `1` in this setup. |
 | `POSTGRES_PASSWORD`, `LIVEKIT_API_SECRET`, `GARAGE_RPC_SECRET`, `GARAGE_ACCESS_KEY`, `GARAGE_SECRET_KEY` | required | Secrets, written by the [installer](../install/compose.md#2-install). Changing the PostgreSQL password or the Garage keys later does not change them in the existing volumes. |

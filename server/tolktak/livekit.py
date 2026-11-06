@@ -9,6 +9,13 @@ import orjson
 PUBLISH_SOURCES = ["microphone", "camera", "screen_share", "screen_share_audio"]
 
 
+class LiveKitError(RuntimeError):
+    def __init__(self, method: str, status: int, code: str):
+        super().__init__(f"livekit {method}: {status} {code}")
+        self.status = status
+        self.code = code
+
+
 class WebhookError(Exception):
     pass
 
@@ -57,7 +64,8 @@ class LiveKit:
             raise WebhookError("token not valid now or wrong issuer")
         return claims
 
-    def join_token(self, identity: str, name: str, metadata: str, room: str, ttl: int) -> str:
+    def join_token(self, identity: str, name: str, metadata: str, room: str, ttl: int,
+                   allowed: dict | None = None) -> str:  # fmt: skip
         now = int(time.time())
         claims = {"iss": self.api_key, "sub": identity, "nbf": now - 10, "exp": now + ttl}
         if name:
@@ -68,6 +76,14 @@ class LiveKit:
             "roomJoin": True, "room": room, "canPublish": True, "canSubscribe": True, "canPublishData": True,
             "canPublishSources": PUBLISH_SOURCES,
         }  # fmt: skip
+        if allowed is not None:
+            sources = [s for s in PUBLISH_SOURCES if allowed["screen" if s.startswith("screen_share") else s]]
+            claims["video"].update(
+                canPublish=bool(sources),
+                canPublishSources=sources,
+                canSubscribe=bool(allowed["entry"]),
+                canPublishData=bool(allowed["entry"]),
+            )
         return self.sign(claims)
 
     def receive_webhook(self, authorization: str, body: bytes) -> dict:
@@ -89,7 +105,11 @@ class LiveKit:
             headers={"Content-Type": "application/json", "Authorization": "Bearer " + tok},
         )
         if res.status_code != 200:
-            raise RuntimeError(f"livekit {method}: {res.status_code}: {res.text[:4096]}")
+            try:
+                code = res.json().get("code", "unknown")
+            except ValueError:
+                code = "unknown"
+            raise LiveKitError(method, res.status_code, code)
         return res.json()
 
     async def list_rooms(self) -> list[dict]:
@@ -101,3 +121,23 @@ class LiveKit:
 
     async def remove_participant(self, room: str, identity: str) -> None:
         await self._twirp("RemoveParticipant", {"roomAdmin": True, "room": room}, {"room": room, "identity": identity})
+
+    async def update_permissions(self, room: str, identity: str, allowed: dict) -> dict:
+        sources = []
+        if allowed["microphone"]:
+            sources.append("MICROPHONE")
+        if allowed["camera"]:
+            sources.append("CAMERA")
+        if allowed["screen"]:
+            sources.extend(("SCREEN_SHARE", "SCREEN_SHARE_AUDIO"))
+        permission = {
+            "canPublish": bool(sources),
+            "canSubscribe": bool(allowed["entry"]),
+            "canPublishData": bool(allowed["entry"]),
+            "canPublishSources": sources,
+        }
+        return await self._twirp(
+            "UpdateParticipant",
+            {"roomAdmin": True, "room": room},
+            {"room": room, "identity": identity, "permission": permission},
+        )

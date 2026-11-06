@@ -37,7 +37,7 @@ See [Domains and addresses](../guides/domains.md) for setup. In HTTP mode, passw
 |---|---|---|
 | 80, 443 | TCP | HTTPS and certificate issuance, in the Compose setup or with your own reverse proxy |
 | 443 | UDP | HTTP/3, in the Compose setup |
-| 8080, 7880 | TCP | TolkTak and LiveKit directly, with `docker run` without HTTPS |
+| 8080 | TCP | TolkTak, including call admission, with `docker run` without HTTPS |
 | 7881 | TCP | Calls when UDP is unavailable |
 | 7882 | UDP | Voice, video and screen sharing |
 

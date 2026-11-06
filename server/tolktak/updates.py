@@ -14,7 +14,7 @@ from .realtime import Hub, event
 
 log = logging.getLogger("tolktak")
 
-# Raise when a release breaks older clients; clients below it must update before they can work.
+# Raise when a release breaks older clients.
 MIN_CLIENT_VERSION = "0.1.3"
 
 URGENT_MARK = "<!-- tolktak:urgent -->"
@@ -125,7 +125,7 @@ class Updater:
             urgent = URGENT_MARK in (release.get("body") or "")
             self.available = Release(version, urgent)
             self.apply_by = self.clock() + WAIT_FOR_QUIET
-            # An administrator's "Update now" carries over to the newer release.
+            # Keep a pending manual update across newer releases.
             self.apply_when_pulled = self.apply_when_pulled or (urgent and self.mode == "auto")
             log.info("update available version=%s urgent=%s", version, urgent)
             if self.state != "restarting":
@@ -189,7 +189,7 @@ class Updater:
         (self.dir / "status").unlink(missing_ok=True)
         self.since = self.clock()
         self._set("restarting")
-        # Gives clients time to receive the notice before the container stops.
+        # Deliver the restart notice before stopping the container.
         await asyncio.sleep(RESTART_DELAY)
         self._request("apply", version)
         log.info("restarting for update version=%s", version)
@@ -206,13 +206,13 @@ class Updater:
             return ""
 
     def _fail(self, reason: str) -> None:
-        # A request left behind would be carried out whenever the sidecar comes back, without warning.
+        # A stale request could trigger an unannounced update when the sidecar returns.
         (self.dir / "request").unlink(missing_ok=True)
         self.apply_when_pulled = self.mode == "auto" and self.available is not None and self.available.urgent
         self._set("failed", reason)
 
     def _set(self, state: str, error: str = "") -> None:
         self.state, self.error = state, error
-        # Administrators fetch the details; everyone needs to know a restart is coming.
+        # Notify everyone of restarts; details stay admin-only.
         version = self.available.version if self.available else None
         self.hub.broadcast_all(event("server.update", {"state": state, "version": version}))

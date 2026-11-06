@@ -34,6 +34,8 @@ Clients talk to it over a REST API under `/api/v1/` and receive changes (new mes
 
 Sending a message is idempotent: each message carries a client-generated nonce, and the server keeps one message per author and nonce, so a retry after a dropped connection does not create a duplicate.
 
+The [message history API](message-history.md) provides bounded windows before, after or around a message, with explicit edges and a consistent snapshot version. Message revisions let clients distinguish newer changes from late responses. Read positions are monotonic and server-validated; sending a message does not acknowledge an unseen gap.
+
 ### LiveKit
 
 [LiveKit](https://livekit.io) is a selective forwarding unit (SFU): it receives each participant's audio and video once and forwards it to the others without mixing or transcoding. It knows nothing about users or groups. Every group voice room and every direct-message call maps to one LiveKit room.

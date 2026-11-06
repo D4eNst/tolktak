@@ -21,11 +21,14 @@ def parse_range(header: str, size: int) -> tuple[int, int] | Literal["invalid"] 
     m = _RANGE.fullmatch(header.strip())
     if not m or not (m[1] or m[2]):
         return None
-    if not m[1]:
-        n = int(m[2])
-        return (max(size - n, 0), size - 1) if n else "invalid"
-    first = int(m[1])
-    last = int(m[2]) if m[2] else size - 1
+    try:
+        if not m[1]:
+            n = int(m[2])
+            return (max(size - n, 0), size - 1) if n else "invalid"
+        first = int(m[1])
+        last = int(m[2]) if m[2] else size - 1
+    except ValueError:
+        return "invalid"
     if first >= size:
         return "invalid"
     if last < first:

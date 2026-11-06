@@ -22,7 +22,8 @@ services:
       TOLKTAK_S3_REGION: ${TOLKTAK_S3_REGION-garage}
       TOLKTAK_S3_ACCESS_KEY: ${TOLKTAK_S3_ACCESS_KEY:-${GARAGE_ACCESS_KEY:-}}
       TOLKTAK_S3_SECRET_KEY: ${TOLKTAK_S3_SECRET_KEY:-${GARAGE_SECRET_KEY:-}}
-      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-}
+      TOLKTAK_SIGNALING_PUBLIC_URL: ${TOLKTAK_SIGNALING_PUBLIC_URL:-}
+      TOLKTAK_SIGNALING_PRIVATE: ${TOLKTAK_SIGNALING_PRIVATE:-1}
       LIVEKIT_INTERNAL_URL: ${LIVEKIT_INTERNAL_URL:-http://livekit:7880}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-tolktak}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?generate the secrets, see docs/install/compose.md}
@@ -62,7 +63,7 @@ services:
           urls: [http://tolktak:8080/api/v1/livekit/webhook]
         room:
           empty_timeout: 60
-          # Adds H.264 42001f: Chromium encodes it on the GPU, the default 42e01f only in software.
+          # Chromium can encode 42001f on the GPU; default 42e01f uses software.
           enabled_codecs:
             - mime: audio/opus
             - mime: audio/red
@@ -79,7 +80,6 @@ services:
         turn:
           enabled: false
     ports:
-      - ${LIVEKIT_BIND:-127.0.0.1}:${LIVEKIT_PORT:-7880}:7880
       - ${LIVEKIT_TCP_PORT:-7881}:${LIVEKIT_TCP_PORT:-7881}
       - ${LIVEKIT_UDP_PORT:-7882}:${LIVEKIT_UDP_PORT:-7882}/udp
     cap_drop: [ALL]
@@ -151,9 +151,22 @@ services:
 configs:
   caddy:
     content: |
+      {
+          log default {
+              format filter {
+                  request>uri query {
+                      delete access_token
+                      delete token
+                      delete join_request
+                  }
+                  request>headers>Authorization delete
+              }
+          }
+      }
+
       ${TOLKTAK_DOMAIN:?set TOLKTAK_DOMAIN in .env} {
         header Strict-Transport-Security max-age=31536000
-        reverse_proxy /rtc* livekit:7880
+        reverse_proxy /rtc* tolktak:8080
         reverse_proxy tolktak:8080
       }
   garage:

@@ -1,4 +1,4 @@
-"""Reads are not authenticated: <img> and <audio> cannot send the token, the random id is the access."""
+"""Random file IDs authorize reads; uploads require a session."""
 
 import asyncio
 import contextlib
@@ -26,10 +26,10 @@ User = Annotated[dict, Depends(current_user)]
 
 MAX_SIDE = 16384
 
-# The built-in table only, the same on every host: mimetypes.guess_type also reads files such as /etc/mime.types.
+# Ignore host-specific MIME tables.
 _MIME_TYPES = mimetypes.MimeTypes()
 
-# Control and text direction characters: an override shows "a\u202egpj.exe" as "aexe.jpg".
+# Strip controls and bidirectional formatting from download names.
 _HIDDEN = re.compile("[\x00-\x1f\x7f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 
 
@@ -48,7 +48,7 @@ async def upload(request: Request, user: User):
     s = server(request)
     me = user["id"]
     s.limit(f"upload:{me}", 20, 60, "Too many uploads, slow down")
-    # One upload at a time per user, so parallel uploads cannot pass the quota together.
+    # Serialize per-user quota checks.
     async with s.upload_locks.setdefault(me, asyncio.Lock()):
         return await receive_file(request, s, me)
 
@@ -89,29 +89,28 @@ async def receive_file(request: Request, s: Server, me: int):
                 f.write(chunk)
         if size == 0:
             raise ApiError(400, "empty_file", "File is empty")
-        # The content is trusted over the client.
         ctype = detect_content_type(head)
         by_name = _MIME_TYPES.guess_file_type(name)[0]
         if by_name and (ctype == "application/octet-stream" or ctype.startswith("text/plain")):
             ctype = by_name
         ctype = ctype.split(";")[0].strip()
-        # Sniffing and mimetypes give WAV and Ogg other names; players and INLINE_TYPES expect these.
+        # Normalize sniffed types for media playback.
         ctype = {
             "audio/wave": "audio/wav",
             "audio/vnd.wave": "audio/wav",
             "application/ogg": "audio/ogg",
         }.get(ctype, ctype)
-        # WebM sniffs as video, but a client voice message is audio-only WebM.
+        # Audio-only WebM also sniffs as video.
         if ctype == "video/webm" and request.headers.get("content-type", "").startswith("audio/webm"):
             ctype = "audio/webm"
-        # So does MP4, but an M4A file is audio.
+        # M4A also sniffs as video.
         if ctype == "video/mp4" and by_name == "audio/mp4":
             ctype = by_name
         meta = {"id": fid, "name": name, "mime": ctype, "size": size}
         if ctype.startswith("image/"):
             w, h = image_size(str(path), ctype)
             if w == 0:
-                # Formats not parsed here (webp, avif): accept the client's measurement.
+                # Use client dimensions for formats not parsed here.
                 w, h = query_int(request, "w"), query_int(request, "h")
                 if not (0 < w <= MAX_SIDE and 0 < h <= MAX_SIDE):
                     w = h = 0
@@ -129,7 +128,7 @@ async def receive_file(request: Request, s: Server, me: int):
     return json_response({"file": files.file_dict(meta)}, 201)
 
 
-# Uploads that were never sent and replaced pictures count against the quota until removed.
+# Unsent uploads and old avatars count toward quota until cleanup.
 async def remove_old_unused_files(s: Server) -> None:
     fids = await files.unused_before(now() - 24 * 60 * 60 * 1000)
     for i in range(0, len(fids), 500):
@@ -137,17 +136,16 @@ async def remove_old_unused_files(s: Server) -> None:
 
 
 async def remove_unused_files(s: Server, fids: list[str]) -> None:
-    # The records go first, so nothing can attach a file while its copy is being deleted.
+    # Commit metadata deletion before removing blobs.
     for f in await files.delete_unused(fids):
         try:
             await s.files.delete(f["id"])
         except Exception as e:
             log.warning("delete file id=%s: %r", f["id"], e)
-            # Back in place, so the daily cleanup tries again.
+            # Restore metadata so cleanup can retry.
             await files.create_file(f["uploader_id"], f)
 
 
-# Rendered by the client; everything else is downloaded.
 INLINE_TYPES = {
     "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif",
     "audio/mpeg", "audio/ogg", "audio/wav", "audio/webm", "audio/mp4", "audio/x-wav", "audio/aac", "audio/flac",
@@ -172,7 +170,7 @@ async def download(request: Request, id: str):
     headers = {
         "Content-Disposition": f"{disp}; filename*=UTF-8''{quote(meta['name'], safe='')}",
         "Cache-Control": "private, max-age=31536000, immutable",
-        # Uploaded content never runs as a page of this origin.
+        # Sandbox uploads on this origin.
         "Content-Security-Policy": "sandbox; default-src 'none'",
     }
     return await server(request).files.response(id, request, meta["size"], ctype, headers) or not_found

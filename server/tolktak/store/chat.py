@@ -1,22 +1,28 @@
+from tortoise.backends.base.client import BaseDBAsyncClient
 from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
 from .. import db
 from ..db import CONN
-from ..errors import Conflict, Forbidden, NotFound
-from ..models import Channel, ChannelMember, File, Message, MessageFile, Reaction, TextChannel, User
-from . import now
+from ..errors import Conflict, FileMissing, Forbidden, NotFound
+from ..models import Channel, ChannelMember, Message, MessageFile, Reaction, TextChannel, User
+from . import files, groups, now, search, users
 from .files import file_dict
 
 
 def channel_summary(cid: int, kind: str, peer_id: int = 0, group_id: int = 0, last_message: dict | None = None,
-                    last_read_id: int = 0, unread: int = 0) -> dict:  # fmt: skip
+                    last_read_id: int = 0, unread: int = 0, history_version: int = 0) -> dict:  # fmt: skip
     out: dict = {"id": cid, "kind": kind}
     if peer_id:
         out["peer_id"] = peer_id
     if group_id:
         out["group_id"] = group_id
-    out |= {"last_message": last_message, "last_read_id": last_read_id, "unread": unread}
+    out |= {
+        "last_message": last_message,
+        "last_read_id": last_read_id,
+        "unread": unread,
+        "history_version": history_version,
+    }
     return out
 
 
@@ -69,38 +75,68 @@ async def dm_peer(cid: int, me: int) -> int:
 
 
 async def list_channels(uid: int) -> list[dict]:
-    found = await db.rows(
-        """
-        SELECT c.id, c.kind, cm.last_read_id,
-          COALESCE((SELECT m2.user_id FROM channel_members m2 WHERE m2.channel_id = c.id AND m2.user_id != ?
-                    AND c.kind = 'dm'), 0) AS peer_id,
-          COALESCE((SELECT t.group_id FROM text_channels t WHERE t.channel_id = c.id), 0) AS group_id,
-          (SELECT COUNT(*) FROM messages m WHERE m.channel_id = c.id AND m.id > cm.last_read_id
-             AND m.author_id != ? AND m.deleted = 0) AS unread,
-          COALESCE((SELECT MAX(id) FROM messages m WHERE m.channel_id = c.id), 0) AS last_id
-        FROM channel_members cm JOIN channels c ON c.id = cm.channel_id
-        WHERE cm.user_id = ?
-        """,
-        [uid, uid, uid],
-    )
-    last = {m["id"]: m for m in await messages_by_ids([r["last_id"] for r in found if r["last_id"]])}
-    return [
-        channel_summary(
-            r["id"], r["kind"], r["peer_id"], r["group_id"], last.get(r["last_id"]), r["last_read_id"], r["unread"]
+    async with db.read_transaction() as tx:
+        found = await db.rows(
+            """
+            SELECT c.id, c.kind, c.history_version, cm.last_read_id,
+              COALESCE((SELECT m2.user_id FROM channel_members m2 WHERE m2.channel_id = c.id AND m2.user_id != ?
+                        AND c.kind = 'dm'), 0) AS peer_id,
+              COALESCE((SELECT t.group_id FROM text_channels t WHERE t.channel_id = c.id), 0) AS group_id,
+              (SELECT COUNT(*) FROM messages m WHERE m.channel_id = c.id AND m.id > cm.last_read_id
+                 AND m.author_id != ? AND m.deleted = 0) AS unread,
+              COALESCE((SELECT MAX(id) FROM messages m WHERE m.channel_id = c.id AND m.deleted = 0), 0) AS last_id
+            FROM channel_members cm JOIN channels c ON c.id = cm.channel_id
+            WHERE cm.user_id = ?
+            """,
+            [uid, uid, uid],
+            tx,
         )
-        for r in found
-    ]
+        last = {m["id"]: m for m in await messages_by_ids([r["last_id"] for r in found if r["last_id"]], tx)}
+        return [
+            channel_summary(
+                r["id"],
+                r["kind"],
+                r["peer_id"],
+                r["group_id"],
+                last.get(r["last_id"]),
+                r["last_read_id"],
+                r["unread"],
+                r["history_version"],
+            )
+            for r in found
+        ]
 
 
-async def mark_read(cid: int, uid: int, message_id: int) -> None:
-    await db.execute(
-        "UPDATE channel_members SET last_read_id = CASE WHEN last_read_id > ? THEN last_read_id ELSE ? END "
-        "WHERE channel_id = ? AND user_id = ?",
-        [message_id, message_id, cid, uid],
+async def read_state(cid: int, uid: int, c: db.BaseDBAsyncClient | None = None) -> dict:
+    found = await db.rows(
+        "SELECT cm.channel_id, cm.last_read_id AS message_id, c.history_version, "
+        "(SELECT COUNT(*) FROM messages m WHERE m.channel_id = cm.channel_id "
+        "AND m.id > cm.last_read_id AND m.author_id != cm.user_id AND m.deleted = 0) AS unread "
+        "FROM channel_members cm JOIN channels c ON c.id = cm.channel_id "
+        "WHERE cm.channel_id = ? AND cm.user_id = ?",
+        [cid, uid],
+        c,
     )
+    if not found:
+        raise NotFound
+    return found[0]
 
 
-_COLUMNS = "id, channel_id, author_id, nonce, text, created_at, edited_at, deleted, reply_to, pinned_at"
+async def mark_read(cid: int, uid: int, message_id: int) -> dict:
+    async with in_transaction(CONN) as tx:
+        changed = await db.execute(
+            "UPDATE channel_members SET last_read_id = CASE WHEN last_read_id > ? THEN last_read_id ELSE ? END "
+            "WHERE channel_id = ? AND user_id = ? "
+            "AND EXISTS (SELECT 1 FROM messages WHERE channel_id = ? AND id = ?)",
+            [message_id, message_id, cid, uid, cid, message_id],
+            tx,
+        )
+        if not changed:
+            raise NotFound
+    return await read_state(cid, uid)
+
+
+_COLUMNS = "id, channel_id, author_id, nonce, text, created_at, edited_at, deleted, reply_to, pinned_at, revision"
 
 
 def _message(m: dict) -> dict:
@@ -118,10 +154,11 @@ def _message(m: dict) -> dict:
         "attachments": [],
         "reactions": [],
         "pinned_at": None if deleted else m["pinned_at"],
+        "revision": m["revision"],
     }
 
 
-async def _hydrate(ms: list[dict]) -> list[dict]:
+async def _hydrate(ms: list[dict], c: BaseDBAsyncClient | None = None) -> list[dict]:
     if not ms:
         return ms
     by_id = {m["id"]: m for m in ms}
@@ -130,12 +167,14 @@ async def _hydrate(ms: list[dict]) -> list[dict]:
         "SELECT mf.message_id, f.id, f.name, f.mime, f.size, f.width, f.height FROM message_files mf "
         f"JOIN files f ON f.id = mf.file_id WHERE mf.message_id IN ({db.marks(len(ids))}) ORDER BY mf.position",
         ids,
+        c,
     ):
         by_id[r["message_id"]]["attachments"].append(file_dict(r))
     reactions = await db.rows(
         f"SELECT message_id, emoji, user_id FROM reactions WHERE message_id IN ({db.marks(len(ids))}) "
         "ORDER BY created_at",
         ids,
+        c,
     )
     for r in reactions:
         m = by_id[r["message_id"]]
@@ -152,10 +191,11 @@ async def _hydrate(ms: list[dict]) -> list[dict]:
     if reply_ids:
         previews = {}
         for r in await db.rows(
-            "SELECT id, author_id, text, deleted, "
+            "SELECT id, author_id, text, deleted, revision, "
             "(SELECT COUNT(*) FROM message_files WHERE message_id = messages.id) AS attachments "
             f"FROM messages WHERE id IN ({db.marks(len(reply_ids))})",
             reply_ids,
+            c,
         ):
             deleted = r["deleted"] == 1
             text = r["text"]
@@ -169,6 +209,7 @@ async def _hydrate(ms: list[dict]) -> list[dict]:
                 "text": text,
                 "deleted": deleted,
                 "attachments": 0 if deleted else r["attachments"],
+                "revision": r["revision"],
             }
         for m in ms:
             if m["reply_to"] is not None and m["reply_to"] in previews:
@@ -176,22 +217,66 @@ async def _hydrate(ms: list[dict]) -> list[dict]:
     return ms
 
 
-async def _collect(where: str, values: list) -> list[dict]:
-    found = await db.rows(f"SELECT {_COLUMNS} FROM messages WHERE {where}", values)
-    return await _hydrate([_message(m) for m in found])
+async def _collect(where: str, values: list, c: BaseDBAsyncClient | None = None) -> list[dict]:
+    found = await db.rows(f"SELECT {_COLUMNS} FROM messages WHERE {where}", values, c)
+    return await _hydrate([_message(m) for m in found], c)
 
 
-async def messages_by_ids(ids: list[int]) -> list[dict]:
+async def messages_by_ids(ids: list[int], c: BaseDBAsyncClient | None = None) -> list[dict]:
     if not ids:
         return []
-    return await _collect(f"id IN ({db.marks(len(ids))})", list(ids))
+    return await _collect(f"id IN ({db.marks(len(ids))})", list(ids), c)
 
 
-async def message_by_id(mid: int) -> dict:
-    found = await _collect("id = ?", [mid])
+async def message_by_id(mid: int, c: BaseDBAsyncClient | None = None) -> dict:
+    found = await _collect("id = ?", [mid], c)
     if not found:
         raise NotFound
     return found[0]
+
+
+async def _lock_history(cid: int, c: BaseDBAsyncClient) -> None:
+    # Group mutations take this same lock before touching channels or membership.
+    group = await db.rows("SELECT group_id FROM text_channels WHERE channel_id = ?", [cid], c)
+    if group:
+        await groups.lock_group(group[0]["group_id"], c)
+    found = await db.rows("UPDATE channels SET history_version = history_version WHERE id = ? RETURNING id", [cid], c)
+    if not found:
+        raise NotFound
+
+
+async def _advance_history(cid: int, c: BaseDBAsyncClient) -> int:
+    found = await db.rows(
+        "UPDATE channels SET history_version = history_version + 1 WHERE id = ? RETURNING history_version", [cid], c
+    )
+    return found[0]["history_version"]
+
+
+async def _require_member(cid: int, uid: int, c: BaseDBAsyncClient) -> None:
+    if not await ChannelMember.filter(channel_id=cid, user_id=uid).using_db(c).exists():
+        raise NotFound
+
+
+async def _can_moderate(cid: int, uid: int, c: BaseDBAsyncClient) -> bool:
+    found = await db.rows(
+        "SELECT g.owner_id, gm.role FROM text_channels t JOIN groups g ON g.id = t.group_id "
+        "LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ? WHERE t.channel_id = ?",
+        [uid, cid],
+        c,
+    )
+    return not found or (found[0]["owner_id"] == uid or found[0]["role"] == "mod")
+
+
+async def _lock_message(mid: int, uid: int, c: BaseDBAsyncClient) -> Message:
+    found = await Message.filter(id=mid).using_db(c).first()
+    if found is None:
+        raise NotFound
+    await _lock_history(found.channel_id, c)
+    await _require_member(found.channel_id, uid, c)
+    found = await Message.filter(id=mid).using_db(c).first()
+    if found is None or found.deleted:
+        raise NotFound
+    return found
 
 
 async def create_message(cid: int, author: int, nonce: str, text: str, reply_to: int, attachments: list[str]):
@@ -199,6 +284,8 @@ async def create_message(cid: int, author: int, nonce: str, text: str, reply_to:
     created = False
     try:
         async with in_transaction(CONN) as tx:
+            await _lock_history(cid, tx)
+            await _require_member(cid, author, tx)
             existing = await Message.filter(author_id=author, nonce=nonce).using_db(tx).first()
             if existing is not None:
                 if existing.channel_id != cid:
@@ -212,32 +299,29 @@ async def create_message(cid: int, author: int, nonce: str, text: str, reply_to:
                         raise NotFound
                     reply = reply_to
                 if attachments:
-                    owners = dict(await File.filter(id__in=attachments).using_db(tx).values_list("id", "uploader_id"))
-                    if any(owners.get(f) != author for f in attachments):
+                    owners = {file["id"]: file["uploader_id"] for file in await files.lock_files(attachments, tx)}
+                    if any(owner != author for owner in owners.values()):
                         raise Forbidden
+                    if any(f not in owners for f in attachments):
+                        raise FileMissing
+                revision = await _advance_history(cid, tx)
                 m = await Message.create(
                     channel_id=cid, author_id=author, nonce=nonce, text=text, created_at=now(), reply_to=reply,
-                    using_db=tx,
+                    revision=revision, using_db=tx,
                 )  # fmt: skip
                 mid = m.id
                 created = True
+                await search.replace(mid, text, tx)
                 if attachments:
                     await MessageFile.bulk_create(
                         [MessageFile(message_id=mid, file_id=f, position=i) for i, f in enumerate(attachments)],
                         using_db=tx,
                     )
-                await db.execute(
-                    "UPDATE channel_members SET last_read_id = ? WHERE channel_id = ? AND user_id = ?",
-                    [mid, cid, author],
-                    tx,
-                )
+            result = await message_by_id(mid, tx)
     except IntegrityError:
-        # A concurrent send with the same nonce won.
-        existing = await Message.filter(author_id=author, nonce=nonce).first()
-        if existing is None or existing.channel_id != cid:
-            raise Conflict from None
-        mid = existing.id
-    return await message_by_id(mid), created
+        # Same-channel nonce retries already serialize on the channel lock.
+        raise Conflict from None
+    return result, created
 
 
 async def list_messages(cid: int, before: int, after: int, limit: int) -> list[dict]:
@@ -249,6 +333,93 @@ async def list_messages(cid: int, before: int, after: int, limit: int) -> list[d
         out = await _collect("channel_id = ? ORDER BY id DESC LIMIT ?", [cid, limit])
     out.reverse()
     return out
+
+
+async def _message_profiles(messages: list[dict], c: BaseDBAsyncClient) -> list[dict]:
+    authors = {message["author_id"] for message in messages}
+    authors.update(message["reply"]["author_id"] for message in messages if message.get("reply"))
+    return await users.profiles_by_ids(sorted(authors), c)
+
+
+async def _history_ids(cid: int, clause: str, values: list[int], limit: int, c: BaseDBAsyncClient) -> list[int]:
+    found = await db.rows(
+        f"SELECT id FROM messages WHERE channel_id = ? AND deleted = 0 {clause} LIMIT ?", [cid, *values, limit], c
+    )
+    return [m["id"] for m in found]
+
+
+async def history_page(cid: int, uid: int, before: int = 0, after: int | None = None, around: int = 0,
+                       limit: int = 100) -> dict:  # fmt: skip
+    async with db.read_transaction() as tx:
+        read = await read_state(cid, uid, tx)
+        if around:
+            target = await db.rows(
+                "SELECT id FROM messages WHERE channel_id = ? AND id = ? AND deleted = 0", [cid, around], tx
+            )
+            if not target:
+                raise NotFound
+            left_limit = (limit - 1) // 2 + 1
+            left = await _history_ids(cid, "AND id <= ? ORDER BY id DESC", [around], left_limit, tx)
+            right = await _history_ids(cid, "AND id > ? ORDER BY id", [around], limit - len(left), tx)
+            if len(right) < limit - len(left):
+                left = await _history_ids(cid, "AND id <= ? ORDER BY id DESC", [around], limit - len(right), tx)
+            ids = [*reversed(left), *right]
+        elif after is not None:
+            ids = await _history_ids(cid, "AND id > ? ORDER BY id", [after], limit, tx)
+        else:
+            clause = "AND id < ? ORDER BY id DESC" if before else "ORDER BY id DESC"
+            ids = list(reversed(await _history_ids(cid, clause, [before] if before else [], limit, tx)))
+
+        first, last = (ids[0], ids[-1]) if ids else (None, None)
+        if ids:
+            bounds = await db.rows(
+                "SELECT EXISTS(SELECT 1 FROM messages WHERE channel_id = ? AND deleted = 0 AND id < ?) AS older, "
+                "EXISTS(SELECT 1 FROM messages WHERE channel_id = ? AND deleted = 0 AND id > ?) AS newer",
+                [cid, first, cid, last],
+                tx,
+            )
+        elif before or after is not None:
+            bounds = await db.rows(
+                "SELECT EXISTS(SELECT 1 FROM messages WHERE channel_id = ? AND deleted = 0 AND id <= ?) AS older, "
+                "EXISTS(SELECT 1 FROM messages WHERE channel_id = ? AND deleted = 0 AND id >= ?) AS newer",
+                [cid, after or 0, cid, before or (1 << 63) - 1],
+                tx,
+            )
+        else:
+            bounds = [{"older": False, "newer": False}]
+        ms = await messages_by_ids(ids, tx)
+        ms.sort(key=lambda m: m["id"])
+        return {
+            "messages": ms,
+            "users": await _message_profiles(ms, tx),
+            "first_id": first,
+            "last_id": last,
+            "has_before": bool(bounds[0]["older"]),
+            "has_after": bool(bounds[0]["newer"]),
+            "history_version": read["history_version"],
+            "read": {"message_id": read["message_id"], "unread": read["unread"]},
+        }
+
+
+async def message_changes(cid: int, uid: int, since: int, limit: int = 100) -> dict:
+    async with db.read_transaction() as tx:
+        read = await read_state(cid, uid, tx)
+        if since > read["history_version"]:
+            raise Conflict
+        found = await db.rows(
+            "SELECT id FROM messages WHERE channel_id = ? AND revision > ? ORDER BY revision, id LIMIT ?",
+            [cid, since, limit + 1],
+            tx,
+        )
+        ms = await messages_by_ids([m["id"] for m in found[:limit]], tx)
+        ms.sort(key=lambda m: (m["revision"], m["id"]))
+        return {
+            "messages": ms,
+            "users": await _message_profiles(ms, tx),
+            "history_version": read["history_version"],
+            "complete": len(found) <= limit,
+            "read": {"message_id": read["message_id"], "unread": read["unread"]},
+        }
 
 
 async def search_messages(cid: int, q: str, limit: int) -> list[dict]:
@@ -263,6 +434,35 @@ async def search_messages(cid: int, q: str, limit: int) -> list[dict]:
     return out
 
 
+async def _history_head(cid: int, uid: int, c: BaseDBAsyncClient) -> int:
+    found = await db.rows(
+        "SELECT c.history_version FROM channel_members cm JOIN channels c ON c.id = cm.channel_id "
+        "WHERE cm.channel_id = ? AND cm.user_id = ?",
+        [cid, uid],
+        c,
+    )
+    if not found:
+        raise NotFound
+    return found[0]["history_version"]
+
+
+async def search_page(cid: int, uid: int, query: str, before: int = 0, limit: int = 50) -> dict:
+    async with db.read_transaction() as tx:
+        version = await _history_head(cid, uid, tx)
+        if before and not await Message.filter(channel_id=cid, id=before).using_db(tx).exists():
+            raise NotFound
+        ids = await search.candidates(cid, query, before or (1 << 63) - 1, limit + 1, tx)
+        ms = await messages_by_ids(ids[:limit], tx)
+        ms.sort(key=lambda m: m["id"], reverse=True)
+        return {
+            "messages": ms,
+            "users": await _message_profiles(ms, tx),
+            "has_more": len(ids) > limit,
+            "next_before": ms[-1]["id"] if len(ids) > limit else None,
+            "history_version": version,
+        }
+
+
 async def attachments_in(cids: list[int]) -> list[str]:
     found = await db.rows(
         "SELECT mf.file_id FROM message_files mf JOIN messages m ON m.id = mf.message_id "
@@ -272,45 +472,71 @@ async def attachments_in(cids: list[int]) -> list[str]:
     return [r["file_id"] for r in found]
 
 
-async def pinned_messages(cid: int) -> list[dict]:
+async def pinned_messages(cid: int, c: BaseDBAsyncClient | None = None) -> list[dict]:
     return await _collect(
-        "channel_id = ? AND deleted = 0 AND pinned_at IS NOT NULL ORDER BY pinned_at DESC LIMIT 50", [cid]
+        "channel_id = ? AND deleted = 0 AND pinned_at IS NOT NULL ORDER BY pinned_at DESC, id DESC LIMIT 50", [cid], c
     )
 
 
+async def pinned_page(cid: int, uid: int) -> dict:
+    async with db.read_transaction() as tx:
+        version = await _history_head(cid, uid, tx)
+        ms = await pinned_messages(cid, tx)
+        return {"messages": ms, "users": await _message_profiles(ms, tx), "history_version": version}
+
+
 async def edit_message(mid: int, author: int, text: str) -> dict:
-    n = await Message.filter(id=mid, author_id=author, deleted=0).update(text=text, edited_at=now())
-    if n == 0:
-        raise Forbidden
-    return await message_by_id(mid)
-
-
-async def delete_message(mid: int) -> dict:
     async with in_transaction(CONN) as tx:
-        n = await Message.filter(id=mid, deleted=0).using_db(tx).update(text="", pinned_at=None, deleted=1)
-        if n == 0:
-            raise NotFound
+        m = await _lock_message(mid, author, tx)
+        if m.author_id != author:
+            raise Forbidden
+        if m.text != text:
+            revision = await _advance_history(m.channel_id, tx)
+            await Message.filter(id=mid).using_db(tx).update(text=text, edited_at=now(), revision=revision)
+            await search.replace(mid, text, tx)
+        return await message_by_id(mid, tx)
+
+
+async def delete_message(mid: int, uid: int) -> dict:
+    async with in_transaction(CONN) as tx:
+        m = await _lock_message(mid, uid, tx)
+        if m.author_id != uid:
+            group = await TextChannel.filter(channel_id=m.channel_id).using_db(tx).exists()
+            if not group or not await _can_moderate(m.channel_id, uid, tx):
+                raise Forbidden
+        revision = await _advance_history(m.channel_id, tx)
+        await Message.filter(id=mid).using_db(tx).update(text="", pinned_at=None, deleted=1, revision=revision)
+        await db.execute("DELETE FROM message_search WHERE message_id = ?", [mid], tx)
         await db.execute("DELETE FROM message_files WHERE message_id = ?", [mid], tx)
         await db.execute("DELETE FROM reactions WHERE message_id = ?", [mid], tx)
-    return await message_by_id(mid)
+        return await message_by_id(mid, tx)
 
 
 async def toggle_reaction(mid: int, uid: int, emoji: str) -> dict:
     async with in_transaction(CONN) as tx:
+        m = await _lock_message(mid, uid, tx)
         removed = await db.execute(
             "DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?", [mid, uid, emoji], tx
         )
         if not removed:
             distinct = await Reaction.filter(message_id=mid).using_db(tx).distinct().values_list("emoji", flat=True)
-            if len(set(distinct)) >= 20:
+            if emoji not in distinct and len(set(distinct)) >= 20:
                 raise Conflict
             await Reaction.create(message_id=mid, user_id=uid, emoji=emoji, created_at=now(), using_db=tx)
-    return await message_by_id(mid)
+        revision = await _advance_history(m.channel_id, tx)
+        await Message.filter(id=mid).using_db(tx).update(revision=revision)
+        return await message_by_id(mid, tx)
 
 
-async def set_pinned(mid: int, pinned: bool) -> dict:
-    await Message.filter(id=mid, deleted=0).update(pinned_at=now() if pinned else None)
-    return await message_by_id(mid)
+async def set_pinned(mid: int, uid: int, pinned: bool) -> dict:
+    async with in_transaction(CONN) as tx:
+        m = await _lock_message(mid, uid, tx)
+        if not await _can_moderate(m.channel_id, uid, tx):
+            raise Forbidden
+        if (m.pinned_at is not None) != pinned:
+            revision = await _advance_history(m.channel_id, tx)
+            await Message.filter(id=mid).using_db(tx).update(pinned_at=now() if pinned else None, revision=revision)
+        return await message_by_id(mid, tx)
 
 
 async def group_of_channel(cid: int) -> int:

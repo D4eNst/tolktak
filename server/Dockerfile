@@ -28,4 +28,5 @@ ENTRYPOINT ["tolktak-server"]
 FROM server AS full
 COPY --from=livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a /livekit-server /usr/local/bin/livekit-server
 ENV TOLKTAK_EMBEDDED_LIVEKIT=1
-EXPOSE 7880 7881 7882/udp
+# Signaling binds loopback and is admitted through the app; only media is public.
+EXPOSE 7881 7882/udp
