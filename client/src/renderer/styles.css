@@ -17,8 +17,7 @@
   color-scheme: dark;
 }
 
-/* A theme is a set of color tokens on <html data-theme> (or on any element, as the theme cards do).
-   What every theme shares sits here; each theme sets its surfaces, text and accent. */
+/* Shared theme tokens; data-theme also scopes preview cards. */
 :root,
 [data-theme] {
   --accent: #ff8a4c;
@@ -41,7 +40,7 @@
   --user-6: #3cc6b8;
   --user-7: #c9e265;
 }
-/* Петроль и латунь: deep ink teal with a brass accent. The default. */
+/* Default theme. */
 [data-theme='petrol'] {
   --bg-app: #081114;
   --bg-island: #0f1b1f;
@@ -139,7 +138,6 @@
   --muted: #a98f98;
   --faint: #7b656d;
 }
-/* «Синий стол», the first theme. */
 [data-theme='blue'] {
   --bg-app: #0b1327;
   --bg-island: #131d37;
@@ -654,7 +652,7 @@ code {
 .slide-in {
   animation: slide-in 220ms var(--ease);
 }
-/* In the background every animated frame is GPU time taken from the game. */
+/* Pause decorative animation in the background. */
 .app-inactive *,
 .app-inactive *::before,
 .app-inactive *::after {
@@ -843,8 +841,7 @@ code {
 .chip:hover {
   background: var(--bg-active);
 }
-/* One shape for both states: outside a call the room label and the call buttons fold to nothing.
-   Opening, the width leads and the content follows; closing, the content leaves first. */
+/* Expand the capsule before revealing call controls; reverse on close. */
 .capsule {
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
@@ -1009,6 +1006,7 @@ code {
 }
 .workspace {
   position: relative;
+  isolation: isolate;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1254,7 +1252,7 @@ code {
   font-weight: 600;
 }
 
-/* the navigator folded into a strip */
+/* Collapsed navigator. */
 .nav-rail {
   display: flex;
   flex-direction: column;
@@ -1296,7 +1294,7 @@ code {
   pointer-events: none;
 }
 
-/* navigator: groups or people, a group's page beside a strip of the other groups */
+/* Navigator lists and group detail. */
 .nav-top {
   flex: none;
   display: flex;
@@ -1523,7 +1521,7 @@ code {
   background: var(--bg-active);
   color: var(--text);
 }
-/* A plain window is one card: the title row sits inside it instead of a capsule above. */
+/* Inset titles for single-card windows. */
 .workspace .dv-groupview.win-plain {
   gap: 0;
 }
@@ -1539,7 +1537,7 @@ code {
     inset 1px -1px 0 color-mix(in srgb, var(--text) 5%, transparent),
     inset -1px 0 0 color-mix(in srgb, var(--text) 5%, transparent);
 }
-/* Tabs that do not fit: a count at the end opens a list of all of them. */
+/* Tab overflow menu. */
 .workspace .dv-tabs-container {
   scrollbar-width: none;
 }
@@ -1586,7 +1584,7 @@ code {
 .workspace .dv-single-tab .dv-tab {
   background: none !important;
 }
-/* In a row of tabs there is no room for a server or a status line. */
+/* Hide secondary details in tab rows. */
 .dv-tabs-and-actions-container:not(.dv-single-tab) .win-sub {
   display: none;
 }
@@ -1607,7 +1605,7 @@ code {
   display: grid;
   margin: 0 4px 0 6px;
 }
-/* Its room is always kept, so showing it moves nothing. */
+/* Reserve space for the indicator to avoid layout shifts. */
 .win-close {
   width: 18px;
   height: 18px;
@@ -1896,6 +1894,7 @@ code {
   display: flex;
   min-height: 0;
   position: relative;
+  --chat-panel-width: 320px;
 }
 .chat-col {
   flex: 1;
@@ -1904,7 +1903,28 @@ code {
   min-width: 0;
   position: relative;
 }
+.history-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 20px;
+}
+.history-pages {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+}
+.history-back {
+  position: sticky;
+  bottom: 12px;
+  margin: 8px 22px 0;
+  z-index: 3;
+}
 .msg-list {
+  overflow-anchor: none;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -2007,9 +2027,9 @@ code {
   position: relative;
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
-  padding: 6px 20px 4px 14px;
-  margin: 0 8px;
-  border-radius: var(--r);
+  padding: 8px 20px 8px 14px;
+  margin: 2px 8px;
+  border-radius: var(--r-sm);
   transition: background 120ms var(--ease);
 }
 .msg:hover,
@@ -2017,8 +2037,16 @@ code {
   background: color-mix(in srgb, var(--text) 2.5%, transparent);
 }
 .msg.grouped {
-  padding-top: 1px;
-  padding-bottom: 1px;
+  min-height: 36px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.msg.grouped .msg-main {
+  align-self: center;
+}
+.msg.grouped .msg-gutter {
+  align-items: center;
+  padding-top: 0;
 }
 .msg.flash {
   animation: flash 1.6s var(--ease);
@@ -2039,7 +2067,6 @@ code {
   font-size: 10.5px;
   color: var(--faint);
   opacity: 0;
-  padding-top: 4px;
   transition: opacity var(--t);
 }
 .msg:hover .msg-time-hover {
@@ -2162,7 +2189,7 @@ code {
   color: var(--text);
   background: var(--bg-hover);
 }
-/* A spoiler is a patch of haze over the words that slowly breathes; opened, the haze thins out and the words come into focus. */
+/* Spoiler reveal animation. */
 @property --haze {
   syntax: '<length>';
   inherits: false;
@@ -2233,7 +2260,7 @@ code {
 .msg.pending.failed .msg-text {
   color: var(--danger);
 }
-/* Shows only when sending takes a while, so a quick send never blinks. */
+/* Delay the pending indicator to avoid flicker on quick sends. */
 .msg-sending {
   align-self: center;
   width: 6px;
@@ -2244,7 +2271,7 @@ code {
     gone-in 300ms 700ms var(--ease-out) backwards,
     sending 1.4s 1s ease-in-out infinite alternate;
 }
-/* What a message answers sits in its header line, after the time. */
+/* Inline reply preview. */
 .msg-reply {
   align-self: center;
   display: inline-flex;
@@ -2274,14 +2301,13 @@ code {
   color: var(--text-2);
   background: color-mix(in srgb, var(--text) 8%, transparent);
 }
-/* The actions grow out of the hovered row itself: no card, the row's own tone with a soft edge over the text. */
+/* Message actions share the hover background. */
 .msg-actions {
   --row: color-mix(in srgb, var(--text) 2.5%, var(--bg-island));
   position: absolute;
-  top: 0;
+  top: 4px;
   right: 10px;
-  /* Never taller than the row: the strip's own edges must stay inside the row's tone. */
-  height: min(100%, 38px);
+  height: 28px;
   display: flex;
   align-items: center;
   gap: 1px;
@@ -2294,10 +2320,6 @@ code {
     opacity 160ms var(--ease-out),
     transform 260ms var(--ease-out);
   z-index: 2;
-}
-.msg.grouped .msg-actions button {
-  width: 26px;
-  height: 24px;
 }
 .msg:hover .msg-actions,
 .msg:has(:focus-visible) .msg-actions {
@@ -2429,7 +2451,7 @@ code {
   }
 }
 
-/* entrances and exits: the list itself eases up (see Chat.tsx), the new row only settles in */
+/* The list controls scrolling; rows animate their own entry and removal. */
 .msg.enter {
   animation: msg-in 420ms var(--ease-out) backwards;
 }
@@ -2765,6 +2787,9 @@ code {
   z-index: 3;
   transition: transform var(--t) var(--spring);
 }
+.chat-body:has(> .chat-panel) .to-bottom {
+  margin-right: calc(var(--chat-panel-width) + 22px);
+}
 .to-bottom:hover {
   transform: translateY(-2px);
   color: var(--text);
@@ -3047,7 +3072,7 @@ code {
 }
 
 /* chat side panels */
-/* Over the messages, not beside them: a narrow chat stays readable. */
+/* Overlay panels to preserve the message column width. */
 .chat-panel {
   position: absolute;
   top: 0;
@@ -3068,7 +3093,7 @@ code {
   background: var(--bg-sunk);
 }
 .chat-panel {
-  width: min(320px, 100%);
+  width: min(var(--chat-panel-width), 100%);
   background: var(--bg-raised);
 }
 .chat-panel header {
@@ -3189,7 +3214,7 @@ code {
   color: color-mix(in srgb, #7f9cff 75%, var(--text));
 }
 
-/* A profile inside a window or a side panel: the cover follows the rounded card. */
+/* Match the profile cover to its containing card. */
 .profile-pane .profile-banner {
   border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
@@ -3197,7 +3222,7 @@ code {
   padding: 10px;
 }
 
-/* settings «Окна»: choices drawn as small sketches of the desk */
+/* Window placement previews. */
 .field-label {
   font-size: 13px;
   color: var(--muted);
@@ -3402,7 +3427,7 @@ code {
   background: var(--accent);
 }
 
-/* The sketch: a 400×224 desk drawn with blocks; every step loops over 6.4 s. */
+/* Tour previews: 400×224, 6.4-second loops. */
 .tour-scene {
   position: relative;
   display: block;
@@ -3586,7 +3611,7 @@ code {
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
 }
 
-/* 1. picking in the navigator fills the main window */
+/* Tour: navigation. */
 .t-nav .ts-cursor {
   animation-name: t1-cursor;
 }
@@ -3690,7 +3715,7 @@ code {
   }
 }
 
-/* Pieces the later steps share. */
+/* Shared tour elements. */
 .ts-deco {
   right: 8px;
   top: 6px;
@@ -3777,7 +3802,7 @@ code {
     var(--shadow-sm);
   opacity: 0;
 }
-/* Covers the desk while a loop jumps back to its start, so the jump is never seen. */
+/* Mask the loop reset. */
 .ts-veil {
   z-index: 3;
   left: 96px;
@@ -3811,7 +3836,7 @@ code {
   box-shadow: 0 0 0 2px rgba(61, 220, 151, 0.2);
 }
 
-/* 2. joining a room puts the call beside; it is dragged to the other side, then on top of the chat */
+/* Tour: call placement. */
 .t-move * {
   animation-duration: 9s;
 }
@@ -4057,7 +4082,7 @@ code {
   }
 }
 
-/* 3. the chat closes, the call's people get their own window, another chat goes under the call */
+/* Tour: additional windows. */
 .t-beside * {
   animation-duration: 9s;
 }
@@ -4240,7 +4265,7 @@ code {
   }
 }
 
-/* 4. the «…» menu: people float and move, then hide behind the edge; the chat folds onto the shelf */
+/* Tour: floating, edge and minimized windows. */
 .t-menu * {
   animation-duration: 12s;
 }
@@ -4586,7 +4611,7 @@ code {
   }
 }
 
-/* With less motion each sketch stands still on the end of its story. */
+/* Reduced motion shows each preview's final state. */
 @media (prefers-reduced-motion: reduce) {
   .tour-scene * {
     animation-play-state: paused !important;
@@ -4607,7 +4632,7 @@ code {
   }
 }
 
-/* a room you are not in */
+/* Inactive room. */
 .room-lobby {
   height: 100%;
   display: flex;
@@ -4644,7 +4669,7 @@ code {
 }
 
 
-/* «Крупно»: the other streams small above the big one */
+/* Single-stream layout. */
 .theater-previews {
   display: flex;
   gap: 8px;
@@ -4681,7 +4706,7 @@ code {
 }
 
 
-/* «Кино»: cameras as bubbles along the edge, clear of the middle */
+/* Camera bubbles. */
 .cam-bubbles {
   position: absolute;
   top: 14px;
@@ -4871,7 +4896,7 @@ code {
   place-items: center;
   overflow: auto;
 }
-/* Too many to fit: tiles keep a usable size and the room scrolls. */
+/* Scroll instead of shrinking tiles below their minimum size. */
 .tiles.scroll {
   place-items: start center;
 }
@@ -4953,6 +4978,37 @@ code {
   box-shadow: var(--shadow);
   z-index: 3;
   animation: pop-in 160ms var(--ease);
+}
+.tile-moderation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.menu-header {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.moderation-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.moderation-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.moderation-details {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
 }
 video.cover {
   object-fit: cover;
@@ -5128,7 +5184,7 @@ video.mirror {
   font-size: 13px;
 }
 
-/* the room window: the call, and the list of its people over its right edge */
+/* Room participant overlay. */
 .stage-wrap {
   position: relative;
   height: 100%;
@@ -5664,6 +5720,25 @@ video.mirror {
   padding: 10px 26px 26px 10px;
   animation: fade-up 200ms var(--ease);
 }
+.settings textarea {
+  resize: none;
+}
+.settings-section + .settings-section {
+  border-top: 1px solid var(--line);
+  margin-top: 24px;
+  padding-top: 24px;
+}
+.settings-section > h3 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
 .section-title {
   margin: 24px 0 10px;
   font-size: 11px;
@@ -5753,19 +5828,24 @@ video.mirror {
   border-color: color-mix(in srgb, var(--text) 25%, transparent);
 }
 .slider {
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
-  gap: 12px;
+  gap: 6px 16px;
   color: var(--text);
   font-size: 13px;
   margin-bottom: 10px;
 }
 .slider-label {
-  min-width: 90px;
+  min-width: 0;
   color: var(--text-2);
 }
 .slider input {
-  flex: 1;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
   -webkit-appearance: none;
   appearance: none;
   height: 22px;
@@ -5791,7 +5871,10 @@ video.mirror {
   transform: scale(1.15);
 }
 .slider-val {
-  min-width: 52px;
+  grid-column: 2;
+  grid-row: 1;
+  width: 8ch;
+  white-space: nowrap;
   text-align: right;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -6122,7 +6205,8 @@ video.mirror {
   margin-bottom: 20px;
 }
 .manage-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) repeat(4, 24px);
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
@@ -6130,12 +6214,58 @@ video.mirror {
   background: var(--bg-sunk);
   border: 1px solid var(--line);
 }
-.manage-row .ellipsis {
-  flex: 1;
-}
 .manage-row > svg {
   color: var(--muted);
 }
+
+.group-settings .modal-body {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+.group-settings .settings {
+  min-height: min(420px, calc(100vh - 140px));
+}
+.group-settings .member-search {
+  margin: 16px 0 10px;
+}
+.group-settings .reorder-list {
+  position: relative;
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 3px 2px;
+}
+.group-settings .reorder-list .manage-row {
+  position: relative;
+  flex-shrink: 0;
+  grid-template-columns: 24px minmax(0, 1fr) repeat(4, 24px);
+}
+.group-settings .reorder-handle {
+  cursor: grab;
+  touch-action: none;
+  color: var(--muted);
+}
+.group-settings .dragging {
+  opacity: .5;
+}
+.group-settings .dragging .reorder-handle {
+  cursor: grabbing;
+}
+.group-settings .drop-before::before,
+.group-settings .drop-end .manage-row:last-child::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.group-settings .drop-before::before { top: -3px; }
+.group-settings .drop-end .manage-row:last-child::after { bottom: -3px; }
 
 /* pickers */
 .user-picker input {
@@ -6360,6 +6490,10 @@ label.radio .muted {
   overflow-y: auto;
   padding: 6px;
 }
+.switcher-help {
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+}
 .switcher-item {
   width: 100%;
   display: flex;
@@ -6464,10 +6598,8 @@ label.radio .muted {
   .share-options {
     grid-template-columns: 1fr 1fr;
   }
-  .members-panel,
-  .chat-panel {
-    width: 260px;
-  }
+  .chat-body { --chat-panel-width: 260px; }
+  .members-panel { width: 260px; }
 }
 
 .update-bar {
@@ -6490,7 +6622,7 @@ label.radio .muted {
   background: transparent;
 }
 
-/* a window of the desk in a window of its own */
+/* Native popouts. */
 .popout {
   height: 100vh;
   display: flex;
@@ -6540,11 +6672,11 @@ label.radio .muted {
   position: relative;
 }
 
-/* windows behind the right edge of the desk: a strip of tabs, each slides its window out */
+/* Edge tabs and slide-out windows. */
 .workspace .dv-resize-container.edge-win {
   transition: transform 240ms var(--ease);
 }
-/* Fixed in place: no grip to drag it by and no edges to resize. */
+/* Edge windows cannot be dragged or resized. */
 .workspace .edge-win > .dv-floating-titlebar,
 .workspace .edge-win > [class*='dv-resize-handle'] {
   display: none;
@@ -6628,7 +6760,7 @@ label.radio .muted {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
-/* Each card carries its own data-theme, so everything inside is drawn in that theme. */
+/* Preview cards use their own data-theme. */
 .theme-card {
   display: flex;
   flex-direction: column;
@@ -6873,4 +7005,129 @@ label.radio .muted {
 .custom-reset {
   justify-self: start;
   font-size: 12.5px;
+}
+
+.unsent-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.unsent-message textarea {
+  width: 100%;
+  min-height: 80px;
+  max-height: 160px;
+  resize: none;
+}
+
+.nav-directory {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.nav-directory:hover { color: var(--text); background: var(--bg-hover); }
+.nav-person-row { display: flex; align-items: center; min-width: 0; }
+.nav-person-row > .nav-person { flex: 1; min-width: 0; }
+.contact-toggle { flex: none; margin-right: 6px; }
+.profile-contact { margin: 14px 0; }
+
+.people-selected { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.people-selected .chip { display: inline-flex; align-items: center; gap: 6px; }
+
+.search-control {
+  display: flex;
+  position: relative;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  color: var(--muted);
+  overflow: hidden;
+  transition: border-color 150ms, color 150ms;
+}
+.search-control:focus-within { border-color: var(--accent); }
+.search-control > svg { flex: none; position: static; transform: none; }
+.search-control.search-active > svg { color: var(--accent); }
+.search-control input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  background: none;
+  color: var(--text);
+  font-size: 13.5px;
+}
+.search-control input::-webkit-search-cancel-button { display: none; }
+.search-control .search-clear { flex: none; position: static; }
+.search-control .search-clear svg { position: static; transform: none; }
+.search-activity {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  transition: opacity 150ms;
+  pointer-events: none;
+}
+.search-active .search-activity { opacity: .85; animation: search-sweep 900ms ease-in-out infinite; }
+@keyframes search-sweep { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+.search-stale { opacity: .55; transition: opacity 140ms; }
+.switcher .search-control { min-height: 56px; border-width: 0 0 1px; border-radius: 0; padding: 0 16px; }
+.switcher .search-control input { height: 56px; font-size: 16px; }
+.user-picker > .search-control { margin-bottom: 8px; }
+.members-panel > .member-search { position: sticky; z-index: 1; top: 0; margin: 0 0 12px; }
+.nav-people { display: flex; flex: 1; flex-direction: column; min-height: 0; container-type: inline-size; }
+.people-tabs { flex: none; margin: 0 12px 8px; padding: 3px; gap: 2px; }
+.people-tabs button { display: flex; align-items: center; justify-content: center; gap: 4px; flex: 1 1 auto; min-width: 0; padding: 6px 3px; font-size: 11.5px; }
+.request-count { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; color: var(--accent-ink); background: var(--accent); font-size: 10px; font-weight: 700; }
+.request-filters { display: flex; flex: none; flex-wrap: wrap; gap: 4px; padding: 0 14px 8px; }
+.request-filters button { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); padding: 5px 8px; font-size: 12px; border-radius: var(--r); }
+.request-filters button.on { color: var(--accent); background: var(--bg-hover); }
+.people-results { display: flex; flex: 1; min-height: 0; }
+.people-scroll { flex: 1; width: 100%; min-height: 0; overflow: auto; }
+.people-virtual { position: relative; width: 100%; }
+.people-virtual-row { position: absolute; top: 0; left: 0; width: 100%; }
+.nav-person-item { padding-bottom: 2px; }
+.nav-person-item .nav-person { min-height: 60px; }
+.nav-person-sub { display: flex; align-items: center; gap: 4px; }
+.request-item { padding: 0 0 8px; }
+.request-actions { display: flex; align-items: center; gap: 12px; padding: 0 10px 0 56px; }
+.request-actions .small-btn { padding: 4px 8px; font-size: 11.5px; gap: 4px; }
+.contact-actions { display: inline-flex; flex: none; align-items: center; flex-wrap: wrap; gap: 6px; }
+.contact-actions .contact-toggle:disabled { color: var(--accent); opacity: .65; }
+.people-loading { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.people-loading i, .person-skeleton { display: block; min-height: 52px; border-radius: var(--r); background: var(--bg-raised); animation: search-pulse 1.1s ease-in-out infinite alternate; }
+.people-loading i:nth-child(2) { animation-delay: 100ms; }
+.people-loading i:nth-child(3) { animation-delay: 200ms; }
+.person-skeleton { margin: 4px 0; }
+@keyframes search-pulse { from { opacity: .35; } to { opacity: .7; } }
+@media (prefers-reduced-motion: reduce) {
+  .search-activity { animation: none; background: var(--accent); transition: none; }
+  .search-active .search-activity { opacity: .5; animation: none; }
+  .search-stale, .search-control { transition: none; }
+  .people-loading i, .person-skeleton { animation: none; opacity: .5; }
+}
+
+@container (max-width: 260px) {
+  .people-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .people-tabs button { min-height: 30px; font-size: 12px; }
 }

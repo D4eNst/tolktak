@@ -1,4 +1,4 @@
-// Outside Electron (dev server, tests) a fallback stands in for the preload bridge.
+// Browser fallback for the preload bridge.
 
 export type CaptureSource = { id: string; name: string; kind: 'screen' | 'window'; thumbnail: string; icon: string };
 export type AudioMode = 'app' | 'system' | 'system-all' | 'none';
@@ -42,7 +42,7 @@ type Bridge = {
   readAsset(name: string): Promise<Uint8Array>;
   installUpdate(): Promise<void>;
   onUpdateReady(fn: (version: string) => void): () => void;
-  /** A build that cannot install updates itself offers the release page instead. */
+  /** Manual-update builds offer the release page. */
   onUpdateAvailable(fn: (update: { version: string; url: string }) => void): () => void;
   /** The app follows the version of its server. */
   serverVersion(server: { version: string; min_client?: string }): Promise<void>;
@@ -53,25 +53,25 @@ type Bridge = {
 const native = (globalThis as unknown as { tolktak?: Bridge }).tolktak;
 export const isDesktop = !!native;
 
-const LS_KEY = 'tolktak.settings';
-function lsGet(): DesktopSettings {
+const BROWSER_SETTINGS_KEY = 'tolktak.settings';
+function readBrowserSettings(): DesktopSettings {
   try {
-    return { ...defaults(), ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') };
+    return { ...defaultSettings(), ...JSON.parse(localStorage.getItem(BROWSER_SETTINGS_KEY) || '{}') };
   } catch {
-    return defaults();
+    return defaultSettings();
   }
 }
-function defaults(): DesktopSettings {
+function defaultSettings(): DesktopSettings {
   return { server: location.protocol.startsWith('http') ? location.origin : '', token: '', minimizeToTray: true, hotkeys: {}, openAtLogin: false, allowWin10Loopback: false };
 }
 
 const browserFallback: Bridge = {
   async getSettings() {
-    return lsGet();
+    return readBrowserSettings();
   },
   async setSettings(patch) {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ ...lsGet(), ...patch }));
+      localStorage.setItem(BROWSER_SETTINGS_KEY, JSON.stringify({ ...readBrowserSettings(), ...patch }));
     } catch {
       /* storage unavailable */
     }

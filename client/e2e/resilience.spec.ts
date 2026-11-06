@@ -38,11 +38,11 @@ test('toggles, source switch, two parallel streams', async ({ browser }) => {
   await expect(alice.locator('.tile')).toHaveCount(3);
 
   // The camera turns on after a look at its preview.
-  await bob.click('button[aria-label="Камера"]');
+  await bob.click('.call-controls button[aria-label="Включить камеру"]');
   await bob.click('.modal button.primary');
   await expectFlowing(alice, ids.bob, 'camera', 20);
   await expect(alice.locator('.tile video')).toHaveCount(1);
-  await bob.click('button[aria-label="Камера"]');
+  await bob.click('.call-controls button[aria-label="Выключить камеру"]');
   await expect(alice.locator('.tile video')).toHaveCount(0);
 
   await bob.click('button[aria-label="Микрофон"]');
@@ -54,8 +54,8 @@ test('toggles, source switch, two parallel streams', async ({ browser }) => {
   await share(alice);
   await expect(carol.locator('.theater')).toBeVisible();
   await expectFlowing(carol, ids.alice, 'screen_share', 40);
-  await alice.click('.call-controls button[aria-label="Демонстрация"]');
-  await expect(alice.locator('.modal h2')).toHaveText('Сменить источник');
+  await alice.click('.call-controls button[aria-label="Изменить источник трансляции"]');
+  await expect(alice.locator('.modal h2')).toHaveText('Изменить источник трансляции');
   await alice.locator('.warn-box input[type=checkbox]').check();
   await alice.click('.modal button.primary');
   await expect(alice.locator('.modal')).toHaveCount(0);
@@ -79,6 +79,7 @@ test('toggles, source switch, two parallel streams', async ({ browser }) => {
 });
 
 test('short network loss (5 s): call and stream recover, chat catches up', async ({ browser }) => {
+  test.skip(process.platform !== 'linux', 'network outage requires Linux iptables');
   const alice = await openClient(browser, stack, 'alice');
   const bob = await openClient(browser, stack, 'bob');
   for (const p of [alice, bob]) await joinRoom(p, 'Тест');
@@ -101,6 +102,7 @@ test('short network loss (5 s): call and stream recover, chat catches up', async
 });
 
 test('long network loss (40 s): client rejoins by itself and republishes its stream', async ({ browser }) => {
+  test.skip(process.platform !== 'linux', 'network outage requires Linux iptables');
   const alice = await openClient(browser, stack, 'alice');
   const bob = await openClient(browser, stack, 'bob');
   for (const p of [alice, bob]) await joinRoom(p, 'Тест');

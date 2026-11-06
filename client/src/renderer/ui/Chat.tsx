@@ -2,10 +2,15 @@ import { signal } from '@preact/signals';
 import { Component, type ComponentChildren } from 'preact';
 import { createPortal, memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { ApiError, type FileMeta, type Message } from '../api';
+import { type FileMeta, type Message, type User } from '../api';
 import { bridge } from '../bridge';
+import { type HistoryView } from '../history';
+import { useKnownUsers } from './usePeople';
+import { useHistoryScroll } from './useHistoryScroll';
+import { SearchField, useSearch } from './search';
 import { cmd, keyLabel } from '../keys';
 import { t } from '../i18n';
+import { deleteOutgoingFile, saveOutgoingFile } from '../outboxFiles';
 import {
   api,
   channels,
@@ -14,16 +19,17 @@ import {
   errorText,
   fileUrl,
   groups,
-  loadOlder,
-  loadUntil,
+  history,
+  mergeUsers,
+  settingsOpen,
   markRead,
   me,
   messagePreview,
   messages,
-  openChannel,
   replyTo,
   sendMessage,
   sendTyping,
+  session,
   setDraft,
   setReply,
   toast,
@@ -41,6 +47,7 @@ const MAX_FILES = 10;
 const MAX_LENGTH = 4000;
 
 const lightbox = signal<{ images: FileMeta[]; index: number; win: Window } | null>(null);
+window.addEventListener('tolktak:session-reset', () => (lightbox.value = null));
 
 export function LightboxHost() {
   const lb = lightbox.value;
@@ -267,15 +274,19 @@ export function EmojiPicker({ onPick, onSticker, onClose, x, y }: { onPick: (e: 
 }
 
 async function react(m: Message, emoji: string) {
+  const a = api();
   try {
-    const { message } = await api().react(m.id, emoji);
+    const { message } = await a.react(m.id, emoji);
+    if (session.value?.api !== a) return;
     upsertMessage(message);
   } catch (e) {
+    if (session.value?.api !== a) return;
     toast(errorText(e), 'error');
   }
 }
 
 function Reactions({ m }: { m: Message }) {
+  useKnownUsers(m.reactions?.flatMap((r) => r.users) ?? []);
   const myId = me.value?.id ?? 0;
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   if (!m.reactions?.length) return null;
@@ -302,25 +313,9 @@ function Reactions({ m }: { m: Message }) {
   );
 }
 
-const highlight = signal(0);
-
-async function jumpTo(id: number, from: Element) {
+function jumpTo(id: number, from: Element) {
   const chat = from.closest<HTMLElement>('.chat');
-  const find = () => (chat ?? from.ownerDocument).querySelector(`.msg[data-id="${id}"]`);
-  let el = find();
-  const near = !!el;
-  if (!el && chat) {
-    const got = await loadUntil(Number(chat.dataset.channel), id);
-    // The rows render on the next frame.
-    if (got === 'found') await new Promise((r) => setTimeout(r, 60));
-    el = find();
-    if (!el) return toast(got === 'far' ? t().chat.message.tooFar : t().chat.message.gone);
-  }
-  if (!el) return toast(t().chat.message.gone);
-  // A smooth ride through freshly loaded history reaches the top and loads more under it.
-  el.scrollIntoView({ block: 'center', behavior: near ? 'smooth' : 'instant' });
-  highlight.value = id;
-  setTimeout(() => highlight.value === id && (highlight.value = 0), 1600);
+  chat?.dispatchEvent(new CustomEvent('tolktak:jump', { detail: id }));
 }
 
 function quote(m: Message) {
@@ -335,7 +330,7 @@ function quote(m: Message) {
 
 function ReplyRef({ r }: { r: { id: number; author_id: number; text: string; deleted?: boolean; attachments?: FileMeta[] | number } }) {
   return (
-    <button class="msg-reply" onClick={(e) => (r.deleted ? toast(t().chat.message.gone) : jumpTo(r.id, e.currentTarget))} title={t().chat.message.reply}>
+    <button class="msg-reply" onClick={(e) => (r.deleted ? toast(t().chat.message.gone) : jumpTo(r.id, e.currentTarget))} title={t().chat.message.goTo}>
       <Icon name="reply" size={13} />
       <b style={{ color: users.value.get(r.author_id)?.color }}>{userName(r.author_id)}</b>
       <span class="ellipsis">{r.deleted ? t().chat.message.replyDeleted : messagePreview(r) || t().chat.message.attachment}</span>
@@ -343,7 +338,7 @@ function ReplyRef({ r }: { r: { id: number; author_id: number; text: string; del
   );
 }
 
-// When each own message left the composer, so its row picks up the entrance where the pending row left it.
+// Preserve animation progress when a pending row receives its server ID.
 const sentAt = new Map<string, number>();
 
 type RowProps = {
@@ -356,9 +351,9 @@ type RowProps = {
   setEditing: (id: number) => void;
 };
 
-// Memoised, so its props must keep their identity between renders of the chat.
+// Memoized rows require stable props.
 const MessageRow = memo(function MessageRow({ m: live, fresh, grouped, canPin, canDelete, editing, setEditing }: RowProps) {
-  // A deleted message keeps showing what it said while it fades and folds away, then leaves the list.
+  // Deleted messages fade and fold away without a placeholder.
   const alive = useRef(live);
   if (!live.deleted) alive.current = live;
   const m = alive.current;
@@ -385,21 +380,29 @@ const MessageRow = memo(function MessageRow({ m: live, fresh, grouped, canPin, c
   const st = sticker ? findSticker(sticker[1]) : undefined;
 
   const del = async () => {
+    const a = api();
     if (!(await confirmDialog(t().chat.message.deleteConfirm, { text: t().chat.message.deleteConfirmText, ok: t().chat.message.delete, danger: true }))) return;
+    if (session.value?.api !== a) return;
     setLeaving(true);
     try {
-      const [{ message }] = await Promise.all([api().deleteMessage(m.id), new Promise((r) => setTimeout(r, 220))]);
+      const [{ message }] = await Promise.all([a.deleteMessage(m.id), new Promise((r) => setTimeout(r, 220))]);
+      if (session.value?.api !== a) return;
       upsertMessage(message);
     } catch (e) {
+      if (session.value?.api !== a) return;
       toast(errorText(e), 'error');
     }
     setLeaving(false);
   };
   const pin = async () => {
+    const a = api();
     try {
-      upsertMessage((await api().pin(m.id, !m.pinned_at)).message);
+      const { message } = await a.pin(m.id, !m.pinned_at);
+      if (session.value?.api !== a) return;
+      upsertMessage(message);
       toast(m.pinned_at ? t().chat.message.unpinned : t().chat.message.pinned);
     } catch (e) {
+      if (session.value?.api !== a) return;
       toast(errorText(e), 'error');
     }
   };
@@ -429,7 +432,6 @@ const MessageRow = memo(function MessageRow({ m: live, fresh, grouped, canPin, c
         (grouped ? ' grouped' : '') +
         (mine ? ' mine' : '') +
         (editing ? ' editing' : '') +
-        (highlight.value === m.id ? ' flash' : '') +
         (m.pinned_at ? ' pinned' : '') +
         (enter >= 0 && enter < 400 ? ' enter' : '') +
         (leaving || dying ? ' leaving' : '')
@@ -437,6 +439,7 @@ const MessageRow = memo(function MessageRow({ m: live, fresh, grouped, canPin, c
       style={enter > 0 ? { animationDelay: `-${enter}ms` } : undefined}
       ref={row}
       data-id={m.id}
+      data-deleted={live.deleted ? 'true' : undefined}
       onContextMenu={menu}
       onDblClick={(e) => !m.deleted && !(e.target as HTMLElement).closest('a,button,.spoiler,img,audio,video') && setReply(m.channel_id, m)}
     >
@@ -532,12 +535,23 @@ class RowBoundary extends Component<{ children: ComponentChildren }, { failed?: 
   }
 }
 
-type Upload = { key: number; name: string; size: number; preview?: string; progress: number; file?: FileMeta; error?: string; abort: AbortController };
+type Upload = {
+  key: number; name: string; size: number; preview?: string; progress: number; file?: FileMeta; error?: string; abort: AbortController;
+  original: File; api: ReturnType<typeof api>; server: string; uid: number; localID?: string; accepted: boolean; running: boolean;
+  sendWhenDone?: (f: FileMeta) => boolean;
+};
 let uploadSeq = 0;
 
 function cancelUpload(u: Upload) {
   u.abort.abort();
   if (u.preview) URL.revokeObjectURL(u.preview);
+  if (!u.accepted && u.localID) {
+    const localID = u.localID;
+    u.localID = undefined;
+    void deleteOutgoingFile(u.server, u.uid, localID).catch((error) => {
+      if (session.value?.api === u.api && session.value.me.id === u.uid) toast(errorText(error), 'error');
+    });
+  }
 }
 
 function imageSize(blob: Blob): Promise<{ w: number; h: number } | undefined> {
@@ -659,7 +673,12 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
   const setText = (v: string) => (edit ? setEditText(v) : setDraft(channelId, v));
   const [uploads, setUploads] = useState<Upload[]>([]);
   const uploadsRef = useRef(uploads);
-  uploadsRef.current = uploads;
+  const stagedUploads = useRef(new Set<Upload>());
+  const lifetime = useRef({ channelId, active: true });
+  const updateUploads = (list: Upload[]) => {
+    uploadsRef.current = list;
+    setUploads(list);
+  };
   const [emoji, setEmoji] = useState<{ x: number; y: number } | null>(null);
   const [mention, setMention] = useState<{ q: string; at: number; idx: number } | null>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
@@ -670,11 +689,15 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
     addFiles([new File([blob], name, { type: 'audio/webm' })], (f) => sendMessage(channelId, '', { attachments: [f] }));
   });
 
-  useEffect(() => {
-    setUploads([]);
+  useLayoutEffect(() => {
+    lifetime.current = { channelId, active: true };
     ta.current?.focus();
     // Unsent uploads belong to the channel being left.
-    return () => uploadsRef.current.forEach(cancelUpload);
+    return () => {
+      lifetime.current.active = false;
+      stagedUploads.current.forEach(cancelUpload);
+      stagedUploads.current.clear();
+    };
   }, [channelId]);
   useEffect(() => {
     if (reply) ta.current?.focus();
@@ -707,8 +730,53 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
     return () => window.removeEventListener('tolktak:files', h);
   });
 
-  const addFiles = (files: File[], sendWhenDone?: (f: FileMeta) => void) => {
-    const room = MAX_FILES - uploads.length;
+  const currentUpload = (u: Upload) => lifetime.current.active && lifetime.current.channelId === channelId &&
+    session.value?.api === u.api && session.value.me.id === u.uid && !u.abort.signal.aborted && !u.accepted;
+  const showUpload = (u: Upload) => {
+    const list = uploadsRef.current;
+    updateUploads(list.includes(u) ? [...list] : [...list, u]);
+  };
+  const runUpload = async (u: Upload) => {
+    if (u.running || !currentUpload(u)) return;
+    u.running = true;
+    u.error = undefined;
+    u.progress = 0;
+    if (!u.sendWhenDone || uploadsRef.current.includes(u)) showUpload(u);
+    try {
+      if (!u.localID) {
+        // Keep the File in memory when durable storage fails; Retry needs its bytes.
+        u.localID = await saveOutgoingFile(u.server, u.uid, u.original, u.name);
+        if (!currentUpload(u)) return cancelUpload(u);
+      }
+      const dims = await imageSize(u.original);
+      if (!currentUpload(u)) return cancelUpload(u);
+      const meta = await u.api.upload(u.original, u.name, dims, (progress) => {
+        if (!currentUpload(u)) return;
+        u.progress = progress;
+        if (uploadsRef.current.includes(u)) showUpload(u);
+      }, u.abort.signal);
+      if (!currentUpload(u)) return cancelUpload(u);
+      u.file = { ...meta, local_id: u.localID };
+      u.progress = 1;
+      if (u.sendWhenDone?.(u.file)) {
+        u.accepted = true;
+        stagedUploads.current.delete(u);
+        if (u.preview) URL.revokeObjectURL(u.preview);
+        updateUploads(uploadsRef.current.filter((x) => x !== u));
+      } else showUpload(u);
+    } catch (error) {
+      if (!currentUpload(u)) return cancelUpload(u);
+      u.error = errorText(error);
+      showUpload(u);
+      if (u.sendWhenDone) toast(u.error, 'error');
+    } finally {
+      u.running = false;
+    }
+  };
+  const addFiles = (files: File[], sendWhenDone?: (f: FileMeta) => boolean) => {
+    const s = session.value;
+    if (!s || !lifetime.current.active) return;
+    const room = Math.max(0, MAX_FILES - uploadsRef.current.length);
     if (files.length > room && !sendWhenDone) toast(t().chat.composer.tooManyFiles(MAX_FILES), 'error');
     for (const file of sendWhenDone ? files : files.slice(0, room)) {
       const u: Upload = {
@@ -718,58 +786,67 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
         preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
         progress: 0,
         abort: new AbortController(),
+        original: file,
+        api: s.api,
+        server: s.api.base,
+        uid: s.me.id,
+        accepted: false,
+        running: false,
+        sendWhenDone,
       };
-      const patch = (p: Partial<Upload>) => setUploads((list) => list.map((x) => (x.key === u.key ? { ...x, ...p } : x)));
-      if (!sendWhenDone) setUploads((list) => [...list, u]);
-      imageSize(file)
-        .then((dims) => api().upload(file, u.name, dims, (p) => patch({ progress: p }), u.abort.signal))
-        .then((meta) => {
-          if (sendWhenDone) sendWhenDone(meta);
-          else patch({ file: meta, progress: 1 });
-        })
-        .catch((e) => {
-          if (sendWhenDone) toast(errorText(e), 'error');
-          else patch({ error: errorText(e) });
-        });
+      stagedUploads.current.add(u);
+      void runUpload(u);
     }
   };
   const removeUpload = (u: Upload) => {
     cancelUpload(u);
-    setUploads((list) => list.filter((x) => x.key !== u.key));
+    stagedUploads.current.delete(u);
+    updateUploads(uploadsRef.current.filter((x) => x !== u));
   };
 
   const busy = uploads.some((u) => !u.file && !u.error);
+  const incomplete = uploads.some((u) => !u.file);
   const ready = uploads.filter((u) => u.file).map((u) => u.file!);
   const saveEdit = async () => {
+    const a = api();
     const m = edit!;
     const body = (ta.current?.value ?? text).trim();
     onEditEnd();
     if (body === m.text || (!body && !m.attachments.length)) return;
     try {
-      upsertMessage((await api().editMessage(m.id, body)).message);
+      const { message } = await a.editMessage(m.id, body);
+      if (session.value?.api !== a) return;
+      upsertMessage(message);
     } catch (e) {
+      if (session.value?.api !== a) return;
       toast(errorText(e), 'error');
     }
   };
   const submit = () => {
     if (edit) return saveEdit();
-    // The field, not the state: a paste followed at once by Enter lands before the state catches up.
+    // Read the DOM value: Enter can follow a paste before state updates.
     const body = (ta.current?.value ?? text).trim();
-    if (busy) {
-      toast(t().chat.composer.waitForUploads);
+    const staged = uploadsRef.current;
+    if (staged.some((u) => !u.file)) {
+      toast(staged.some((u) => u.error) ? t().chat.composer.uploadFailed : t().chat.composer.waitForUploads);
       return;
     }
-    if (!body && !ready.length) return;
+    const attachments = staged.map((u) => u.file!);
+    if (!body && !attachments.length) return;
     if (body.length > MAX_LENGTH) {
       toast(t().chat.composer.tooLong(MAX_LENGTH), 'error');
       return;
     }
-    sendMessage(channelId, body, { replyTo: reply?.id, attachments: ready });
-    uploads.forEach((u) => u.preview && URL.revokeObjectURL(u.preview));
-    setUploads([]);
+    if (!sendMessage(channelId, body, { replyTo: reply?.id, attachments })) return;
+    staged.forEach((u) => {
+      u.accepted = true;
+      stagedUploads.current.delete(u);
+      if (u.preview) URL.revokeObjectURL(u.preview);
+    });
+    updateUploads([]);
     setText('');
     setReply(channelId, null);
-    window.dispatchEvent(new CustomEvent('tolktak:sent', { detail: channelId }));
+    ta.current?.closest('.chat')?.dispatchEvent(new CustomEvent('tolktak:sent'));
   };
 
   const insert = (s: string) => {
@@ -783,11 +860,14 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
     });
   };
 
+  const ch = channels.value.get(channelId);
+  const participants = ch?.group_id ? groups.value.get(ch.group_id)?.members ?? [] : [me.value?.id, ch?.peer_id].filter((id): id is number => !!id);
+  useKnownUsers(participants);
   const mentionList = useMemo(() => {
     if (!mention) return [];
     const q = mention.q.toLowerCase();
-    return [...users.value.values()].filter((u) => u.id !== me.value?.id && (u.username.toLowerCase().startsWith(q) || u.display_name.toLowerCase().startsWith(q))).slice(0, 6);
-  }, [mention?.q, users.value]);
+    return participants.map((id) => users.value.get(id)).filter((u): u is User => u !== undefined && u.id !== me.value?.id && (u.username.toLowerCase().startsWith(q) || u.display_name.toLowerCase().startsWith(q))).slice(0, 6);
+  }, [mention?.q, users.value, participants.join()]);
   const completeMention = (username: string) => {
     if (!mention) return;
     const el = ta.current!;
@@ -840,6 +920,7 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
               {u.preview ? <img src={u.preview} alt="" /> : <Icon name="file" size={26} />}
               <span class="upload-name ellipsis">{u.name}</span>
               <span class="small muted">{u.error ? t().chat.composer.uploadFailed : u.file ? sizeLabel(u.size) : Math.round(u.progress * 100) + '%'}</span>
+              {u.error && <button class="btn small" onClick={() => void runUpload(u)} title={t().chat.view.retry} aria-label={t().chat.view.retry}>{t().chat.view.retry}</button>}
               {!u.file && !u.error && <span class="upload-progress" style={{ width: `${u.progress * 100}%` }} />}
               <button class="upload-x" onClick={() => removeUpload(u)} aria-label={t().chat.composer.removeFile}>
                 <Icon name="x" size={12} />
@@ -970,8 +1051,8 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
           <button class="send-btn" onClick={submit} title={t().chat.composer.saveHint} aria-label={t().chat.composer.save}>
             <Icon name="check" size={18} />
           </button>
-        ) : text.trim() || ready.length || busy ? (
-          <button class="send-btn" onClick={submit} disabled={busy} title={t().chat.composer.sendHint} aria-label={t().chat.composer.send}>
+        ) : text.trim() || ready.length || busy || uploads.length ? (
+          <button class="send-btn" onClick={submit} disabled={incomplete} title={t().chat.composer.sendHint} aria-label={t().chat.composer.send}>
             <Icon name="send" size={18} />
           </button>
         ) : (
@@ -988,8 +1069,7 @@ function Composer({ channelId, title, onEditLast, edit, onEditEnd }: ComposerPro
           onPick={(e) => insert(e)}
           onSticker={(id) => {
             setEmoji(null);
-            sendMessage(channelId, `[[sticker:${id}]]`, { replyTo: reply?.id });
-            setReply(channelId, null);
+            if (sendMessage(channelId, `[[sticker:${id}]]`, { replyTo: reply?.id })) setReply(channelId, null);
           }}
         />
       )}
@@ -1011,67 +1091,99 @@ function MiniMessage({ m, onJump }: { m: Message; onJump: (e: MouseEvent & { cur
   );
 }
 
+function PanelError({ retry }: { retry: () => void }) {
+  return <div class="history-status"><span>{t().chat.view.loadFailed}</span><button class="link" onClick={retry}>{t().chat.view.retry}</button></div>;
+}
+
 function PinsPanel({ channelId, onClose }: { channelId: number; onClose: () => void }) {
-  const [list, setList] = useState<Message[] | null>(null);
-  const cm = messages.value.get(channelId);
-  const pinnedIds = (cm?.items ?? []).filter((m) => m.pinned_at).map((m) => m.id).join();
+  const store = history.value;
+  const key = useMemo(() => crypto.randomUUID(), [store, channelId]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const version = store?.collectionsVersion.value.get(channelId) ?? 0;
+  const list = store?.collection(key).filter((m) => m.pinned_at) ?? [];
+  useEffect(() => () => store?.release(key), [store, key]);
   useEffect(() => {
-    api()
-      .pins(channelId)
-      .then((r) => setList(r.messages))
-      .catch((e) => toast(errorText(e), 'error'));
-  }, [channelId, pinnedIds]);
+    const a = api();
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setLoading(true);
+      setFailed(false);
+      void a.pins(channelId, controller.signal).then((r) => {
+        if (controller.signal.aborted || session.value?.api !== a) return;
+        mergeUsers(r.users);
+        if (!store?.retain(key, channelId, r.messages, r.history_version)) throw new Error('history_changed');
+      }).catch(() => { if (!controller.signal.aborted) setFailed(true); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    }, 150);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [store, key, channelId, version, attempt]);
   return (
     <aside class="chat-panel slide-in">
       <header>
-        <Icon name="pin" size={18} />
-        <h3>{t().chat.pins.title}</h3>
-        <button class="icon-btn" onClick={onClose} aria-label={t().chat.close}>
-          <Icon name="x" />
-        </button>
+        <Icon name="pin" size={18} /><h3>{t().chat.pins.title}</h3>
+        <button class="icon-btn" onClick={onClose} aria-label={t().chat.close}><Icon name="x" /></button>
       </header>
       <div class="chat-panel-list">
-        {list === null && <div class="muted small pad">{t().chat.pins.loading}</div>}
-        {list?.length === 0 && <div class="panel-empty">{t().chat.pins.empty}</div>}
-        {list?.map((m) => <MiniMessage key={m.id} m={m} onJump={(e) => jumpTo(m.id, e.currentTarget)} />)}
+        {loading && <div class="muted small pad">{t().chat.pins.loading}</div>}
+        {failed && <PanelError retry={() => setAttempt(attempt + 1)} />}
+        {!loading && !failed && !list.length && <div class="panel-empty">{t().chat.pins.empty}</div>}
+        {list.map((m) => <MiniMessage key={m.id} m={m} onJump={(e) => jumpTo(m.id, e.currentTarget)} />)}
       </div>
     </aside>
   );
 }
 
 function SearchPanel({ channelId, onClose }: { channelId: number; onClose: () => void }) {
-  const [q, setQ] = useState('');
-  const [res, setRes] = useState<Message[] | null>(null);
-  useEffect(() => {
-    const s = q.trim();
-    if (s.length < 2) {
-      setRes(null);
-      return;
-    }
-    const timer = setTimeout(() => {
-      api()
-        .messages(channelId, { q: s, limit: 50 })
-        .then((r) => setRes(r.messages))
-        // The next keystroke searches again.
-        .catch((e) => e instanceof ApiError && e.code === 'rate_limited' ? undefined : toast(errorText(e), 'error'));
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [q, channelId]);
+  const store = history.value;
+  const key = useMemo(() => crypto.randomUUID(), [store, channelId]);
+  const search = useSearch();
+  const [navigation, setNavigation] = useState<{ scope: string; cursors: (number | undefined)[] }>({ scope: '', cursors: [undefined] });
+  const [next, setNext] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const list = search.pending ? [] : store?.collection(key) ?? [];
+  const term = search.query.trim();
+  const length = [...term].length;
+  const scope = `${channelId}:${term}`;
+  const cursors = navigation.scope === scope ? navigation.cursors : [undefined];
+  const setCursors = (next: (number | undefined)[]) => setNavigation({ scope, cursors: next });
+  const before = cursors[cursors.length - 1];
+  const version = store?.collectionsVersion.value.get(channelId) ?? 0;
+  useEffect(() => () => store?.release(key), [store, key]);
+  useLayoutEffect(() => {
+    const a = api();
+    const controller = new AbortController();
+    store?.release(key);
+    setFailed(false);
+    setNext(null);
+    setLoading(!search.pending && length >= 2);
+    if (search.pending || length < 2) return;
+    void a.search(channelId, term, before, controller.signal).then((r) => {
+      if (controller.signal.aborted || session.value?.api !== a) return;
+      mergeUsers(r.users);
+      if (!store?.retain(key, channelId, r.messages, r.history_version)) throw new Error('history_changed');
+      setNext(r.has_more ? r.next_before : null);
+    }).catch(() => { if (!controller.signal.aborted) setFailed(true); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [store, key, channelId, term, before, version, attempt, search.pending]);
   return (
     <aside class="chat-panel slide-in">
       <header>
-        <div class="search-field">
-          <Icon name="search" size={16} />
-          <input autoFocus placeholder={t().chat.search.placeholder} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
-        </div>
-        <button class="icon-btn" onClick={onClose} aria-label={t().chat.close}>
-          <Icon name="x" />
-        </button>
+        <SearchField search={search} class="search-field" autoFocus maxLength={256} busy={loading} placeholder={t().chat.search.placeholder} />
+        <button class="icon-btn" onClick={onClose} aria-label={t().chat.close}><Icon name="x" /></button>
       </header>
       <div class="chat-panel-list">
-        {res === null && <div class="panel-empty">{t().chat.search.tooShort}</div>}
-        {res?.length === 0 && <div class="panel-empty">{t().chat.search.empty}</div>}
-        {res?.map((m) => <MiniMessage key={m.id} m={m} onJump={(e) => jumpTo(m.id, e.currentTarget)} />)}
+        {!search.pending && length < 2 && <div class="panel-empty">{t().chat.search.tooShort}</div>}
+        {!search.pending && loading && <div class="muted small pad">{t().chat.search.loading}</div>}
+        {!search.pending && failed && <PanelError retry={() => setAttempt(attempt + 1)} />}
+        {!search.pending && length >= 2 && !loading && !failed && !list.length && <div class="panel-empty">{t().chat.search.empty}</div>}
+        {list.map((m) => <MiniMessage key={m.id} m={m} onJump={(e) => jumpTo(m.id, e.currentTarget)} />)}
+        {!search.pending && !loading && !failed && <div class="history-pages">
+          {cursors.length > 1 && <button class="secondary small-btn" onClick={() => setCursors(cursors.slice(0, -1))}>{t().chat.search.previous}</button>}
+          {next !== null && <button class="secondary small-btn" onClick={() => setCursors([...cursors, next].slice(-200))}>{t().chat.search.next}</button>}
+        </div>}
       </div>
     </aside>
   );
@@ -1095,11 +1207,11 @@ function TypingLine({ channelId }: { channelId: number }) {
   );
 }
 
-/** The side panel open in each chat; its buttons live in the window frame. */
+// Per-chat side panels, controlled from the window frame.
 const chatPanel = signal<Record<number, string | undefined>>({});
 export const setPanel = (cid: number, p?: string) => (chatPanel.value = { ...chatPanel.value, [cid]: p });
 export const openPanel = (cid: number) => chatPanel.value[cid];
-/** Side panels other parts of the app add to a chat, by name. */
+// Named side-panel extensions.
 const morePanels = new Map<string, (channelId: number, close: () => void) => ComponentChildren>();
 export const addChatPanel = (name: string, render: (channelId: number, close: () => void) => ComponentChildren) => morePanels.set(name, render);
 
@@ -1133,109 +1245,73 @@ export function ChatActions({ channelId }: { channelId: number }) {
   );
 }
 
+function useAnimatedMessages(view: HistoryView | null) {
+  const [, render] = useState(0);
+  const previous = useRef<{ view: HistoryView | null; serial: number; items: Message[]; removed: Map<number, { message: Message; until: number }> }>({ view: null, serial: 0, items: [], removed: new Map() });
+  const items = view?.items ?? [];
+  const serial = view?.state.value.position.serial ?? 0;
+  const old = previous.current;
+  if (old.view !== view || old.serial !== serial) old.removed.clear();
+  else {
+    const ids = new Set(items.map((m) => m.id));
+    for (const m of old.items) {
+      if (ids.has(m.id) || old.removed.has(m.id)) continue;
+      const updated = view?.store.message(view.channelId, m.id);
+      if (updated?.deleted) old.removed.set(m.id, { message: updated, until: Date.now() + 600 });
+    }
+  }
+  for (const [id, value] of old.removed) if (value.until <= Date.now()) old.removed.delete(id);
+  const shown = [...items, ...[...old.removed.values()].map((v) => v.message)].sort((a, b) => a.id - b.id);
+  previous.current = { view, serial, items, removed: old.removed };
+  useEffect(() => {
+    if (!old.removed.size) return;
+    const delay = Math.max(0, Math.min(...[...old.removed.values()].map((v) => v.until)) - Date.now());
+    const timer = setTimeout(() => render((n) => n + 1), delay);
+    return () => clearTimeout(timer);
+  }, [view, serial, shown.length, old.removed.size]);
+  return shown;
+}
+
 export function ChatView({ channelId, title, icon, canModerate = false }: { channelId: number; title: string; icon?: ComponentChildren; canModerate?: boolean }) {
-  const cm = messages.value.get(channelId);
+  const store = history.value;
+  const historyView = useMemo(() => store?.createView(channelId) ?? null, [store, channelId]);
+  const hs = historyView?.state.value;
+  const items = useAnimatedMessages(historyView);
+  const pending = messages.value.get(channelId)?.pending ?? [];
+  const sectionRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const stickToBottom = useRef(true);
-  const prevHeight = useRef(0);
+  const read = useMemo(() => (id: number) => markRead(channelId, id), [channelId]);
+  const scroll = useHistoryScroll(historyView, listRef, read, !!settingsOpen.value);
+  const { atBottom, onScroll } = scroll;
   const panel = chatPanel.value[channelId];
   const [editing, setEditing] = useState(0);
-  const [atBottom, setAtBottom] = useState(true);
   const [drag, setDrag] = useState(false);
   const dragDepth = useRef(0);
-
-  useLayoutEffect(() => {
-    stickToBottom.current = true;
-    prevHeight.current = 0;
-    setEditing(0);
-    openChannel(channelId);
-  }, [channelId]);
-  // Where reading stopped when the channel opened: the divider stays there while new messages are read.
-  const readMark = useMemo(() => channels.value.get(channelId)?.last_read_id ?? 0, [channelId]);
-  // Messages newer than this arrived while the chat was open, and play their entrance.
-  const openedAt = useMemo(() => Date.now(), [channelId]);
-  const gliding = useRef(0);
-  // A new message at the bottom eases the list up by its height instead of jumping.
-  // A popped-out chat animates on its own window's frames: the main window's pause while it is covered.
-  const frames = () => listRef.current?.ownerDocument.defaultView ?? window;
-  const glide = (el: HTMLDivElement, by: number) => {
-    frames().cancelAnimationFrame(gliding.current);
-    const target = () => el.scrollHeight - el.clientHeight;
-    // Travels only the new message's height, wherever the list was left.
-    if (target() - el.scrollTop > by) el.scrollTop = target() - by;
-    const from = el.scrollTop;
-    const t0 = performance.now();
-    const step = (now: number) => {
-      const k = Math.min(1, (now - t0) / 420);
-      el.scrollTop = from + (target() - from) * (1 - (1 - k) ** 2);
-      gliding.current = k < 1 ? frames().requestAnimationFrame(step) : 0;
-    };
-    gliding.current = frames().requestAnimationFrame(step);
-  };
-  useEffect(() => () => frames().cancelAnimationFrame(gliding.current), []);
-  useEffect(() => {
-    const sent = (e: Event) => {
-      if ((e as CustomEvent<number>).detail !== channelId) return;
-      stickToBottom.current = true;
-    };
-    window.addEventListener('tolktak:sent', sent);
-    return () => window.removeEventListener('tolktak:sent', sent);
-  }, [channelId]);
-
-  const items = cm?.items ?? [];
+  const readMark = useMemo(() => channels.value.get(channelId)?.last_read_id ?? 0, [store, channelId]);
+  const openedAt = useMemo(() => Date.now(), [store, channelId]);
   let shown: Message | undefined;
-  const pending = cm?.pending ?? [];
-  const last = items[items.length - 1];
-
-  // Before paint, so a message read on arrival never shows as unread.
   useLayoutEffect(() => {
-    const w = listRef.current?.ownerDocument.defaultView ?? window;
-    if (last && w.document.hasFocus() && stickToBottom.current) markRead(channelId, last.id);
-    const onFocus = () => last && stickToBottom.current && markRead(channelId, last.id);
-    w.addEventListener('focus', onFocus);
-    return () => w.removeEventListener('focus', onFocus);
-  }, [channelId, last?.id]);
-
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const fresh = pending.length > 0 || (!!last && last.created_at > openedAt);
-    if (stickToBottom.current && gliding.current) {
-      // A glide under way already eases to wherever the bottom now is.
-    } else if (stickToBottom.current && fresh && prevHeight.current && el.scrollHeight > prevHeight.current && !matchMedia('(prefers-reduced-motion: reduce)').matches) glide(el, el.scrollHeight - prevHeight.current);
-    else if (stickToBottom.current) el.scrollTop = el.scrollHeight;
-    else if (prevHeight.current && el.scrollHeight > prevHeight.current && el.scrollTop < 50) {
-      el.scrollTop += el.scrollHeight - prevHeight.current;
-    }
-    prevHeight.current = el.scrollHeight;
-  }, [items.length, pending.length, items[0]?.id]);
-
-  // Images load after layout: stay pinned to the bottom meanwhile.
+    setEditing(0);
+    void historyView?.open(channels.value.get(channelId) ?? { last_read_id: 0, unread: 0 });
+    return () => historyView?.dispose();
+  }, [historyView]);
   useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const ro = new ((el.ownerDocument.defaultView ?? window) as typeof window).ResizeObserver(() => {
-      if (stickToBottom.current && !gliding.current) el.scrollTop = el.scrollHeight;
-    });
-    for (const c of el.children) ro.observe(c);
-    return () => ro.disconnect();
-  }, [items.length, channelId]);
-
-  const onScroll = () => {
-    if (gliding.current) return;
-    const el = listRef.current!;
-    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    stickToBottom.current = bottom;
-    if (bottom !== atBottom) setAtBottom(bottom);
-    if (bottom && last) markRead(channelId, last.id);
-    if (el.scrollTop < 300 && cm?.hasOlder && !cm.loading) {
-      prevHeight.current = el.scrollHeight;
-      loadOlder(channelId);
-    }
-  };
+    const section = sectionRef.current;
+    if (!section) return;
+    const jump = (e: Event) => {
+      const id = (e as CustomEvent<number>).detail;
+      const panel = section.querySelector('.chat-panel');
+      if (panel && section.clientWidth - panel.clientWidth < 240) setPanel(channelId);
+      void scroll.jump(id);
+    };
+    const sent = () => { void scroll.latest(); };
+    section.addEventListener('tolktak:jump', jump);
+    section.addEventListener('tolktak:sent', sent);
+    return () => { section.removeEventListener('tolktak:jump', jump); section.removeEventListener('tolktak:sent', sent); };
+  }, [scroll.jump, scroll.latest]);
 
   const editLast = () => {
-    const mine = [...items].reverse().find((m) => m.author_id === me.value?.id && !m.deleted && !STICKER_RE.test(m.text));
+    const mine = items.findLast((m) => m.author_id === me.value?.id && !m.deleted && !STICKER_RE.test(m.text));
     if (mine) setEditing(mine.id);
   };
 
@@ -1246,6 +1322,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
   return (
     <section
       class="chat"
+      ref={sectionRef}
       data-channel={channelId}
       onDragEnter={(e) => {
         if (!e.dataTransfer?.types.includes('Files')) return;
@@ -1268,22 +1345,25 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
       <div class="chat-body">
         <div class="chat-col">
           <div class="msg-list" ref={listRef} onScroll={onScroll}>
-            {cm?.loading && (
+            {hs?.loading && (
               <div class="loading-dots">
                 <span />
                 <span />
                 <span />
               </div>
             )}
-            {cm?.loaded && !cm.hasOlder && (
+            {hs?.loaded && !hs.hasBefore && (
               <div class="chat-start">
                 <div class="chat-start-icon">{icon ?? <Icon name="chat" size={28} />}</div>
                 <h2>{title}</h2>
                 <p class="muted">{g ? t().chat.view.channelStart : t().chat.view.dmStart}</p>
               </div>
             )}
+            {hs?.error && <PanelError retry={() => { void historyView?.retry(); }} />}
+            {hs?.olderError && <PanelError retry={() => { void historyView?.older(); }} />}
+            {hs?.olderLoading && <div class="history-status muted small">{t().chat.pins.loading}</div>}
             {items.map((m, i) => {
-              // Deleted messages leave the list, so each row lays out against the last message still shown.
+              // Group against the preceding visible message.
               const prev = shown;
               const before = items[i - 1];
               if (!m.deleted) shown = m;
@@ -1296,7 +1376,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
                       <span>{dayLabel(m.created_at)}</span>
                     </div>
                   )}
-                  {!m.deleted && (before ? before.id <= readMark : !cm?.hasOlder) && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
+                  {!m.deleted && (before ? before.id <= readMark : hs?.position.kind === 'start' || !hs?.hasBefore) && m.id > readMark && m.author_id !== me.value?.id && <div class="new-divider">{t().chat.view.newMessages}</div>}
                   <RowBoundary>
                     <MessageRow m={m} fresh={m.created_at > openedAt} grouped={grouped} canPin={canModerate || !g} canDelete={canModerate && !!g} editing={editing === m.id} setEditing={setEditing} />
                   </RowBoundary>
@@ -1306,7 +1386,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
             {pending.map((p, i) => {
               sentAt.set(p.nonce, p.created_at);
               const last = shown;
-              // Laid out as the message will be once it is stored, so nothing moves when it is.
+              // Match the confirmed row layout to avoid a jump on delivery.
               const grouped = !p.reply_to && (i > 0 || (!!last && last.author_id === me.value?.id && !last.deleted && p.created_at - last.created_at < 5 * 60_000));
               const r = p.reply_to ? items.find((x) => x.id === p.reply_to) : undefined;
               return (
@@ -1350,13 +1430,13 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
                 </div>
               );
             })}
-            {!atBottom && (
+            {hs?.newerLoading && <div class="history-status muted small">{t().chat.pins.loading}</div>}
+            {hs?.newerError && <PanelError retry={() => { void historyView?.newer(); }} />}
+            {!!historyView?.backStack.length && <button class="history-back secondary small-btn" onClick={() => { void scroll.back(); }}><Icon name="arrowLeft" size={16} />{t().chat.view.back}</button>}
+            {(!atBottom || hs?.hasAfter) && (
               <button
                 class="to-bottom pop-in"
-                onClick={() => {
-                  stickToBottom.current = true;
-                  listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
-                }}
+                onClick={() => { void scroll.latest(); }}
                 aria-label={t().chat.view.toLatest}
               >
                 <Icon name="arrowDown" size={18} />
@@ -1365,7 +1445,7 @@ export function ChatView({ channelId, title, icon, canModerate = false }: { chan
             )}
           </div>
           <TypingLine channelId={channelId} />
-          <Composer channelId={channelId} title={title} onEditLast={editLast} edit={items.find((m) => m.id === editing) ?? null} onEditEnd={() => setEditing(0)} />
+          <Composer key={channelId} channelId={channelId} title={title} onEditLast={editLast} edit={items.find((m) => m.id === editing) ?? null} onEditEnd={() => setEditing(0)} />
         </div>
         {panel === 'pins' && <PinsPanel channelId={channelId} onClose={() => setPanel(channelId)} />}
         {panel === 'search' && <SearchPanel channelId={channelId} onClose={() => setPanel(channelId)} />}

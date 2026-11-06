@@ -14,7 +14,6 @@ export const THEMES = [
 ] as const;
 export type ThemeId = (typeof THEMES)[number]['id'] | 'custom';
 
-/** A theme of one's own: a few dials that every color is worked out from. */
 export type Custom = { light: boolean; hue: number; tint: number; depth: number; contrast: number; accent: string };
 export const CUSTOM_DEFAULT: Custom = { light: false, hue: 190, tint: 40, depth: 50, contrast: 50, accent: '#e6b25c' };
 export const ACCENTS = ['#e6b25c', '#ff8a4c', '#ff6b78', '#ec6fb0', '#9b87ff', '#5b9bff', '#3cc6b8', '#3ddc97', '#c9e265'];
@@ -38,7 +37,6 @@ function luminance(hex: string) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** Every token of a custom theme, from its dials. */
 export function customVars(c: Custom): Record<string, string> {
   const { hue: h, light } = c;
   const s = c.tint * 0.5;
@@ -76,9 +74,9 @@ export function customVars(c: Custom): Record<string, string> {
   };
 }
 
-const CUSTOM_KEYS = Object.keys(customVars(CUSTOM_DEFAULT)).concat(Object.keys(customVars({ ...CUSTOM_DEFAULT, light: true })));
+const CUSTOM_KEYS = new Set([...Object.keys(customVars(CUSTOM_DEFAULT)), ...Object.keys(customVars({ ...CUSTOM_DEFAULT, light: true }))]);
 
-/** Puts the theme on a document's root: the app window and every window popped out of it. */
+// Apply the same theme to the main document and popouts.
 export function paint(doc: Document) {
   const root = doc.documentElement;
   const t = theme.value;
@@ -88,7 +86,7 @@ export function paint(doc: Document) {
   if (doc === document) bridge.windowColors({ app: resolve('--bg-app'), island: resolve('--bg-island'), symbol: resolve('--muted') }).catch(() => {});
 }
 
-/** A token as #rrggbb, the form the window's own title bar takes. */
+// Native title bars require resolved hex colors.
 function resolve(token: string) {
   const el = document.createElement('i');
   el.style.color = `var(${token})`;

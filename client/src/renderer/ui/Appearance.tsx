@@ -7,7 +7,6 @@ function ThemeCard({ id, style }: { id: ThemeId; style?: Record<string, string> 
   const on = theme.value.id === id;
   return (
     <button class={'theme-card' + (on ? ' on' : '')} data-theme={id} style={style} role="radio" aria-checked={on} onClick={() => setTheme({ id })}>
-      {/* The card is a small desk drawn in its own theme's colors. */}
       <span class="tc-desk" aria-hidden="true">
         <i class="tc-nav">
           <i />
@@ -48,7 +47,6 @@ function Dial({ label, value, track, onInput }: { label: string; value: number; 
 function CustomEditor() {
   const tx = t().settings.look;
   const c = theme.value.custom;
-  // Touching any dial switches to the custom theme.
   const set = (patch: Partial<Custom>) => setTheme({ id: 'custom', custom: { ...c, ...patch } });
   const v = customVars(c);
   const h = c.hue;
@@ -92,7 +90,6 @@ export function AppearanceSettings() {
   const tx = t().settings.look;
   return (
     <div class="look">
-      <p class="hint">{tx.hint}</p>
       {([false, true] as const).map((light) => (
         <section key={String(light)}>
           <div class="field-label">{light ? tx.lightGroup : tx.darkGroup}</div>

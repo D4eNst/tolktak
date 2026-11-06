@@ -3,6 +3,7 @@ import { computed, signal } from '@preact/signals';
 import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { intlLocale, t } from '../i18n';
+import { useKnownUsers } from './usePeople';
 import { avatarUrl, groups, online, users } from '../state';
 
 const paths: Record<string, string> = {
@@ -52,7 +53,9 @@ const paths: Record<string, string> = {
   shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
   check: 'M20 6 9 17l-5-5',
   alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+  chevronUp: 'M6 15l6-6 6 6',
   chevronDown: 'M6 9l6 6 6-6',
+  chevronLeft: 'M15 6l-6 6 6 6',
   chevronRight: 'M9 6l6 6-6 6',
   keyboard: 'M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10',
   user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
@@ -60,6 +63,7 @@ const paths: Record<string, string> = {
   bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
   bellOff: 'M8.7 3A6 6 0 0 1 18 8c0 2.8.5 4.8 1.1 6.2M17 17H3s3-2 3-9c0-.8.1-1.5.4-2.2M13.7 21a2 2 0 0 1-3.4 0M3 3l18 18',
   arrowDown: 'M12 5v14M19 12l-7 7-7-7',
+  arrowLeft: 'M19 12H5M12 19l-7-7 7-7',
   sticker: 'M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9.5L21 14.5V5a2 2 0 0 0-2-2zM14 21v-5a2 2 0 0 1 2-2h5M8 10h.01M14 10h.01M8.5 14.5s1.5 1.5 3.5 1.5',
   stop: 'M6 6h12v12H6z',
   link: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
@@ -106,6 +110,7 @@ export function Avatar({
   speaking?: boolean;
   showPresence?: boolean;
 }) {
+  useKnownUsers([id]);
   const u = users.value.get(id);
   const name = u?.display_name ?? '?';
   const src = u?.avatar ? avatarUrl(u.avatar) : '';
@@ -132,6 +137,8 @@ export function GroupAvatar({ id, size = 44 }: { id: number; size?: number }) {
   );
 }
 
+const modalBackgrounds = new WeakMap<HTMLElement, { count: number; inert: boolean }>();
+
 export function Modal({
   title,
   onClose,
@@ -148,16 +155,55 @@ export function Modal({
   const [closing, setClosing] = useState(false);
   const [opened] = useState(inputWindow);
   const win = opened.closed ? window : opened;
+  const [opener] = useState(() => win.document.activeElement as HTMLElement | null);
   const ref = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
+  const currentClose = useRef(onClose);
+  currentClose.current = onClose;
   const close = () => {
-    if (closing) return;
+    if (closing || closeTimer.current !== null) return;
     setClosing(true);
-    setTimeout(onClose, 140);
+    closeTimer.current = win.setTimeout(() => {
+      closeTimer.current = null;
+      currentClose.current();
+    }, 140);
   };
-  useEffect(() => {
+  useLayoutEffect(() => () => {
+    if (closeTimer.current !== null) win.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }, [win]);
+  useLayoutEffect(() => {
+    const roots = [...win.document.querySelectorAll<HTMLElement>('.shell, .topbar, .popout-win')];
+    for (const root of roots) {
+      const state = modalBackgrounds.get(root) ?? { count: 0, inert: root.inert };
+      state.count++;
+      modalBackgrounds.set(root, state);
+      root.inert = true;
+    }
+    if (!ref.current?.contains(win.document.activeElement)) ref.current?.focus({ preventScroll: true });
+    return () => {
+      for (const root of roots) {
+        const state = modalBackgrounds.get(root)!;
+        if (--state.count === 0) {
+          root.inert = state.inert;
+          modalBackgrounds.delete(root);
+        }
+      }
+      if (opener?.isConnected && !opener.closest('[inert]')) opener.focus({ preventScroll: true });
+    };
+  }, [win]);
+  useLayoutEffect(() => {
     const k = (e: KeyboardEvent) => {
-      // Escape closes only the top layer: menus and popovers sit above modals, and a later modal above an earlier one.
+      // Only the top overlay handles Escape and focus trapping.
       const top = !win.document.querySelector('.menu, .popover') && ref.current === [...win.document.querySelectorAll('.modal')].at(-1);
+      if (e.key === 'Tab' && !e.defaultPrevented && top) {
+        const items = [...ref.current!.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]')].filter((el) => el.tabIndex >= 0 && !el.matches(':disabled') && el.getClientRects().length);
+        const active = win.document.activeElement;
+        if (!items.length || !ref.current!.contains(active) || active === ref.current || active === (e.shiftKey ? items[0] : items.at(-1))) {
+          e.preventDefault();
+          (e.shiftKey ? items.at(-1) : items[0])?.focus();
+        }
+      }
       if (e.key === 'Escape' && !e.defaultPrevented && top) {
         e.preventDefault();
         close();
@@ -169,7 +215,7 @@ export function Modal({
   // In <body>: an ancestor with a transform would become the containing block.
   return createPortal(
     <div class={'modal-backdrop' + (closing ? ' closing' : '')} onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div class={'modal' + (wide ? ' wide' : '') + ' ' + cls} ref={ref} role="dialog" aria-label={title}>
+      <div class={'modal' + (wide ? ' wide' : '') + ' ' + cls} ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
         <header>
           <h2>{title}</h2>
           <button class="icon-btn" onClick={close} aria-label={t().common.close}>
@@ -183,20 +229,28 @@ export function Modal({
   );
 }
 
-type Ask =
+type Ask = { id: number } & (
   | { kind: 'confirm' | 'info'; title: string; text?: string; ok: string; danger?: boolean; resolve: (v: boolean) => void }
-  | { kind: 'prompt'; title: string; label: string; initial: string; ok: string; max: number; resolve: (v: string | null) => void };
+  | { kind: 'prompt'; title: string; label: string; initial: string; ok: string; max: number; resolve: (v: string | null) => void }
+);
 const asking = signal<Ask | null>(null);
+let nextAskId = 0;
+function replaceAsk(next: Ask) {
+  const previous = asking.peek();
+  asking.value = next;
+  if (previous?.kind === 'prompt') previous.resolve(null);
+  else previous?.resolve(false);
+}
 
 export function confirmDialog(title: string, opts: { text?: string; ok?: string; danger?: boolean } = {}): Promise<boolean> {
-  return new Promise((resolve) => (asking.value = { kind: 'confirm', title, text: opts.text, ok: opts.ok ?? t().common.yes, danger: opts.danger, resolve }));
+  return new Promise((resolve) => replaceAsk({ id: ++nextAskId, kind: 'confirm', title, text: opts.text, ok: opts.ok ?? t().common.yes, danger: opts.danger, resolve }));
 }
 export function infoDialog(title: string, text: string) {
-  asking.value = { kind: 'info', title, text, ok: t().common.ok, resolve: () => {} };
+  replaceAsk({ id: ++nextAskId, kind: 'info', title, text, ok: t().common.ok, resolve: () => {} });
 }
 export function promptDialog(title: string, opts: { label?: string; initial?: string; ok?: string; max?: number } = {}): Promise<string | null> {
   return new Promise((resolve) =>
-    (asking.value = { kind: 'prompt', title, label: opts.label ?? t().common.name, initial: opts.initial ?? '', ok: opts.ok ?? t().common.save, max: opts.max ?? 60, resolve }),
+    replaceAsk({ id: ++nextAskId, kind: 'prompt', title, label: opts.label ?? t().common.name, initial: opts.initial ?? '', ok: opts.ok ?? t().common.save, max: opts.max ?? 60, resolve }),
   );
 }
 
@@ -208,12 +262,13 @@ export function AskHost() {
   }, [a]);
   if (!a) return null;
   const done = (val: boolean | string | null) => {
+    if (asking.value !== a) return;
     asking.value = null;
     (a.resolve as (x: unknown) => void)(val);
   };
   if (a.kind !== 'prompt') {
     return (
-      <Modal title={a.title} onClose={() => done(false)} class="ask">
+      <Modal key={a.id} title={a.title} onClose={() => done(false)} class="ask">
         {a.text && <p class="ask-text">{a.text}</p>}
         <div class="modal-actions">
           {a.kind === 'confirm' && (
@@ -229,7 +284,7 @@ export function AskHost() {
     );
   }
   return (
-    <Modal title={a.title} onClose={() => done(null)} class="ask">
+    <Modal key={a.id} title={a.title} onClose={() => done(null)} class="ask">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -296,6 +351,7 @@ export function Slider({
         style={{ '--p': pct + '%' }}
         onInput={(e) => onInput(Number((e.target as HTMLInputElement).value))}
         aria-label={label}
+        aria-valuetext={format(value)}
       />
       <span class="slider-val">{format(value)}</span>
     </label>
@@ -367,8 +423,16 @@ export type MenuItem = { label: string; icon?: string; danger?: boolean; run: ()
 type MenuState = { x: number; y: number; items: MenuItem[]; header?: ComponentChildren; win: Window };
 const menuState = signal<MenuState | null>(null);
 
+window.addEventListener('tolktak:session-reset', () => {
+  menuState.value = null;
+  const a = asking.value;
+  asking.value = null;
+  if (a?.kind === 'prompt') a.resolve(null);
+  else a?.resolve(false);
+});
+
 let lastInput: Window = window;
-/** Menus and dialogs open in the window people last pressed in, a popped-out one included. */
+// Open overlays in the window that received the last input, including popouts.
 export function followInput(w: Window) {
   const mark = () => (lastInput = w);
   w.addEventListener('pointerdown', mark, true);
@@ -480,9 +544,10 @@ export function Popover({ x, y, onClose, children, class: cls = '' }: { x: numbe
         onClose();
       }
     };
-    setTimeout(() => w.addEventListener('mousedown', off));
+    const timer = w.setTimeout(() => w.addEventListener('mousedown', off));
     w.addEventListener('keydown', k);
     return () => {
+      w.clearTimeout(timer);
       w.removeEventListener('mousedown', off);
       w.removeEventListener('keydown', k);
     };
@@ -500,7 +565,7 @@ function isYesterday(d: Date, now: Date) {
   return d.toDateString() === y.toDateString();
 }
 
-// Building a formatter costs far more than formatting, and every message shows a time.
+// Reuse formatters across message rows.
 export const dateFormats = computed(() => {
   const l = intlLocale();
   return {
@@ -511,7 +576,7 @@ export const dateFormats = computed(() => {
   };
 });
 
-// Memoised message rows read it, so their labels change at midnight.
+// Invalidate memoized date labels at midnight.
 const today = signal(new Date().toDateString());
 setInterval(() => (today.value = new Date().toDateString()), 60_000);
 

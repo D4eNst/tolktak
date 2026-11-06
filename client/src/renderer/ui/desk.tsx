@@ -1,5 +1,4 @@
-// The desk: one layout of windows that stays put. Each window is described once below; the main
-// window shows what the navigator picks, the voice window comes and goes with a call. dockview places them.
+// Dockview layout, window lifecycle and per-account persistence.
 import { effect, signal } from '@preact/signals';
 import { render, type VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -15,7 +14,7 @@ import {
 } from 'dockview-core/dist/dockview-core.js';
 import type { Group, Room } from '../api';
 import { platform } from '../bridge';
-import { type Messages, t } from '../i18n';
+import { t } from '../i18n';
 import {
   addPopWindow,
   api,
@@ -47,15 +46,16 @@ import { copyText, openProfile, ProfileCard } from './Profile';
 import { CallPeople, callPeopleOpen, RoomModeToggle, Stage, toggleRoomMode } from './Stage';
 import { startTour } from './Tour';
 import { paint, theme } from '../theme';
+import { SearchField, useSearch } from './search';
+import { useKnownUsers } from './usePeople';
 
 export type WindowId = 'main' | 'voice' | 'room' | 'people' | 'profile' | 'chat' | 'callpeople';
-/** `arg` is what a window is fixed to, from its id `type:arg`: `chat:12` is channel 12. */
+// Window IDs use type:arg; chat:12 refers to channel 12.
 type WinProps = { arg?: number; bare?: boolean };
 type Win = {
   name: () => string;
   minWidth: number;
   minHeight: number;
-  /** Title in the window frame: icon, name, a muted detail. */
   Head: (p: WinProps) => VNode | null;
   Actions?: (p: WinProps) => VNode | null;
   Body: (p: WinProps) => VNode | null;
@@ -84,7 +84,7 @@ const callRoom = () => {
   const c = call.value;
   return c && 'room_id' in c.target ? c.target.room_id : undefined;
 };
-/** The window a call lives in: its room's, or `voice` for a call with a person. */
+// Room calls use their room window; direct calls use voice.
 const callWindow = () => {
   const rid = callRoom();
   return rid ? 'room:' + rid : 'voice';
@@ -121,7 +121,7 @@ function RoomHead({ rid, bare }: { rid: number; bare?: boolean }) {
   );
 }
 
-/** A room you are not in: who is there and a way in, without joining by just looking. */
+// Viewing a room does not join its call.
 function RoomLobby({ rid }: { rid: number }) {
   const f = findRoom(rid);
   const tx = t().desk.room;
@@ -147,7 +147,6 @@ function RoomLobby({ rid }: { rid: number }) {
   );
 }
 
-/** The call with the list of its people over its right edge, as a chat shows its side panels. */
 function RoomStage() {
   const close = () => (callPeopleOpen.value = false);
   return (
@@ -186,7 +185,7 @@ function DmCallButton({ cid }: { cid: number }) {
   );
 }
 
-// A chat, a person's or a group channel's: the main window and the fixed `chat:` ones.
+// Shared by the main window and fixed chat windows.
 function ChatHead({ cid, name, bare }: { cid?: number; name: string; bare?: boolean }) {
   const ch = cid ? channels.value.get(cid) : undefined;
   const g = ch?.group_id ? groups.value.get(ch.group_id) : undefined;
@@ -218,7 +217,6 @@ function ChatHeadActions({ cid }: { cid?: number }) {
     </>
   );
 }
-/** Group members or a person's profile: a panel over the chat's right edge first, a window of its own on request. */
 function SideToggle({ cid, panel, icon }: { cid: number; panel: 'people' | 'profile'; icon: string }) {
   const own = shownWindows.value.has(panel);
   const on = own || openPanel(cid) === panel;
@@ -230,13 +228,13 @@ function SideToggle({ cid, panel, icon }: { cid: number; panel: 'people' | 'prof
   );
 }
 function PopOut({ id, close }: { id: WindowId; close: () => void }) {
-  const label = t().desk.menu.popOut;
+  const label = t().desk.menu.openPanel;
   return (
     <button
       class="icon-btn"
       onClick={() => {
         close();
-        // Next to the main window in the grid; a floating one takes no tabs.
+        // Floating groups cannot accept tabs.
         const main = dock?.getPanel('main');
         show(id, main?.group.api.location.type === 'grid' ? { referencePanel: 'main', direction: 'right' } : 'right');
       }}
@@ -383,30 +381,30 @@ export const WINDOWS: Record<WindowId, Win> = {
 // ---------- storage: per server and account, on this device ----------
 
 type Rect = { x: number; y: number; width: number; height: number };
-/** Where the voice window stood when the last call ended: the whole desk then, the shape of the desk without it, and a neighbour to stand by if the desk changed since. */
+// Restore the saved layout if unchanged; otherwise place the call by its former neighbour.
 type VoicePlace = { desk?: SerializedDockview; shape?: string; position?: AddPanelPositionOptions; width?: number; height?: number; floating?: Rect };
 type Saved = {
   layout?: SerializedDockview;
-  /** Windows put away on the shelf. */
+  // Minimized windows.
   shelf?: string[];
-  /** Where windows put on the shelf from floating were floating. */
+  // Floating bounds to restore from the shelf.
   shelfFloat?: Record<string, Rect>;
-  /** Windows put on the shelf from behind the edge, to go back there. */
+  // Shelved windows that belong behind the edge.
   shelfEdge?: string[];
   opacity?: Record<string, number>;
-  /** Windows drawn as one card, their title inside instead of a capsule above, only while alone in their frame: chosen by hand either way; the rest follow the default. */
+  // Explicit title placement overrides for single-panel groups.
   plain?: string[];
   capsule?: string[];
   voice?: VoicePlace;
-  /** Room windows kept on the desk after the call in them ends. */
+  // Room windows retained after leaving the call.
   pinned?: string[];
-  /** Windows hidden behind the right edge of the desk, showing only a tab there. */
+  // Windows hidden behind the right edge.
   edge?: string[];
   nav?: number;
   navFolded?: boolean;
   last?: View;
 };
-// Bump the version when the stored shape changes: older layouts are then ignored.
+// Increment when saved layouts become incompatible.
 const storeKey = () => `tolktak.desk.v2.${session.value?.api.base}.${session.value?.me.id}`;
 export function loadDesk(): Saved {
   try {
@@ -427,7 +425,7 @@ export function saveDesk(patch: Saved) {
 
 // ---------- behaviour: settings «Окна», per device ----------
 
-type DeskPrefs = { call: 'replace' | 'beside' | 'full'; keepCall?: boolean; autoPin?: boolean };
+type DeskPrefs = { call: 'replace' | 'beside' | 'full'; keepCall?: boolean; autoPin?: boolean; hints?: boolean };
 const PREFS_KEY = 'tolktak.deskPrefs';
 export const deskPrefs = signal<DeskPrefs>({
   call: 'replace',
@@ -446,7 +444,7 @@ export function setDeskPrefs(patch: Partial<DeskPrefs>) {
   } catch {
     /* storage unavailable */
   }
-  // The call's remembered place would win over the new choice.
+  // Clear the saved call position when its default placement changes.
   if (patch.call) saveDesk({ voice: undefined });
 }
 
@@ -463,10 +461,9 @@ export function callPerson(channelId: number, join: boolean) {
   (join ? joinVoice({ channel_id: channelId }, label) : startCall(channelId, label)).catch((e) => toast(errorText(e), 'error'));
 }
 
-/** The call's window, back on screen. */
 export const openVoice = () => call.value && bringForward(callWindow());
 
-/** A room's window put on the desk by hand: it stays there, in the call or not. */
+// Manually opened rooms stay visible outside a call.
 export function openRoom(rid: number, position?: AddPanelPositionOptions) {
   if (deskPrefs.value.autoPin !== false && !pinned.value.includes('room:' + rid)) setPinned([...pinned.value, 'room:' + rid]);
   show('room:' + rid, position);
@@ -481,15 +478,15 @@ export function openPerson(userId: number) {
 let dock: DockviewApi | null = null;
 let host: HTMLElement | null = null;
 let saveTimer = 0;
-/** The layout before windows were folded into tabs for lack of room; null when nothing is folded or the folded one was changed by hand. */
+// Layout before automatic folding; cleared after a manual layout change.
 let intended: SerializedDockview | null = null;
-/** Our own layout changes, which do not count as the person's; and the folded desk as we left it. */
+// Distinguish automatic layout changes from user changes.
 let fitting = false;
 let foldedShape = '';
-let fitted = { width: 0, height: 0 };
+let observedSize = { width: 0, height: 0 };
 let unfoldTimer = 0;
 let fitQueued = 0;
-const hintsShown: Record<string, number> = {};
+let foldHintAt = 0;
 export const shelf = signal<string[]>([]);
 const opacities = signal<Record<string, number>>({});
 const plain = signal<string[]>([]);
@@ -499,14 +496,14 @@ function setPinned(v: string[]) {
   saveDesk({ pinned: v });
 }
 const capsule = signal<string[]>([]);
-/** Bumped on every layout change: whether a window is in a lower row depends on where it stands. */
+// Invalidates frame styling after layout changes.
 const layoutTick = signal(0);
-/** By default the voice window and windows below the top row carry their title inside. */
+// Call windows and lower rows default to an inset title.
 function isPlain(group: DockviewGroupPanel, id: string) {
-  // Behind the edge a window is one card, glued to its title.
+  // Edge windows always use an inset title.
   if (edge.value.includes(id)) return true;
   if (group.api.location.type !== 'grid') return false;
-  // Chosen for one of its tabs: the frame follows it.
+  // An explicit tab preference applies to its frame.
   const ids = group.panels.map((p) => p.id);
   if (ids.some((x) => plain.value.includes(x))) return true;
   if (ids.some((x) => capsule.value.includes(x))) return false;
@@ -517,18 +514,10 @@ export const CHAT_DRAG = 'application/x-tolktak-chat';
 export const ROOM_DRAG = 'application/x-tolktak-room';
 const DIRECTION = { top: 'above', bottom: 'below', left: 'left', right: 'right', center: 'within' } as const;
 
-/** A short note on what just happened, at most `times` per device and once in 10 s; a click opens the details. */
-function hint(key: keyof Messages['desk']['hints'], times = Infinity) {
-  if (Date.now() - (hintsShown[key] ?? 0) < 10_000) return;
-  try {
-    const n = Number(localStorage.getItem('tolktak.hint.' + key)) || 0;
-    if (n >= times) return;
-    localStorage.setItem('tolktak.hint.' + key, String(n + 1));
-  } catch {
-    /* storage unavailable */
-  }
-  hintsShown[key] = Date.now();
-  const h = t().desk.hints[key];
+function hintFolded() {
+  if (deskPrefs.value.hints === false || Date.now() - foldHintAt < 10_000) return;
+  foldHintAt = Date.now();
+  const h = t().desk.hints.folded;
   toast(h.text, 'info', 7000, h.more);
 }
 
@@ -536,7 +525,7 @@ function saveLayout() {
   clearTimeout(saveTimer);
   if (dock) saveDesk({ layout: intended ?? dock.toJSON() });
 }
-/** Lays out a stored desk without it counting as a change by hand. */
+// Restore without recording a user layout change.
 function restore(j: SerializedDockview) {
   fitting = true;
   try {
@@ -549,7 +538,7 @@ function restore(j: SerializedDockview) {
 
 function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOptions, size: { width?: number; height?: number } = { width: 360 }) {
   const { w } = parseId(id);
-  // A floating window takes no tabs and no neighbours: next to it means the edge of the grid.
+  // Floating groups have no docking neighbours; fall back to the grid edge.
   const ref = position && typeof position !== 'string' && ('referencePanel' in position ? dock!.getPanel(String(typeof position.referencePanel === 'string' ? position.referencePanel : position.referencePanel.id))?.group : 'referenceGroup' in position ? position.referenceGroup : undefined);
   if (ref && typeof ref !== 'string' && ref.api.location.type !== 'grid') position = 'right';
   return dock!.addPanel({
@@ -561,7 +550,7 @@ function addWindow(id: string, position?: 'left' | 'right' | AddPanelPositionOpt
     ...(position && dock!.panels.length ? { position: typeof position === 'string' ? { direction: position } : position, initialWidth: size.width, initialHeight: size.height } : {}),
   });
 }
-/** Minimum sizes come from the window descriptions, not from a layout saved before they changed. */
+// Use current minimum sizes when restoring an older layout.
 function applyConstraints() {
   for (const p of dock!.panels) {
     const { w } = parseId(p.id);
@@ -574,27 +563,29 @@ function setShelf(list: string[]) {
   saveDesk({ shelf: list });
 }
 
-/** The main window is always on the desk and shows what was just picked. */
 function ensureMain() {
   if (shelf.value.includes('main')) setShelf(shelf.value.filter((x) => x !== 'main'));
   const p = dock?.getPanel('main');
-  if (p) return p.api.setActive();
+  if (p) {
+    // Re-activating the selected panel detaches its content and drops input focus.
+    if (!p.api.isActive || !p.api.isGroupActive) p.api.setActive();
+    return;
+  }
   addWindow('main', 'left');
-  hint('mainBack');
 }
 
-/** How far the grid sticks out of the desk to the right (or bottom): windows at their minimum size, gaps included. */
+// Grid overflow at minimum panel sizes, including gaps.
 function overflow(wide: boolean) {
   const h = host!.getBoundingClientRect();
   const grid = dock!.groups.filter((g) => g.api.location.type === 'grid');
   return Math.max(0, ...grid.map((g) => (wide ? g.element.getBoundingClientRect().right - h.right : g.element.getBoundingClientRect().bottom - h.bottom)));
 }
 
-// The window's title capsule, which dockview counts on top of the content's minimum.
+// Dockview adds the title height to the content minimum.
 const HEAD = 46;
-// The gap between windows is padding inside each one: dockview's own gap overflows nested layouts by a gap.
+// Panel padding avoids Dockview gap overflow in nested layouts.
 const PAD = 10;
-/** A window squeezed below its minimum size, which dockview does not always keep, and by how much. */
+// Detect minimum-size violations after Dockview moves.
 function cramped(wide: boolean) {
   for (const g of dock!.groups) {
     if (g.api.location.type !== 'grid') continue;
@@ -606,7 +597,7 @@ function cramped(wide: boolean) {
   return null;
 }
 
-/** The smallest the desk can be, [width, height], from the windows' minimums: dockview's own goes stale after moves. */
+// Recompute grid minimums; Dockview caches can be stale after moves.
 type GridNode = { type: 'leaf' | 'branch'; data: { views: string[] } | GridNode[] };
 function minSize(j: SerializedDockview): [number, number] {
   const walk = (n: GridNode, vertical: boolean): [number, number] => {
@@ -625,15 +616,15 @@ function minSize(j: SerializedDockview): [number, number] {
 // dockview lays itself out lazily; sizes are read right after each change.
 const relayout = () => dock!.layout(host!.clientWidth, host!.clientHeight, true);
 
-/** Too small for the windows' minimum sizes: the rightmost (or lowest, or squeezed) become tabs of their neighbour. */
+// Fold overflowing panels into neighbouring tabs.
 function fit(byUser = false) {
   const d = dock;
-  // A window across the whole desk hides the rest; they are not squeezed.
+  // Maximized panels hide their neighbours without squeezing them.
   if (!d || !host || d.hasMaximizedGroup()) return;
   fitting = true;
   let folded = false;
   try {
-    // A window added a moment ago has no size yet: measure the desk as dockview will lay it out.
+    // Newly added panels need a layout pass before measuring.
     relayout();
     for (const wide of [true, false]) {
       const tried = new Set<DockviewGroupPanel>();
@@ -641,7 +632,7 @@ function fit(byUser = false) {
       for (let i = 0; i < 20; i++) {
         const room = wide ? host.clientWidth : host.clientHeight;
         const fits = minSize(d.toJSON())[wide ? 0 : 1] <= room + 1;
-        // It fits, yet dockview sticks out: its minimums are stale after windows moved. A rebuild resets them.
+        // Rebuild to clear stale Dockview minimums.
         if (fits && overflow(wide) > 1 && !rebuilt) {
           rebuilt = true;
           d.fromJSON(d.toJSON());
@@ -651,7 +642,7 @@ function fit(byUser = false) {
         if (fits && overflow(wide) <= 1 && !cramped(wide)) break;
         const out = fits ? 0 : overflow(wide) || 2;
         const squeezed = out > 1 ? null : cramped(wide);
-        // A squeezed window first takes room from its neighbours; it folds only when they have none to give.
+        // Redistribute spare space before folding a panel.
         if (squeezed && !tried.has(squeezed.g)) {
           tried.add(squeezed.g);
           squeezed.g.api.setSize(wide ? { width: squeezed.need } : { height: squeezed.need });
@@ -663,10 +654,10 @@ function fit(byUser = false) {
         if (grid.length < 2) break;
         const edge = (g: DockviewGroupPanel) => (wide ? g.element.getBoundingClientRect().right : g.element.getBoundingClientRect().bottom);
         const span = (g: DockviewGroupPanel) => (wide ? g.element.getBoundingClientRect().width : g.element.getBoundingClientRect().height);
-        // The outermost window; of those at the edge, the narrowest: a window across the whole desk is not "the last column".
+        // Prefer the narrowest outer panel over a full-width row.
         const far = Math.max(...grid.map(edge));
         const last = squeezed?.g ?? grid.filter((g) => edge(g) > far - 2).reduce((a, b) => (span(b) < span(a) ? b : a));
-        // A window just dropped in can stick out only because of the size dockview gave it: shrink it to its minimum first.
+        // Try the dropped panel's minimum size before folding it.
         if (!squeezed && !tried.has(last)) {
           tried.add(last);
           const min = Math.max(0, ...last.panels.map((p) => parseId(p.id).w).map((w) => (w ? (wide ? w.minWidth + PAD : w.minHeight + HEAD + PAD) : 0)));
@@ -684,16 +675,12 @@ function fit(byUser = false) {
   } finally {
     fitting = false;
   }
-  fitted = { width: host.clientWidth, height: host.clientHeight };
   if (intended) foldedShape = shape(d.toJSON());
-  if (folded && byUser) hint('folded');
+  if (folded && byUser) hintFolded();
 }
-/** Back to the intended desk before a change, so the change lands in it and not in the folded one. */
+// Apply manual changes to the layout before automatic folding.
 type Node = { type: 'leaf' | 'branch'; data: Node[] | { views: string[]; activeView?: string; id: string }; size: number };
-/**
- * The intended desk with window `id` put beside the windows the folded desk shows as one frame:
- * below that frame now is below all the columns folded into it once there is room again. Null when they are not side by side there.
- */
+// Place id beside all columns represented by the folded frame, or return null if they are not adjacent.
 export function intendBeside(j: SerializedDockview, views: string[], id: string, direction: 'above' | 'below' | 'left' | 'right'): SerializedDockview | null {
   const copy = structuredClone(j);
   const across = direction === 'above' || direction === 'below';
@@ -714,7 +701,7 @@ export function intendBeside(j: SerializedDockview, views: string[], id: string,
       leaf.size = Math.round(total / (range.length + 1));
       kids.splice(after ? b + 1 : a, 0, leaf);
     } else {
-      // A row of those columns and the new window under it (or beside, for a stack).
+      // Preserve the folded columns as one row or stack.
       const inner: Node = range.length === 1 ? { ...range[0], size: 1 } : { type: 'branch', data: range, size: 1 };
       leaf.size = 1;
       kids.splice(a, range.length, { type: 'branch', data: after ? [inner, leaf] : [leaf, inner], size: total });
@@ -732,9 +719,9 @@ function unfoldNow() {
 }
 // ---------- windows of their own ----------
 
-/** Windows popped out of the desk into windows of the system, drawn from here: one page, one state, one call. */
+// Popouts share the main renderer's state and call.
 const popped = new Map<string, Window>();
-/** Popped windows whose «back to the desk» was pressed: they return to the desk when their window closes. */
+// Popouts awaiting return when their native window closes.
 const returning = new Set<string>();
 window.addEventListener('beforeunload', () => popped.forEach((w) => w.close()));
 effect(() => {
@@ -742,9 +729,9 @@ effect(() => {
   popped.forEach((w) => paint(w.document));
 });
 
-// shortcut: popped windows are not remembered across restarts; save them with the layout when people ask for it.
+// Native popouts are not restored across application restarts.
 function popOut(id: string) {
-  // The main window follows the navigator: what goes out is its chat.
+  // Detach the selected chat, not the navigator-driven main panel.
   const own = id === 'main' ? 'chat:' + viewChannel(view.value) : id;
   if (own === 'chat:undefined' || popped.has(own)) return popped.get(own)?.focus();
   const r = dock?.getPanel(id)?.group.element.getBoundingClientRect();
@@ -771,7 +758,7 @@ function popOut(id: string) {
     render(null, root);
     popped.delete(own);
     shownWindows.value = new Set([...shownWindows.value].filter((x) => x !== own));
-    // The main window already shows that chat: it is back on the desk there.
+    // Reuse the main panel if it already shows this chat.
     if (returning.delete(own) && own !== 'chat:' + viewChannel(view.value)) show(own);
   });
 }
@@ -813,7 +800,7 @@ function closeWindow(id: string) {
   dock?.getPanel(id)?.api.close();
   fit();
 }
-/** The desk grew: lay out the intended desk again and fold only what still does not fit. Once resizing stops, so it rebuilds once. */
+// After resizing settles, restore the layout and fold only the remaining overflow.
 function unfold() {
   if (!intended) return;
   const j = intended;
@@ -825,11 +812,14 @@ function unfold() {
 function onResize() {
   if (!host) return;
   placeEdges();
-  const grew = host.clientWidth > fitted.width || host.clientHeight > fitted.height;
-  if (!grew) return fit();
+  const width = host.clientWidth;
+  const height = host.clientHeight;
+  if (width === observedSize.width && height === observedSize.height) return;
+  const grew = width > observedSize.width || height > observedSize.height;
+  observedSize = { width, height };
   clearTimeout(unfoldTimer);
-  if (intended) unfoldTimer = window.setTimeout(unfold, 250);
-  else fitted = { width: host.clientWidth, height: host.clientHeight };
+  if (grew && intended) unfoldTimer = window.setTimeout(unfold, 250);
+  else fit();
 }
 const queueFit = () => {
   if (!fitQueued)
@@ -850,7 +840,7 @@ function load() {
     dock!.clear();
     addWindow('main');
   }
-  // The call's window lives only as long as the call, unless kept.
+  // Unpinned call windows close when the call ends.
   for (const p of [...dock!.panels]) if (!call.value && (p.id === 'voice' || (p.id.startsWith('room:') && !kept(p.id)))) p.api.close();
   if (call.value && !dock!.getPanel(callWindow()) && !popped.has(callWindow())) showVoice(callWindow());
   callWin = call.value ? callWindow() : null;
@@ -858,7 +848,6 @@ function load() {
   fit();
 }
 
-/** Where the voice window stands now, to put it back there with the next call. */
 function floatRect(g: DockviewGroupPanel): Rect | undefined {
   const r = g.element.closest('.dv-resize-container')?.getBoundingClientRect();
   const h = host!.getBoundingClientRect();
@@ -872,7 +861,7 @@ function voicePlace(p: IDockviewPanel): VoicePlace {
   if (g.api.location.type === 'floating') return { floating: floatRect(g) };
   const other = g.panels.find((x) => x !== p);
   if (other) return { position: { referencePanel: other.id, direction: 'within' } };
-  // Across the whole desk: it goes across the whole desk again, however many windows are there now.
+  // Preserve maximization independently of other panels.
   const r = g.element.getBoundingClientRect();
   const h = host!.getBoundingClientRect();
   const near = (a: number, b: number) => Math.abs(a - b) < 4;
@@ -892,7 +881,7 @@ const kept = (id: string) => id !== 'voice' && (pinned.value.includes(id) || !!d
 function showVoice(id: string) {
   const d = dock!;
   const place = loadDesk().voice ?? {};
-  // Nothing moved since the call ended: the desk comes back exactly as it was with the call.
+  // An unchanged desk can restore the entire saved layout.
   if (place.desk?.panels[id] && place.shape === shape(d.toJSON())) {
     try {
       intended = null;
@@ -904,7 +893,7 @@ function showVoice(id: string) {
     }
   }
   const ref = place.position && 'referencePanel' in place.position ? place.position.referencePanel : undefined;
-  // The window it stood by is gone: the voice window comes in as a new one, where the settings put it.
+  // If the former neighbour is gone, use the default call placement.
   const fits = !ref || !!d.getPanel(typeof ref === 'string' ? ref : ref.id);
   if (fits && (place.position || place.floating)) {
     const p = addWindow(id, place.position ?? 'right', { width: place.width ?? 520, height: place.height });
@@ -920,17 +909,17 @@ function showVoice(id: string) {
   if (how === 'full') p.group.api.maximize();
 }
 
-// The call's window comes with a call and goes when it ends, keeping its place; a kept room window stays and shows who is in.
+// Keep call placement across joins; pinned rooms remain visible after leaving.
 let callWin: string | null = null;
 effect(() => {
   const id = call.value ? callWindow() : null;
   if (!dock || id === callWin) return;
   const was = callWin;
   callWin = id;
-  // A call window of its own closes with the call too.
+  // Close unpinned native call windows too.
   if (was && !kept(was)) popped.get(was)?.close();
   if (was && !kept(was) && dock.getPanel(was)) {
-    // Folded for lack of room: remember the call's place in the desk as intended.
+    // Save the call position from the unfolded layout.
     unfoldNow();
     const v = dock.getPanel(was)!;
     const place = { ...voicePlace(v), desk: dock.toJSON() };
@@ -946,12 +935,12 @@ function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions =
   const own = popped.get(id);
   if (own) return own.focus();
   if (shelf.value.includes(id)) setShelf(shelf.value.filter((x) => x !== id));
-  // Unfolding rebuilds the groups: aim at a window, which survives it, not at its group.
+  // Panel IDs survive unfolding; group IDs do not.
   if (typeof position !== 'string' && 'referenceGroup' in position && typeof position.referenceGroup !== 'string') {
     const at = position.referenceGroup.activePanel?.id;
     position = at ? { referencePanel: at, direction: position.direction } : { direction: position.direction === 'within' ? 'right' : position.direction ?? 'right' };
   }
-  // Folded for lack of room: the window goes where it was dropped on screen, and into the intended desk beside every window that frame stands for.
+  // Apply the drop to both the visible frame and its unfolded columns.
   const at = typeof position !== 'string' && 'referencePanel' in position ? dock.getPanel(String(position.referencePanel)) : undefined;
   const dir = typeof position !== 'string' ? position.direction : undefined;
   if (intended && at && at.group.api.location.type === 'grid' && dir && dir !== 'within' && !dock.getPanel(id)) {
@@ -964,7 +953,7 @@ function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions =
         fitting = false;
       }
       const now = dock.toJSON();
-      // The intended desk knows the window's place; this is the window itself.
+      // Reuse the position in the unfolded layout.
       next.panels[id] = now.panels[id];
       intended = next;
       foldedShape = shape(now);
@@ -975,7 +964,6 @@ function show(id: string, position: 'left' | 'right' | AddPanelPositionOptions =
   (dock.getPanel(id) ?? addWindow(id, position)).api.setActive();
   fit(true);
 }
-/** Shows a window on screen, as a new one if it was closed. */
 export function bringForward(id: string) {
   const own = popped.get(id);
   if (own) return own.focus();
@@ -990,13 +978,11 @@ export function resetLayout() {
   saveDesk({ layout: undefined, shelf: [], voice: undefined });
   load();
 }
-/** Asks first: someone who arranged their windows loses it all to a slip of the mouse otherwise. */
 export async function confirmReset() {
   const tx = t().desk.menu;
   if (await confirmDialog(tx.resetConfirm, { text: tx.resetText, ok: tx.resetOk, danger: true })) resetLayout();
 }
 
-/** A chat in its own window next to the main one. */
 export function openBeside(cid: number) {
   show('chat:' + cid);
 }
@@ -1006,7 +992,6 @@ function shelve(id: string) {
   saveDesk({ shelfFloat: { ...loadDesk().shelfFloat, [id]: rect! }, shelfEdge: [...(loadDesk().shelfEdge ?? []).filter((x) => x !== id), ...(edge.value.includes(id) ? [id] : [])] });
   setShelf([...shelf.value.filter((x) => x !== id), id]);
   dock?.getPanel(id)?.api.close();
-  hint('shelf', 2);
 }
 function unshelve(id: string) {
   if (id === 'voice' && !call.value) return setShelf(shelf.value.filter((x) => x !== id));
@@ -1029,10 +1014,10 @@ function setEdge(v: string[]) {
   edge.value = v;
   saveDesk({ edge: v });
 }
-/** A window behind the right edge: a floating one the full height of the desk, slid out of sight until its tab is clicked. */
+// Edge windows are full-height floating panels controlled by a tab.
 function toEdge(p: IDockviewPanel) {
   const r = host!.getBoundingClientRect();
-  // Taking a window off the grid only frees room: lay the desk out as intended first, and say nothing about folding.
+  // Restore the grid before detaching the panel.
   unfoldNow();
   const q = dock!.getPanel(p.id) ?? p;
   if (q.group.api.location.type !== 'floating') dock!.addFloatingGroup(q, { x: r.width - EDGE_WIDTH, y: 0, width: EDGE_WIDTH, height: r.height });
@@ -1041,12 +1026,10 @@ function toEdge(p: IDockviewPanel) {
   relayout();
   fit();
 }
-/** Out from behind the edge into an ordinary floating window, where it stood. */
 function fromEdge(p: IDockviewPanel) {
   setEdge(edge.value.filter((x) => x !== p.id));
   const box = p.group.element.closest<HTMLElement>('.dv-resize-container');
   box?.classList.remove('edge-win', 'edge-shut');
-  hint('floating', 2);
 }
 function placeEdges() {
   if (!dock || !host) return;
@@ -1057,7 +1040,7 @@ function placeEdges() {
   for (const id of still) {
     const box = dock.getPanel(id)!.group.element.closest<HTMLElement>('.dv-resize-container');
     if (!box) continue;
-    // Left of the strip of tabs, so a tab stays clickable while its window is out.
+    // Leave the edge tabs clickable beside the open panel.
     const w = Math.min(EDGE_WIDTH, W - 90);
     Object.assign(box.style, { top: '10px', left: W - w - 40 + 'px', width: w + 'px', height: host.clientHeight - 20 + 'px' });
     box.classList.add('edge-win');
@@ -1091,7 +1074,7 @@ function EdgeTabs() {
   );
 }
 
-/** Alt+Shift+arrow: the window in front joins its neighbour that way, or splits off its tabs that way. */
+// Join the adjacent group or split a tab in the requested direction.
 function moveWindow(dir: 'left' | 'right' | 'up' | 'down') {
   const p = dock?.activePanel;
   if (!p || p.group.api.location.type !== 'grid') return;
@@ -1106,7 +1089,6 @@ function moveWindow(dir: 'left' | 'right' | 'up' | 'down') {
 function float(p: IDockviewPanel) {
   const r = host!.getBoundingClientRect();
   dock!.addFloatingGroup(p, { width: 380, height: Math.min(520, r.height - 90), x: r.width - 400, y: 70 });
-  hint('floating', 2);
 }
 function dockBack(p: IDockviewPanel) {
   const into = dock!.groups.find((g) => g.api.location.type === 'grid' && g !== p.group);
@@ -1142,7 +1124,6 @@ function openWindowMenu(e: { clientX: number; clientY: number; preventDefault?: 
 }
 const toggleMax = (group: DockviewGroupPanel) => group.api.location.type === 'grid' && (group.api.isMaximized() ? group.api.exitMaximized() : group.api.maximize());
 
-/** A window's name in words, for lists. */
 function windowLabel(id: string): string {
   const { w, arg } = parseId(id);
   const cid = id === 'main' ? viewChannel(view.value) : id.startsWith('chat:') ? arg : undefined;
@@ -1159,13 +1140,13 @@ const groupOfWindow = (id: string) => {
   const cid = id === 'main' ? viewChannel(view.value) : id.startsWith('chat:') ? Number(id.slice(5)) : undefined;
   return cid ? channels.value.get(cid)?.group_id : undefined;
 };
-/** The group all of a frame's windows belong to: its avatar then heads the frame once instead of each tab. */
+// A shared group avatar replaces per-tab avatars.
 const sharedGroup = (group: DockviewGroupPanel) => {
   const owners = group.panels.map((p) => groupOfWindow(p.id));
   return owners.length && owners.every((g) => g !== undefined && g === owners[0]) ? owners[0] : undefined;
 };
 
-/** Re-renders a frame's part when its windows come, go or change place. */
+// Subscribe frame components to Dockview panel changes.
 function useFrame(group: DockviewGroupPanel) {
   const [, rerender] = useState(0);
   useEffect(() => {
@@ -1206,7 +1187,7 @@ function Tab({ id, api }: { id: string; api: DockviewPanelApi }) {
       subs.forEach((d) => d.dispose());
     };
   }, []);
-  // Tabs of one group in a row show its avatar once, on the first of them; a new group starts after a divider.
+  // Show one avatar per consecutive group of tabs.
   const tabs = api.group.panels.map((p) => p.id);
   const at = tabs.indexOf(id);
   const mine = groupOfWindow(id);
@@ -1277,19 +1258,13 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
   const tx = t().desk.menu;
   const floating = group.api.location.type === 'floating';
   const max = group.api.isMaximized();
-  // shortcut: only chats float for now; the call and the side windows need their own compact look first (spec «Режимы окна»).
+  // Floating mode currently supports chats only.
   const canFloat = p.id === 'main' || p.id.startsWith('chat:');
   return [
+    ...(floating ? [] : [isPlain(group, p.id) ? { label: tx.capsule, icon: 'tabAbove', run: () => togglePlain(group, p.id) } : { label: tx.plain, icon: 'tabInside', run: () => togglePlain(group, p.id) }]),
     ...(floating ? [] : [{ label: max ? tx.unmaximize : tx.maximize, icon: 'maximize', run: () => toggleMax(group) } as MenuItem]),
     ...(floating || canFloat ? [{ label: floating ? tx.dock : tx.float, icon: floating ? 'home' : 'copy', run: () => (floating ? dockBack(p) : float(p)) } as MenuItem] : []),
-    ...(floating && !edge.value.includes(p.id) && p.id !== 'main' && p.id !== 'voice' && !p.id.startsWith('room:') ? [{ label: tx.toEdge, icon: 'chevronRight', run: () => toEdge(p) } as MenuItem] : []),
-    { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
     { label: tx.ownWindow, icon: 'external', run: () => popOut(p.id) },
-    ...(edge.value.includes(p.id)
-      ? [{ label: tx.float, icon: 'copy', run: () => fromEdge(p) } as MenuItem]
-      : !floating && p.id !== 'main' && p.id !== 'voice' && !p.id.startsWith('room:')
-        ? [{ label: tx.toEdge, icon: 'chevronRight', run: () => toEdge(p) } as MenuItem]
-        : []),
     ...(p.id.startsWith('room:')
       ? [
           pinned.value.includes(p.id)
@@ -1297,7 +1272,13 @@ function windowMenu(group: DockviewGroupPanel): MenuItem[] {
             : { label: tx.pin, icon: 'pin', run: () => setPinned([...pinned.value, p.id]) },
         ]
       : []),
-    ...(floating ? [] : [isPlain(group, p.id) ? { label: tx.capsule, icon: 'tabAbove', run: () => togglePlain(group, p.id) } : { label: tx.plain, icon: 'tabInside', run: () => togglePlain(group, p.id) }]),
+    ...(floating && !edge.value.includes(p.id) && p.id !== 'main' && p.id !== 'voice' && !p.id.startsWith('room:') ? [{ label: tx.toEdge, icon: 'chevronRight', run: () => toEdge(p) } as MenuItem] : []),
+    ...(edge.value.includes(p.id)
+      ? [{ label: tx.float, icon: 'copy', run: () => fromEdge(p) } as MenuItem]
+      : !floating && p.id !== 'main' && p.id !== 'voice' && !p.id.startsWith('room:')
+        ? [{ label: tx.toEdge, icon: 'chevronRight', run: () => toEdge(p) } as MenuItem]
+        : []),
+    { label: tx.shelve, icon: 'arrowDown', run: () => shelve(p.id) },
     'sep',
     { label: tx.reset, icon: 'reset', run: confirmReset },
     { label: tx.close, icon: 'x', run: () => closeWindow(p.id) },
@@ -1394,6 +1375,7 @@ export function Workspace() {
       createPrefixHeaderActionComponent: (group) => mount(div('win-prefix'), () => <FrameGroup group={group} />),
     });
     dock = d;
+    observedSize = { width: 0, height: 0 };
     load();
     const track = () => (shownWindows.value = new Set([...d.groups.map((g) => g.activePanel?.id).filter((x): x is string => !!x), ...popped.keys()]));
     track();
@@ -1401,7 +1383,7 @@ export function Workspace() {
       d.onDidLayoutChange(() => {
         layoutTick.value++;
         requestAnimationFrame(placeEdges);
-        // Changed by hand while folded: what is on screen is now the desk.
+        // A manual change replaces the saved unfolded layout.
         if (!fitting && intended && shape(d.toJSON()) !== foldedShape) intended = null;
         track();
         queueFit();
@@ -1439,7 +1421,7 @@ export function Workspace() {
       e.preventDefault();
     };
     host.addEventListener('wheel', wheel, { passive: false });
-    // Tabs that do not fit: the count opens our menu of all the frame's tabs instead of dockview's list, which the capsule clips.
+    // Dockview's overflow menu is clipped by the capsule; use the app menu.
     const more = (e: MouseEvent) => {
       const btn = (e.target as HTMLElement).closest<HTMLElement>('.dv-tabs-overflow-dropdown-default');
       const group = btn && d.groups.find((g) => g.element.contains(btn));
@@ -1468,6 +1450,9 @@ export function Workspace() {
       window.removeEventListener('beforeunload', saveLayout);
       subs.forEach((s) => s.dispose());
       resize.disconnect();
+      clearTimeout(unfoldTimer);
+      cancelAnimationFrame(fitQueued);
+      fitQueued = 0;
       host?.removeEventListener('wheel', wheel);
       host?.removeEventListener('pointerdown', more, true);
       host?.removeEventListener('click', more, true);
@@ -1492,7 +1477,8 @@ export function Workspace() {
 
   useEffect(() => {
     const keys = (e: KeyboardEvent) => {
-      // On macOS Option+arrow moves by word: a field with text keeps it.
+      if (e.defaultPrevented || document.querySelector('.modal-backdrop')) return;
+      // Preserve macOS word-navigation shortcuts in text fields.
       const wordJump = platform === 'darwin' && typing(e) && !!(e.target as HTMLInputElement).value;
       const arrow = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as const)[e.key as 'ArrowLeft'];
       // Moving a window: ⌘⌥+arrow on macOS, Alt+Shift+arrow elsewhere.
@@ -1506,7 +1492,7 @@ export function Workspace() {
         e.preventDefault();
         goBy(e.key === 'ArrowLeft' ? -1 : 1);
       }
-      // ⌘[ and ⌘] as in every macOS app.
+      // macOS back/forward shortcuts.
       if (platform === 'darwin' && e.metaKey && !e.altKey && !e.ctrlKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
         e.preventDefault();
         goBy(e.code === 'BracketLeft' ? -1 : 1);
@@ -1527,9 +1513,9 @@ export function Workspace() {
         closeWindow(dock.activePanel.id);
       }
     };
-    const mouse = (e: MouseEvent) => (e.button === 3 || e.button === 4) && goBy(e.button === 3 ? -1 : 1);
+    const mouse = (e: MouseEvent) => !document.querySelector('.modal-backdrop') && (e.button === 3 || e.button === 4) && goBy(e.button === 3 ? -1 : 1);
     // A window out from behind the edge slides back on a click anywhere else.
-    const away = (e: PointerEvent) => edgeOpen.value && !(e.target as HTMLElement).closest('.edge-win, .edge-tabs, .menu') && (edgeOpen.value = null);
+    const away = (e: PointerEvent) => !document.querySelector('.modal-backdrop') && edgeOpen.value && !(e.target as HTMLElement).closest('.edge-win, .edge-tabs, .menu') && (edgeOpen.value = null);
     window.addEventListener('keydown', keys);
     window.addEventListener('mouseup', mouse);
     window.addEventListener('pointerdown', away);
@@ -1587,7 +1573,13 @@ export function memberMenu(g: Group, id: number, e: MouseEvent) {
 
 function MembersPanel({ g }: { g: Group }) {
   const tx = t().shell.member;
-  const sorted = [...g.members].sort((a, b) => {
+  const search = useSearch();
+  useKnownUsers(g.members);
+  const query = search.query.trim().toLocaleLowerCase();
+  const sorted = g.members.filter((id) => {
+    const user = users.value.get(id);
+    return !query || `${userName(id)} ${user?.username ?? ''}`.toLocaleLowerCase().includes(query);
+  }).sort((a, b) => {
     const rank = (id: number) => ({ owner: 0, mod: 1, member: 2 })[groupRole(g, id)];
     return Number(online.value.has(b)) - Number(online.value.has(a)) || rank(a) - rank(b) || userName(a).localeCompare(userName(b));
   });
@@ -1620,6 +1612,8 @@ function MembersPanel({ g }: { g: Group }) {
   };
   return (
     <div class="members-panel win-scroll">
+      <SearchField search={search} class="member-search" placeholder={t().groups.settings.findMember} />
+      {!sorted.length && <div class="muted small">{t().desk.nav.noMatch}</div>}
       <div class="side-label">
         <span>{tx.online}</span>
         <span class="side-label-count">{on.length}</span>
@@ -1647,7 +1641,6 @@ export function WindowsSettings() {
       <div class="scheme-cards" role="radiogroup" aria-label={tx.call}>
         {(['replace', 'beside', 'full'] as const).map((how) => (
           <button key={how} role="radio" aria-checked={p.call === how} class={'scheme-card' + (p.call === how ? ' on' : '')} onClick={() => setDeskPrefs({ call: how })}>
-            {/* A sketch of the desk: navigator, chat and the call coming in; hovering plays it again. */}
             <span class={'scheme ' + how} aria-hidden="true">
               <span class="sc-nav" />
               {how === 'beside' && <span class="sc-chat" />}
@@ -1662,20 +1655,19 @@ export function WindowsSettings() {
       <Toggle checked={p.autoPin !== false} onChange={(autoPin) => setDeskPrefs({ autoPin })} hint={tx.autoPinHint}>
         {tx.autoPin}
       </Toggle>
-      <Toggle checked={!!p.keepCall} onChange={(keepCall) => setDeskPrefs({ keepCall })} hint={tx.keepCallHint}>
+      <Toggle checked={!!p.keepCall} onChange={(keepCall) => setDeskPrefs({ keepCall })}>
         {tx.keepCall}
       </Toggle>
-      <div>
+      <Toggle checked={p.hints !== false} onChange={(hints) => setDeskPrefs({ hints })} hint={tx.hintsHint}>
+        {tx.hints}
+      </Toggle>
+      <div class="settings-actions">
         <button class="secondary" onClick={() => confirmReset()}>
           <Icon name="reset" size={16} /> {t().desk.menu.reset}
         </button>
-        <p class="hint">{tx.resetHint}</p>
-      </div>
-      <div>
         <button class="secondary" onClick={startTour}>
           <Icon name="play" size={16} /> {t().desk.tour.replay}
         </button>
-        <p class="hint">{t().desk.tour.replayHint}</p>
       </div>
     </>
   );

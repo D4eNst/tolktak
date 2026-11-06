@@ -17,6 +17,7 @@ import {
 } from 'electron';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { SOUND_ASSETS } from '../sounds';
 import { fileURLToPath } from 'node:url';
 import { globalPushToTalk, type HotkeyName, type Hotkeys, installHotkeys, uninstallHotkeys } from './hotkeys';
 import { watchOcclusion } from './occlusion';
@@ -56,22 +57,22 @@ const settingsFile = () => path.join(app.getPath('userData'), 'tolktak.json');
 
 // Settings come from a file and from the renderer: only known keys of the expected types are kept.
 function cleanSettings(raw: unknown): Persisted {
-  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const out: Persisted = {};
-  if (typeof r.server === 'string' && (r.server === '' || /^https?:\/\/[^\s]{1,2000}$/i.test(r.server))) out.server = r.server;
-  if (typeof r.token === 'string' && /^[\x21-\x7e]{0,256}$/.test(r.token)) out.token = r.token;
+  const input = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const cleaned: Persisted = {};
+  if (typeof input.server === 'string' && (input.server === '' || /^https?:\/\/[^\s]{1,2000}$/i.test(input.server))) cleaned.server = input.server;
+  if (typeof input.token === 'string' && /^[\x21-\x7e]{0,256}$/.test(input.token)) cleaned.token = input.token;
   for (const k of ['minimizeToTray', 'openAtLogin', 'allowWin10Loopback'] as const) {
-    if (typeof r[k] === 'boolean') out[k] = r[k];
+    if (typeof input[k] === 'boolean') cleaned[k] = input[k];
   }
-  if (r.hotkeys && typeof r.hotkeys === 'object') {
-    const keys = r.hotkeys as Record<string, unknown>;
-    out.hotkeys = {};
+  if (input.hotkeys && typeof input.hotkeys === 'object') {
+    const keys = input.hotkeys as Record<string, unknown>;
+    cleaned.hotkeys = {};
     for (const name of ['mute', 'deafen', 'ptt', 'window'] as HotkeyName[]) {
       const accel = keys[name];
-      if (typeof accel === 'string' && accel.length <= 64) out.hotkeys[name] = accel;
+      if (typeof accel === 'string' && accel.length <= 64) cleaned.hotkeys[name] = accel;
     }
   }
-  return out;
+  return cleaned;
 }
 
 async function readSettings(): Promise<Persisted> {
@@ -118,8 +119,8 @@ let settings: Persisted = {};
 
 // The main process has no renderer dictionaries: it follows the OS language.
 const STRINGS = {
-  en: { open: 'Open TolkTak', toggleMic: 'Mute / unmute microphone', toggleSound: 'Mute / unmute sound', quit: 'Quit', inVoice: 'TolkTak — in voice', unread: (n: number) => `Unread: ${n}` },
-  ru: { open: 'Открыть TolkTak', toggleMic: 'Микрофон вкл/выкл', toggleSound: 'Звук вкл/выкл', quit: 'Выход', inVoice: 'TolkTak — в голосе', unread: (n: number) => `Непрочитанных: ${n}` },
+  en: { open: 'Open TolkTak', toggleMic: 'Mute / unmute microphone', toggleSound: 'Mute / unmute sound', quit: 'Quit', inVoice: 'TolkTak — in call', unread: (n: number) => `Unread: ${n}` },
+  ru: { open: 'Открыть TolkTak', toggleMic: 'Микрофон вкл/выкл', toggleSound: 'Звук вкл/выкл', quit: 'Выход', inVoice: 'TolkTak — в звонке', unread: (n: number) => `Непрочитанные сообщения: ${n}` },
 };
 const str = () => (app.getLocale().toLowerCase().startsWith('ru') ? STRINGS.ru : STRINGS.en);
 
@@ -212,7 +213,7 @@ function createWindow() {
     },
   });
   win.removeMenu();
-  // The launch window stays until the page has drawn the desk or the sign-in, not just loaded.
+  // Keep the launch window until the renderer reports its first screen.
   let revealed = false;
   revealMain = () => {
     if (revealed) return;
@@ -328,7 +329,7 @@ function installIpc() {
     else app.setBadgeCount(count);
   });
   // fetch() cannot read large assets from file://.
-  const assets = new Set(['dfn/df_bg.wasm', 'dfn/model.tar.gz']);
+  const assets = new Set(['dfn/df_bg.wasm', 'dfn/model.tar.gz', ...SOUND_ASSETS]);
   handle('asset:read', (name: string) => (assets.has(name) ? readFileSync(path.join(__dirname, 'assets', name)) : null));
   handle('app:ready', () => revealMain());
   handle('app:colors', (c: typeof colors) => {
@@ -436,7 +437,7 @@ app.whenReady().then(async () => {
   // Packaged builds take the dock icon from the bundle.
   if (process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, 'assets', 'icon-512.png'));
   settings = await readSettings();
-  // First, so that nothing failing below can keep the app from receiving a fix.
+  // Install first so startup failures cannot disable updates.
   installUpdater(() => win);
   restrictFileProtocol();
   installPermissions();

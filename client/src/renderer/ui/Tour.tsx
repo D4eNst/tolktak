@@ -1,7 +1,6 @@
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { t } from '../i18n';
-import { keyLabel } from '../keys';
 import { Icon } from './common';
 import { settingsOpen } from '../state';
 
@@ -181,7 +180,7 @@ export function Tour() {
   const tx = t().desk.tour;
   const id = STEPS[step];
   const last = step === STEPS.length - 1;
-  const text = id === 'beside' ? tx.steps.beside.text(keyLabel('Mod K'), keyLabel('Mod Enter')) : tx.steps[id].text;
+  const text = tx.steps[id].text;
   return (
     <div class={'tour-backdrop' + (closing ? ' closing' : '')} onClick={(e) => e.target === e.currentTarget && close()}>
       <div class="tour" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-text">

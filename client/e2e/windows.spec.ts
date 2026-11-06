@@ -142,7 +142,7 @@ test('stream sound: app/system capture exclude room voices; plain loopback echoe
     }
     await expect(alice.w.locator('.tile')).toHaveCount(2);
     // Alice's microphone would hear the speakers.
-    if (await alice.w.locator('.call-controls button[aria-label="Микрофон"].off').count() === 0) await alice.w.click('.call-controls button[aria-label="Микрофон"]');
+    if (await alice.w.locator('.call-controls button[aria-label="Выключить микрофон"]').count()) await alice.w.click('.call-controls button[aria-label="Выключить микрофон"]');
     results.appInfo = await alice.w.evaluate(() => (window as any).tolktak.appInfo());
 
     await alice.w.waitForTimeout(3000);

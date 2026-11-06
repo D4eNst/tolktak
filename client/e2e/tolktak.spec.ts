@@ -44,17 +44,16 @@ test('messages sent or received while the first page loads stay in the chat', as
   const { channel } = await call('/dms', { user_id: ids.carol });
   await call(`/channels/${channel.id}/messages`, { text: 'до загрузки', nonce: crypto.randomUUID() });
 
-  const carol = await openClient(browser, stack, 'carol');
   let pageFetched!: () => void;
   let releasePage!: () => void;
   const fetched = new Promise<void>((r) => (pageFetched = r));
   const released = new Promise<void>((r) => (releasePage = r));
-  await carol.route(`**/channels/${channel.id}/messages?limit=50`, async (route) => {
+  const carol = await openClient(browser, stack, 'carol', 'password123', async (page) => { await page.route(`**/channels/${channel.id}/history?*`, async (route) => {
     const page = await route.fetch();
     pageFetched();
     await released;
     await route.fulfill({ response: page });
-  });
+  }); });
   const bobItem = await person(carol, 'Bob');
   await bobItem.click();
   await fetched;
@@ -80,7 +79,7 @@ test('an expired session shows one notice after signing in again', async ({ brow
     ws.connectToServer();
     socket = ws;
   });
-  const expired = page.locator('.toast', { hasText: 'Сессия завершена' });
+  const expired = page.locator('.toast', { hasText: 'Сеанс завершён' });
   await page.goto(stack.web);
   for (let round = 0; round < 2; round++) {
     await page.fill('input[name=server]', stack.api);
@@ -141,7 +140,7 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   await expectFlowing(carol, ids.alice, 'screen_share', 40);
   await expectFlowing(carol, ids.alice, 'screen_share_audio', 50);
 
-  await alice.click('.capsule button[aria-label="Выйти из голоса"]');
+  await alice.click('.capsule button[aria-label="Выйти из звонка"]');
   await expect(bob.locator('.theater')).toHaveCount(0);
   await expect(bob.locator('.tile')).toHaveCount(2);
   await expectFlowing(bob, ids.carol, 'microphone', 20);
@@ -166,9 +165,14 @@ test('signing out leaves voice, also while the join request is in flight', async
 
   const inCall = await openClient(browser, stack, 'carol');
   await joinRoom(inCall, 'Выход');
-  const left = inCall.waitForResponse('**/api/v1/voice/leave');
+  await expect.poll(() => inCall.evaluate(() => {
+    const w = globalThis as any;
+    w.__testMic = w.__tolktak.room.localParticipant.getTrackPublication('microphone')?.track?.mediaStreamTrack;
+    return w.__testMic?.readyState;
+  })).toBe('live');
   await logOut(inCall);
-  expect((await left).status(), 'the room must be left while the token is still valid').toBe(204);
+  await expect.poll(() => inCall.evaluate(() => (globalThis as any).__tolktak.room)).toBeNull();
+  expect(await inCall.evaluate(() => (globalThis as any).__testMic?.readyState), 'signing out must stop microphone capture').toBe('ended');
   await inCall.context().close();
 
   const joining = await openClient(browser, stack, 'carol');
@@ -204,15 +208,10 @@ test('message previews, the keyboard message menu and labels after midnight', as
   const { channel } = await call('/dms', { user_id: ids.carol });
   await call(`/channels/${channel.id}/messages`, { text: 'Открой **config_file.py** и _снова_ проверь snake_case * 2', nonce: crypto.randomUUID() });
 
-  const ctx = await browser.newContext({ locale: 'ru-RU' });
-  const carol = await ctx.newPage();
   const now = new Date();
-  await carol.clock.install({ time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 30) });
-  await carol.goto(stack.web);
-  await carol.fill('input[name=server]', stack.api);
-  await carol.fill('input[name=username]', 'carol');
-  await carol.fill('input[name=password]', 'password123');
-  await carol.click('button[type=submit]');
+  const carol = await openClient(browser, stack, 'carol', 'password123', (page) =>
+    page.clock.install({ time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 30) }),
+  );
   const aliceItem = await person(carol, 'Alice');
   await expect(aliceItem.locator('.nav-person-sub')).toHaveText('Открой config_file.py и снова проверь snake_case * 2');
 
@@ -235,5 +234,5 @@ test('message previews, the keyboard message menu and labels after midnight', as
   // Before the socket's watchdog, now behind the clock, reconnects and redraws everything.
   await expect(time).toContainText('вчера', { timeout: 2000 });
   await expect(carol.locator('.day-divider', { hasText: 'Вчера' })).toBeVisible({ timeout: 2000 });
-  await ctx.close();
+  await carol.context().close();
 });

@@ -11,7 +11,7 @@ import { copyText } from './Profile';
 const INLINE =
   /(`[^`\n]+`)|(\|\|[\s\S]+?\|\|)|(\*\*[\s\S]+?\*\*)|(__[\s\S]+?__)|(~~[\s\S]+?~~)|(\*[^*\s](?:[^*]*[^*\s])?\*)|(\b_[^_\s](?:[^_]*[^_\s])?_\b)|(\[[^\]\n]+\]\(https?:\/\/(?:[^\s()]|\([^\s()]*\))+\))|(https?:\/\/(?:[^\s<>"'()]|\([^\s<>"'()]*\))*(?:[^\s<>"'.,;:!?()\]]|\([^\s<>"'()]*\)))|(@[a-z0-9_.-]{2,32})/gi;
 
-// A span, not a button: a long spoiler wraps across lines like the text around it.
+// A span lets spoilers wrap inline.
 function Spoiler({ children }: { children: ComponentChildren }) {
   const [open, setOpen] = useState(false);
   if (open) return <span class="spoiler open">{children}</span>;
@@ -65,7 +65,7 @@ function inline(text: string, key = 'i'): ComponentChildren[] {
     else if (m[6] || m[7]) out.push(<em key={k}>{inline(tok.slice(1, -1), k)}</em>);
     else if (m[8]) {
       const [, label, href] = /^\[([^\]]+)\]\((.+)\)$/.exec(tok)!;
-      // The label can claim any address, so the real host follows it.
+      // Show the actual host beside an arbitrary link label.
       const host = URL.parse(href)?.hostname ?? href;
       out.push(
         <ExternalLink key={k} href={href}>

@@ -21,7 +21,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => stack?.stop());
 
 test('Electron client: login, voice, window share via own picker, H.264', async () => {
-  test.skip(!process.env.DISPLAY, 'needs an X display (xvfb-run)');
+  test.skip(process.platform === 'linux' && !process.env.DISPLAY, 'needs an X display (xvfb-run)');
   const launch = async (user: string) => {
     const app = await electron.launch({
       args: [path.join(__dirname, '..'), '--no-sandbox', '--lang=ru', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--no-proxy-server'],
@@ -48,7 +48,7 @@ test('Electron client: login, voice, window share via own picker, H.264', async 
   await joinRoom(bob, 'Электрон');
   await expectFlowing(bob, ids.alice, 'microphone', 20);
 
-  await bob.click('button[aria-label="Камера"]');
+  await bob.click('.call-controls button[aria-label="Включить камеру"]');
   await bob.click('.modal button.primary');
   await expect(win.locator('.tile video')).toHaveCount(1);
   await win.click('.capsule button[aria-label="Показать экран"]');
@@ -70,9 +70,9 @@ test('Electron client: login, voice, window share via own picker, H.264', async 
   const v = await expectFlowing(bob, ids.alice, 'screen_share', 40);
   const out = (await win.evaluate(() => (globalThis as any).__tolktak.stats())).outbound.filter((o: any) => o.source === 'screen_share');
   test.info().annotations.push({ type: 'share', description: JSON.stringify({ sources: n, inbound: v, outbound: out }) });
-  expect(out.some((o: any) => /openh264|h264|MediaFoundation/i.test(o.encoder ?? '')), 'Electron must encode H.264').toBeTruthy();
+  expect(out.some((o: any) => /^video\/h264\b/i.test(o.codec ?? '')), 'Electron must encode H.264').toBeTruthy();
   // Constrained Baseline 42e01f would be software-only on Windows.
-  expect(out.every((o: any) => /profile-level-id=42001f/.test(o.codec ?? '')), 'H.264 Baseline 42001f negotiated').toBeTruthy();
+  if (process.platform === 'win32') expect(out.every((o: any) => /profile-level-id=42001f/.test(o.codec ?? '')), 'H.264 Baseline 42001f negotiated').toBeTruthy();
   await app2.close();
   await app.close();
 });

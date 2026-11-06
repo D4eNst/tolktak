@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
 import { bridge, isDesktop, type AppInfo, type AudioMode, type CaptureSource } from '../bridge';
 import { t } from '../i18n';
-import { errorText, toast } from '../state';
-import { sharing, startShare, type ShareMode, type ShareQuality } from '../voice';
+import type { VoiceModerationEvent } from '../api';
+import { callEvents, errorText, session, toast } from '../state';
+import { call, mediaAllowed, sharing, startShare, type ShareMode, type ShareQuality } from '../voice';
 import { Icon, Modal, Select, Toggle } from './common';
 
 export function SharePicker({ onClose }: { onClose: () => void }) {
@@ -16,6 +17,18 @@ export function SharePicker({ onClose }: { onClose: () => void }) {
   const [quality, setQuality] = useState<ShareQuality>(sharing.value?.quality ?? '1080p60');
   const [busy, setBusy] = useState(false);
   const tx = t().shell.share;
+  const allowed = mediaAllowed('screen');
+  const currentCall = call.value;
+  useEffect(() => { if (!currentCall || !allowed) onClose(); }, [currentCall, allowed]);
+  useEffect(() => {
+    const off = (event: Event) => {
+      const d = (event as CustomEvent<VoiceModerationEvent>).detail;
+      const target = call.value?.target;
+      if (d.action === 'off' && d.source === 'screen' && d.user_id === session.value?.me.id && target && 'room_id' in target && target.room_id === d.room_id) onClose();
+    };
+    callEvents.addEventListener('voice.moderation', off);
+    return () => callEvents.removeEventListener('voice.moderation', off);
+  }, []);
 
   useEffect(() => {
     bridge.appInfo().then(setInfo);

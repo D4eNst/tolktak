@@ -93,7 +93,7 @@ function received(p: Page, from: number, seconds: number) {
 }
 
 test('voice processing: noise suppression and leveller on the wire', async () => {
-  test.skip(!process.env.DISPLAY, 'needs an X display (xvfb-run)');
+  test.skip(process.platform === 'linux' && !process.env.DISPLAY, 'needs an X display (xvfb-run)');
   const wav = noisySpeechWav();
   const launch = async (user: string, mic?: string) => {
     const app = await electron.launch({
@@ -126,7 +126,7 @@ test('voice processing: noise suppression and leveller on the wire', async () =>
   await alice.locator('.self-menu button', { hasText: 'Настройки' }).click();
   await alice.click('.settings-nav button:has-text("Голос")');
   await expect(alice.locator('.select:has-text("Максимальное")')).toBeVisible();
-  await alice.click('button:has-text("Послушать себя")');
+  await alice.click('button:has-text("Проверить микрофон")');
   await expect(alice.locator('.meter-gain').first()).toBeVisible({ timeout: 10_000 });
   // The pauses between words are silent after the strongest noise suppression.
   const fill = () => alice.locator('.meter-fill').first().evaluate((e) => parseFloat((e as HTMLElement).style.width));

@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import { cmd } from '../keys';
+import { cmd, keyLabel } from '../keys';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Group, Room, TextChannel } from '../api';
 import { platform } from '../bridge';
@@ -18,11 +18,12 @@ import {
   logout,
   me,
   messagePreview,
-  online,
+  people,
   serverRestarting,
   session,
   setMuted,
   settingsOpen,
+  orphanedMessages,
   switcherOpen,
   toast,
   userName,
@@ -31,9 +32,13 @@ import {
   viewChannel,
   voiceRooms,
 } from '../state';
-import { call, deafened, leaveVoice, micOn, sharing, speaking, stopShare, toggleDeafen, toggleMic } from '../voice';
+import { call, deafened, leaveVoice, mediaAllowed, micOn, sharing, speaking, stopShare, toggleDeafen, toggleMic } from '../voice';
+import { ContactButton, PeopleList, RequestActions } from './People';
+import { useUserList } from './usePeople';
+import { SearchField, useSearch, type SearchState } from './search';
 import { AddMembersDialog, CreateGroupDialog } from './Dialogs';
 import { Avatar, confirmDialog, GroupAvatar, Icon, type MenuItem, openMenu, openMenuAt, Popover } from './common';
+import { canModerateRoom, openRestrictions, participantModerationItems } from './Moderation';
 import { CHAT_DRAG, enterRoom, loadDesk, openBeside, openPerson, openRoom, openVoice, ROOM_DRAG, saveDesk, Workspace } from './desk';
 import { createRoom, createTextChannel, deleteRoom, deleteTextChannel, GroupSettingsDialog, renameRoom, renameTextChannel } from './GroupSettings';
 import { copyText, openProfile, ProfileCard } from './Profile';
@@ -55,7 +60,7 @@ function VoiceCapsule() {
   const [picker, setPicker] = useState(false);
   const tx = t().desk.voice;
   const ts = t().shell.self;
-  // The label outlives the call so it can fade out while the capsule closes.
+  // Retain the label through the closing animation.
   const label = useRef('');
   if (c) label.current = c.label;
   return (
@@ -64,14 +69,14 @@ function VoiceCapsule() {
         <span class={'dot ' + (!c ? 'idle' : c.status === 'connected' ? 'ok live' : 'wait')} />
         <span class="capsule-label ellipsis">{label.current}</span>
       </button>
-      <button class={'icon-btn' + (micOn.value ? '' : ' off')} onClick={toggleMic} title={micOn.value ? ts.micOff : ts.micOn} aria-label={ts.micLabel} aria-pressed={!micOn.value}>
+      <button class={'icon-btn' + (micOn.value ? '' : ' off')} onClick={toggleMic} title={mediaAllowed('microphone') ? micOn.value ? ts.micOff : ts.micOn : t().moderation.permissionDenied('microphone')} aria-label={ts.micLabel} aria-pressed={!micOn.value} disabled={!mediaAllowed('microphone')}>
         <Icon name={micOn.value ? 'mic' : 'micOff'} size={18} />
       </button>
       <button class={'icon-btn' + (deafened.value ? ' off' : '')} onClick={toggleDeafen} title={deafened.value ? ts.soundOn : ts.soundOff} aria-label={ts.soundLabel} aria-pressed={deafened.value}>
         <Icon name={deafened.value ? 'headphonesOff' : 'headphones'} size={18} />
       </button>
       <span class="capsule-extra" aria-hidden={!c}>
-        <button class={'icon-btn' + (sharing.value ? ' accent' : '')} onClick={() => (sharing.value ? stopShare() : setPicker(true))} title={sharing.value ? tx.stopShare : tx.share} aria-label={sharing.value ? tx.stopShare : tx.share} tabIndex={c ? 0 : -1}>
+        <button class={'icon-btn' + (sharing.value ? ' accent' : '')} onClick={() => (sharing.value ? stopShare() : setPicker(true))} title={mediaAllowed('screen') ? sharing.value ? tx.stopShare : tx.share : t().moderation.permissionDenied('screen')} aria-label={sharing.value ? tx.stopShare : tx.share} tabIndex={c ? 0 : -1} disabled={!mediaAllowed('screen')}>
           <Icon name="screen" size={18} />
         </button>
         <button class="icon-btn leave" onClick={leaveVoice} title={tx.leave} aria-label={tx.leave} tabIndex={c ? 0 : -1}>
@@ -103,6 +108,9 @@ function AvatarMenu() {
             <button onClick={() => (close(), copyText(u.username, tx.usernameCopied))}>
               <Icon name="copy" size={16} /> {tx.copyUsername}
             </button>
+            {orphanedMessages.value.length > 0 && <button onClick={() => (close(), (settingsOpen.value = 'app'))}>
+              <Icon name="chat" size={16} /> {t().settings.unsent.title} <span class="badge">{orphanedMessages.value.length}</span>
+            </button>}
             <button onClick={() => (close(), (settingsOpen.value = 'profile'))}>
               <Icon name="settings" size={16} /> {tx.settings}
             </button>
@@ -149,7 +157,7 @@ const HOUR = 3600_000;
 function muteMenuItems(key: string): MenuItem[] {
   const tx = t().shell.notifications;
   if (isMuted(key)) return [{ label: tx.unmute, icon: 'bell', run: () => setMuted(key, null) }];
-  // One item, then how long: a menu of three near-identical lines is hard to read.
+  // Choose the mute duration in a submenu.
   return [
     {
       label: t().desk.menu.muteFor,
@@ -165,7 +173,7 @@ function muteMenuItems(key: string): MenuItem[] {
     },
   ];
 }
-// Where the last menu item was clicked: the follow-up menu opens there.
+// Position the submenu at the preceding click.
 const lastMenuPoint = { x: 0, y: 0 };
 window.addEventListener('pointerdown', (e) => {
   if ((e.target as HTMLElement).closest?.('.menu')) Object.assign(lastMenuPoint, { x: e.clientX, y: e.clientY });
@@ -225,6 +233,7 @@ function RoomItem({ g, r, mod }: { g: Group; r: Room; mod: boolean }) {
       ...(mod
         ? ([
             'sep',
+            ...(canModerateRoom(r.id) ? [{ label: t().moderation.restrictions, icon: 'shield', run: () => openRestrictions(r.id) }] : []),
             { label: t().groups.channels.rename, icon: 'edit', run: () => renameRoom(r) },
             ...(g.rooms.length > 1 ? [{ label: tx.deleteRoom, icon: 'trash', danger: true, run: () => deleteRoom(r) } as MenuItem] : []),
           ] as MenuItem[])
@@ -238,7 +247,10 @@ function RoomItem({ g, r, mod }: { g: Group; r: Room; mod: boolean }) {
         {here ? <span class="nav-note">{t().desk.nav.youAreHere}</span> : members.length > 0 && <span class="nav-note">{members.length}</span>}
       </button>
       {members.map((m) => (
-        <button class="nav-sub" key={m.user_id} onClick={(e) => openProfile(m.user_id, e.clientX + 10, e.clientY - 60)}>
+        <button class="nav-sub" key={m.user_id} onClick={(e) => openProfile(m.user_id, e.clientX + 10, e.clientY - 60)} onContextMenu={(e) => {
+          const items = participantModerationItems(e, r.id, m.user_id);
+          if (items.length) openMenu(e, items);
+        }}>
           <Avatar id={m.user_id} size={20} speaking={here && speaking.value.has(String(m.user_id))} />
           <span class="ellipsis">{userName(m.user_id)}</span>
           <span class="nav-sub-icons">
@@ -296,7 +308,7 @@ const groupUnread = (g: Group) =>
 const groupLive = (g: Group) => g.rooms.some((r) => (voiceRooms.value.get(roomKey(r)) ?? []).length > 0);
 
 const navTab = signal<'groups' | 'people'>('groups');
-// The group whose page the navigator shows: null is the list of groups, undefined follows the open chat.
+// null shows all groups; undefined follows the active chat.
 const navGroup = signal<number | null | undefined>(undefined);
 const shownGroup = () => {
   const v = view.value;
@@ -345,7 +357,7 @@ function GroupPage({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'setting
           <Icon name="chevronRight" size={16} />
         </button>
         <span class="ellipsis nav-page-name">{g.name}</span>
-        <button class="icon-btn tiny" onClick={(e) => openMenuAt(e.currentTarget, groupMenuItems(g, (d) => onDialog(g, d)))} title={t().desk.menu.label} aria-label={t().desk.menu.label}>
+        <button class="icon-btn tiny" onClick={(e) => openMenuAt(e.currentTarget, groupMenuItems(g, (d) => onDialog(g, d)))} title={t().shell.group.menu} aria-label={t().shell.group.menu}>
           <Icon name="more" size={16} />
         </button>
       </div>
@@ -377,70 +389,91 @@ function GroupPage({ g, onDialog }: { g: Group; onDialog: (g: Group, d: 'setting
   );
 }
 
-function NavPeople({ query }: { query: string }) {
+function NavPeople({ search, onBusy }: { search: SearchState; onBusy(busy: boolean): void }) {
   const v = view.value;
-  const myId = me.value?.id;
-  const tx = t().shell.home;
-  const q = query.trim().toLowerCase();
-  const dms = new Map([...channels.value.values()].filter((c) => c.kind === 'dm').map((c) => [c.peer_id, c]));
-  const people = [...users.value.values()]
-    .filter((u) => u.id !== myId && (!q || u.display_name.toLowerCase().includes(q) || u.username.includes(q)))
-    .sort((a, b) => {
-      const ca = dms.get(a.id)?.last_message?.id ?? 0;
-      const cb = dms.get(b.id)?.last_message?.id ?? 0;
-      if (ca !== cb) return cb - ca;
-      return Number(online.value.has(b.id)) - Number(online.value.has(a.id)) || a.display_name.localeCompare(b.display_name);
-    });
-  if (!people.length) return <div class="nav-empty muted small">{q ? t().desk.nav.noMatch : tx.noUsers}</div>;
-  return (
-    <>
-      {people.map((u) => {
-        const ch = dms.get(u.id);
-        const active = v.kind === 'person' && !!ch && v.channelId === ch.id;
-        const inCall = ch && (voiceRooms.value.get('dm' + ch.id) ?? []).length > 0;
-        const muted = !!ch && channelMuted(ch);
-        return (
-          <button
-            key={u.id}
-            class={'nav-person' + (active ? ' active' : '') + (ch?.unread && !muted ? ' unread' : '') + (muted ? ' muted' : '')}
-            onClick={() => openPerson(u.id)}
-            draggable={!!ch}
-            onDragStart={ch && dragChat(ch.id)}
-            onContextMenu={(e) =>
-              openMenu(e, [
-                ...(ch ? besideItems(ch.id) : []),
-                { label: tx.profile, icon: 'user', run: () => openProfile(u.id, e.clientX, e.clientY) },
-                { label: t().shell.self.copyUsername, icon: 'copy', run: () => copyText(u.username, t().shell.self.usernameCopied) },
-                ...(ch ? (['sep', ...muteMenuItems('c' + ch.id)] as MenuItem[]) : []),
-              ])
-            }
-          >
-            <Avatar id={u.id} size={36} showPresence />
-            <span class="nav-person-text">
-              <span class="ellipsis nav-person-name">{u.display_name}</span>
-              <span class="ellipsis nav-person-sub">{ch?.last_message ? messagePreview(ch.last_message) : u.status || '@' + u.username}</span>
-            </span>
-            {inCall && <Icon name="phone" size={14} class="talk" />}
-            {muted && <Icon name="bellOff" size={14} class="quiet" />}
-            {!!ch?.unread && !muted && <span class="badge inline">{ch.unread}</span>}
-          </button>
-        );
-      })}
-    </>
-  );
+  const store = people.value;
+  const [section, setSection] = useState<'dialogs' | 'contacts' | 'requests' | 'all'>('dialogs');
+  const [direction, setDirection] = useState<'incoming' | 'outgoing'>('incoming');
+  const tx = t().common.people;
+  const q = search.query.trim();
+  const dms = new Map([...channels.value.values()].filter((channel) => channel.kind === 'dm').map((channel) => [channel.peer_id!, channel]));
+  const mode = section === 'all' ? 'directory' : section === 'requests' ? direction : section === 'dialogs' ? 'dialogs' : 'contact';
+  const enabled = !search.pending && !!store && (section === 'dialogs' ? !!q && store.mutual : section !== 'all' || !!q);
+  const page = useUserList(mode, q, enabled);
+  useEffect(() => { onBusy(page.loading || page.loadingMore); return () => onBusy(false); }, [page.loading, page.loadingMore, onBusy]);
+  const localMatch = (id: number) => {
+    const user = users.value.get(id);
+    return !q || `${user?.display_name ?? ''} ${user?.username ?? ''}`.toLocaleLowerCase().includes(q.toLocaleLowerCase());
+  };
+  const list = section === 'dialogs' && (!q || !store?.mutual) ? [...dms.keys()].filter(localMatch)
+    : section === 'all' && !store ? q ? [...users.value.keys()].filter((id) => id !== me.value?.id && localMatch(id)) : []
+    : section === 'contacts' && !store?.mutual ? page.ids.filter(localMatch) : page.ids;
+  const serverList = !!store && (section !== 'dialogs' || !!q && store.mutual);
+  const sorted = section === 'all' ? list : list.toSorted((a, b) => {
+    if (section === 'requests') return (page.order.get(b)?.since ?? 0) - (page.order.get(a)?.since ?? 0) || a - b;
+    const last = (dms.get(b)?.last_message?.id ?? 0) - (dms.get(a)?.last_message?.id ?? 0);
+    if (section === 'dialogs') return last || (dms.get(b)?.id ?? 0) - (dms.get(a)?.id ?? 0);
+    return last || Number(page.order.get(b)?.online) - Number(page.order.get(a)?.online) || (page.order.get(a)?.name ?? '').localeCompare(page.order.get(b)?.name ?? '') || a - b;
+  });
+  const count = store?.incomingCount.value ?? 0;
+  const render = (id: number) => {
+    const user = users.value.get(id);
+    if (!user) return <div data-user-id={id} class="person-skeleton" aria-label={tx.loading} />;
+    const channel = dms.get(id);
+    const active = v.kind === 'person' && channel?.id === v.channelId;
+    const muted = !!channel && channelMuted(channel);
+    const relation = store?.relations.value.get(id);
+    return <div data-user-id={id} class={'nav-person-item' + (section === 'requests' ? ' request-item' : '')}>
+      <div class="nav-person-row">
+        <button class={'nav-person' + (active ? ' active' : '') + (channel?.unread && !muted ? ' unread' : '') + (muted ? ' muted' : '')}
+          draggable={!!channel} onDragStart={channel && dragChat(channel.id)}
+          onClick={(event) => section === 'requests' ? openProfile(id, event.clientX, event.clientY) : openPerson(id)}
+          onContextMenu={(event) => openMenu(event, [
+            ...(channel ? besideItems(channel.id) : []),
+            { label: t().shell.home.profile, icon: 'user', run: () => openProfile(id, event.clientX, event.clientY) },
+            { label: t().shell.self.copyUsername, icon: 'copy', run: () => copyText(user.username, t().shell.self.usernameCopied) },
+            ...(channel ? (['sep', ...muteMenuItems('c' + channel.id)] as MenuItem[]) : []),
+          ])}>
+          <Avatar id={id} size={36} showPresence />
+          <span class="nav-person-text">
+            <span class="ellipsis nav-person-name">{user.display_name}</span>
+            <span class="ellipsis nav-person-sub">{section === 'requests' ? <><Icon name={relation?.state === 'incoming' ? 'arrowDown' : 'external'} size={12} />{relation?.state === 'incoming' ? tx.received : tx.requested}</> : channel?.last_message ? messagePreview(channel.last_message) : user.status || '@' + user.username}</span>
+          </span>
+          {channel && (voiceRooms.value.get('dm' + channel.id) ?? []).length > 0 && <Icon name="phone" size={14} class="talk" />}
+          {muted && <Icon name="bellOff" size={14} class="quiet" />}
+          {!!channel?.unread && !muted && <span class="badge inline">{channel.unread}</span>}
+        </button>
+        {section === 'all' && <ContactButton id={id} compact />}
+      </div>
+      {section === 'requests' && <RequestActions id={id} />}
+    </div>;
+  };
+  const empty = section === 'all' && !q ? tx.find : q ? t().desk.nav.noMatch : section === 'dialogs' ? tx.noDialogs : section === 'contacts' ? tx.noContacts : direction === 'incoming' ? tx.noIncoming : tx.noOutgoing;
+  return <div class="nav-people">
+    <div class="seg-toggle people-tabs" role="tablist" aria-label={t().desk.nav.direct}>
+      {(['dialogs', 'contacts', 'requests', 'all'] as const).filter((tab) => tab !== 'requests' || store?.mutual).map((tab) => <button key={tab} role="tab" aria-selected={section === tab} class={section === tab ? 'on' : ''} onClick={() => setSection(tab)}>{tx[tab]}{tab === 'requests' && count > 0 && <span class="request-count">{count}</span>}</button>)}
+    </div>
+    {section === 'requests' && <div class="request-filters" role="tablist" aria-label={tx.requests}>
+      {(['incoming', 'outgoing'] as const).map((filter) => <button role="tab" aria-selected={direction === filter} class={direction === filter ? 'on' : ''} onClick={() => setDirection(filter)}>{tx[filter]}{filter === 'incoming' && count > 0 && <span class="request-count">{count}</span>}</button>)}
+    </div>}
+    <div class={'people-results' + (search.pending ? ' search-stale' : '')} inert={search.pending}>
+      <PeopleList key={`${section}:${direction}:${q}`} ids={sorted} render={render} more={() => void page.more()} hasMore={serverList && page.hasMore} loading={search.pending || (serverList && (page.loading || page.loadingMore))} error={serverList ? page.error : null} retry={page.retry} empty={empty} />
+    </div>
+  </div>;
 }
 
 function Navigator() {
   const [creating, setCreating] = useState(false);
   const [dialog, setDialog] = useState<{ g: Group; d: 'settings' | 'add' } | null>(null);
-  const [query, setQuery] = useState('');
+  const search = useSearch();
+  const [peopleBusy, setPeopleBusy] = useState(false);
   const tx = t().desk.nav;
   const tab = navTab.value;
   const all = [...groups.value.values()];
-  const q = query.trim().toLowerCase();
+  const q = search.query.trim().toLowerCase();
   const list = q ? all.filter((g) => g.name.toLowerCase().includes(q)) : all;
   const open = !q && tab === 'groups' ? groups.value.get(shownGroup() ?? -1) : undefined;
-  const peopleUnread = [...channels.value.values()].some((c) => c.kind === 'dm' && c.unread && !channelMuted(c));
+  const peopleUnread = (people.value?.incomingCount.value ?? 0) > 0 || [...channels.value.values()].some((c) => c.kind === 'dm' && c.unread && !channelMuted(c));
   const groupsUnread = all.some((g) => groupUnread(g) > 0);
   return (
     <nav class="win navigator" aria-label={tx.label}>
@@ -448,32 +481,27 @@ function Navigator() {
         <div class="nav-top-row">
         <div class="seg-toggle nav-tabs" role="tablist">
           {(['groups', 'people'] as const).map((x) => (
-            <button key={x} role="tab" aria-selected={tab === x} class={tab === x ? 'on' : ''} onClick={() => (navTab.value = x)}>
+            <button key={x} role="tab" aria-selected={tab === x} class={tab === x ? 'on' : ''} onClick={() => { if (navTab.value !== x) search.setText(''); navTab.value = x; }}>
               {x === 'groups' ? tx.groups : tx.direct}
               {(x === 'groups' ? groupsUnread : peopleUnread) && tab !== x && <span class="nav-tab-dot" />}
             </button>
           ))}
         </div>
-        <button class="icon-btn tiny" onClick={toggleNav} title={tx.fold} aria-label={tx.fold}>
+        <button class="icon-btn tiny" onClick={toggleNav} title={tx.fold + ' (' + keyLabel('Mod \\') + ')'} aria-label={tx.fold}>
           <Icon name="chevronRight" size={16} class="flip" />
         </button>
         </div>
-        <div class="nav-search">
-          <Icon name="search" size={15} />
-          <input value={query} onInput={(e) => setQuery(e.currentTarget.value)} placeholder={tab === 'groups' ? tx.findGroup : tx.findPerson} aria-label={tab === 'groups' ? tx.findGroup : tx.findPerson} />
-        </div>
+        <SearchField class="nav-search" search={search} busy={tab === 'people' && peopleBusy} placeholder={tab === 'groups' ? tx.findGroup : tx.findPerson} maxLength={256} />
       </div>
       {tab === 'people' ? (
-        <div class="nav-scroll">
-          <NavPeople query={query} />
-        </div>
+        <NavPeople search={search} onBusy={setPeopleBusy} />
       ) : open ? (
-        <div class="nav-split">
+        <div class="nav-split" inert={search.pending}>
           <GroupStrip list={all} current={open.id} />
           <GroupPage g={open} onDialog={(g, d) => setDialog({ g, d })} />
         </div>
       ) : (
-        <div class="nav-scroll">
+        <div class={"nav-scroll" + (search.pending ? " search-stale" : "")} inert={search.pending}>
           {list.map((g) => (
             <GroupRow key={g.id} g={g} />
           ))}
@@ -498,7 +526,7 @@ const NAV_MIN = 220;
 const NAV_MAX = 440;
 
 // Ctrl+\ folds the navigator into a strip of avatars and back.
-const navFolded = signal(false);
+export const navFolded = signal(false);
 export const toggleNav = () => {
   navFolded.value = !navFolded.value;
   saveDesk({ navFolded: navFolded.value });
@@ -513,7 +541,7 @@ function NavRail() {
     .slice(0, 8);
   return (
     <nav class="win navigator nav-rail" aria-label={tx.label}>
-      <button class="icon-btn nav-unfold" onClick={toggleNav} title={tx.unfold} aria-label={tx.unfold}>
+      <button class="icon-btn nav-unfold" onClick={toggleNav} title={tx.unfold + ' (' + keyLabel('Mod \\') + ')'} aria-label={tx.unfold}>
         <Icon name="chevronRight" size={18} />
       </button>
       <div class="nav-rail-list">
@@ -541,6 +569,7 @@ export function Shell() {
   useEffect(() => {
     navFolded.value = !!loadDesk().navFolded;
     const keys = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || document.querySelector('.modal-backdrop')) return;
       if (cmd(e) && !e.altKey && e.code === 'Backslash') {
         e.preventDefault();
         toggleNav();

@@ -131,7 +131,7 @@ async function main() {
         args: ['--no-sandbox', '--lang=ru', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-audio-capture=${mic}`, '--no-proxy-server'],
         env: { TOLKTAK_USER_DATA: profile },
         port: PORTS.livekit + 320 + i * 2,
-        initScript: PROBE_SCRIPT,
+        initScript: "localStorage.setItem('tolktak.tour', '1');\n" + PROBE_SCRIPT,
         onError: (m) => console.log(`[perf${i} pageerror]`, m),
       });
       cleanup.push(() => app.close().catch(() => {}));
@@ -140,13 +140,18 @@ async function main() {
     }
     const me = clients[0];
 
-    const openGroup = (c: ElectronClient) => c.page.click('.rail-btn.group', 'ПЕ');
+    const openGroup = async (c: ElectronClient) => {
+      await c.page.click('.nav-tabs button', 'Группы');
+      await c.page.waitFor('.nav-grouprow, .nav-strip-item');
+      await c.page.click('.nav-grouprow, .nav-strip-item', 'Перф');
+      await c.page.waitFor('.nav-row');
+    };
     if (o.scenario === 'idle-chat') await openGroup(me);
     if (o.scenario === 'voice') {
       for (const c of clients) {
         await openGroup(c);
-        await c.page.click('.room-join', 'Общая');
-        await c.page.waitFor('.voicebar-call .dot.ok', 60_000);
+        await c.page.click('.nav-row', 'Общая');
+        await c.page.waitFor('.capsule .dot.ok', 60_000);
       }
     }
     if (o.scenario === 'idle-tray') await me.main(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.hide());

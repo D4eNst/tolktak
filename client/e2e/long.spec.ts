@@ -27,7 +27,8 @@ test('long movie session', async ({ browser }) => {
   for (const p of [alice, bob, carol]) await joinRoom(p, 'Марафон');
   await alice.click('.capsule button[aria-label="Показать экран"]');
   await alice.locator('.warn-box input[type=checkbox]').check();
-  await alice.selectOption('.share-options select', '720p30');
+  await alice.locator('.share-options button[aria-haspopup=listbox]').click();
+  await alice.getByRole('option', { name: /720p.*30/ }).click();
   await alice.click('.modal button.primary');
   await expectFlowing(bob, ids.alice, 'screen_share', 40);
   const rows: string[] = [];

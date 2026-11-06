@@ -6,18 +6,24 @@ import type { Stack } from './stack';
 export async function mainWindow(app: ElectronApplication) {
   let w: Page | undefined;
   await expect.poll(() => (w = app.windows().find((x) => x.url().endsWith('/index.html')))).toBeTruthy();
+  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((win) => win.webContents.getURL().endsWith('/index.html') && win.isVisible()))).toBe(true);
   return w!;
 }
 
-export async function openClient(browser: Browser, stack: Stack, username: string, password = 'password123'): Promise<Page> {
+export async function openClient(browser: Browser, stack: Stack, username: string, password = 'password123', prepare?: (page: Page) => void | Promise<void>): Promise<Page> {
   const ctx = await browser.newContext({ locale: 'ru-RU', permissions: ['microphone', 'camera'] });
   await ctx.addInitScript({ path: path.join(__dirname, 'fake-display.js') });
   await ctx.addInitScript(() => localStorage.setItem('tolktak.tour', '1'));
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${username} pageerror]`, e.message));
   page.on('console', (m) => m.type() === 'error' && console.log(`[${username} console]`, m.text()));
+  await prepare?.(page);
   await page.goto(stack.web);
+  const form = page.locator('.login-card');
+  await expect(form).toBeVisible();
+  await form.evaluate((element) => Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => {}))));
   await page.fill('input[name=server]', stack.api);
+  await expect(page.locator('input[name=server]')).toHaveValue(stack.api);
   await page.fill('input[name=username]', username);
   await page.fill('input[name=password]', password);
   await page.click('button[type=submit]');
@@ -70,6 +76,8 @@ export const groupIn = (p: Page, name: string) => p.locator('.nav-grouprow', { h
 /** Someone in the navigator's «Люди» tab. */
 export async function person(p: Page, name: string) {
   await p.locator('.nav-tabs button', { hasText: 'Люди' }).click();
+  await p.locator('.people-tabs').getByRole('tab', { name: 'Все', exact: true }).click();
+  await p.locator('.nav-search input').fill(name);
   return p.locator('.nav-person', { hasText: name });
 }
 

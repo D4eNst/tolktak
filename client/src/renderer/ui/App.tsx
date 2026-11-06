@@ -9,6 +9,7 @@ import { AskHost, infoDialog, MenuHost } from './common';
 import { IncomingCallDialog, QuickSwitcher } from './Dialogs';
 import { Login } from './Login';
 import { ProfileHost } from './Profile';
+import { ModerationHost } from './Moderation';
 import { SettingsDialog } from './Settings';
 import { Shell, TitleBar } from './Shell';
 import { Tour } from './Tour';
@@ -91,6 +92,7 @@ export function App() {
     const keys = (e: KeyboardEvent) => {
       if (!session.value) return;
       if (cmd(e) && !e.shiftKey && e.code === 'KeyK') {
+        if (document.querySelector('.modal-backdrop')) return;
         e.preventDefault();
         switcherOpen.value = !switcherOpen.value;
       }
@@ -121,7 +123,7 @@ export function App() {
 
   const ready = !booting.value;
   useEffect(() => {
-    // A timer, not a frame: the main window is still hidden, and hidden windows get no frames.
+    // Hidden windows receive no animation frames.
     if (ready) setTimeout(() => bridge.ready(), 50);
   }, [ready]);
 
@@ -149,6 +151,7 @@ export function App() {
       {session.value && incomingCall.value && <IncomingCallDialog />}
       {session.value && <Tour />}
       <ProfileHost />
+      <ModerationHost />
       <LightboxHost />
       <MenuHost />
       <AskHost />

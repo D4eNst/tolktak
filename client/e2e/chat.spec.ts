@@ -120,7 +120,7 @@ test.beforeAll(async ({ browser }) => {
 test.afterAll(async () => stack?.stop());
 
 test('chat, groups and profiles in the desktop client', async ({ browser }) => {
-  test.skip(!process.env.DISPLAY, 'needs an X display (xvfb-run)');
+  test.skip(process.platform === 'linux' && !process.env.DISPLAY, 'needs an X display (xvfb-run)');
   const app = await electron.launch({
     args: [path.join(__dirname, '..'), '--no-sandbox', '--lang=ru', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--no-proxy-server'],
     env: { ...process.env, TOLKTAK_USER_DATA: mkdtempSync(path.join(tmpdir(), 'tt-chat-')) } as Record<string, string>,
@@ -158,11 +158,21 @@ test('chat, groups and profiles in the desktop client', async ({ browser }) => {
   const first = w.locator('.msg', { hasText: 'Интерстеллар' }).first();
   await first.hover();
   await snap(w, '04-hover-toolbar');
-  await first.locator('.msg-actions button[aria-label="Ответить"]').click();
+  await first.locator('.msg-actions button[aria-label="Ответить"]').click().catch(async (error) => {
+    await w.screenshot({ path: test.info().outputPath('reply-action-failure.png') });
+    console.log('reply action state', await first.evaluate((row) => {
+      const actions = row.querySelector<HTMLElement>('.msg-actions')!;
+      const button = actions.querySelector<HTMLElement>('[aria-label="Ответить"]')!;
+      const rect = button.getBoundingClientRect();
+      return { hovered: row.matches(':hover'), actions: { opacity: getComputedStyle(actions).opacity, pointerEvents: getComputedStyle(actions).pointerEvents }, row: row.getBoundingClientRect().toJSON(), button: rect.toJSON(), hit: document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)?.outerHTML.slice(0, 300), focus: document.hasFocus() };
+    }));
+    throw error;
+  });
   await expect(w.locator('.reply-bar')).toContainText('Борис');
   await w.locator('.composer input[type=file]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('список фильмов') });
   await expect(w.locator('.upload')).toHaveCount(1);
   await w.locator('.composer textarea').fill('Беру ~~попкорн~~ **начос**, @dima с тебя пледы');
+  await expect(w.locator('.composer .send-btn')).toBeEnabled();
   await snap(w, '05-composer-reply');
   await w.keyboard.press('Enter');
   const mine = w.locator('.msg', { hasText: 'начос' });
@@ -198,7 +208,7 @@ test('chat, groups and profiles in the desktop client', async ({ browser }) => {
   expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe('bob');
   await w.keyboard.press('Escape');
 
-  await w.locator('.nav-page-head button[aria-label="Меню окна"]').click();
+  await w.locator('.nav-page-head button[aria-label="Меню группы"]').click();
   await w.locator('.menu button', { hasText: 'Настройки группы' }).click();
   await w.locator('.settings-nav button', { hasText: 'Участники' }).click();
   await expect(w.locator('.role-chip.role-mod')).toHaveCount(1);
@@ -206,7 +216,7 @@ test('chat, groups and profiles in the desktop client', async ({ browser }) => {
   await w.locator('.modal header button[aria-label="Закрыть"]').click();
   await expect(w.locator('.modal')).toHaveCount(0);
 
-  await w.locator('.nav-page-head button[aria-label="Меню окна"]').click();
+  await w.locator('.nav-page-head button[aria-label="Меню группы"]').click();
   await w.locator('.menu button', { hasText: 'Удалить группу' }).click();
   await expect(w.locator('.modal.ask')).toBeVisible();
   await snap(w, '12-confirm');
@@ -224,7 +234,7 @@ test('chat, groups and profiles in the desktop client', async ({ browser }) => {
   await w.locator('.self-menu button', { hasText: 'Настройки' }).click();
   await w.locator('.settings-nav button', { hasText: 'Голос' }).click();
   await snap(w, '13-settings-voice');
-  await w.locator('.segmented button', { hasText: 'Рация' }).click();
+  await w.locator('.segmented button', { hasText: 'По нажатию клавиши' }).click();
   await expect(w.locator('.key-capture')).toBeVisible();
   await w.locator('.key-capture').click();
   await w.keyboard.press('F8');
@@ -234,7 +244,7 @@ test('chat, groups and profiles in the desktop client', async ({ browser }) => {
   await w.locator('.settings-nav button', { hasText: 'Профиль' }).click();
   await snap(w, '15-settings-profile');
   await w.locator('.settings-nav button', { hasText: 'Голос' }).click();
-  await w.locator('.segmented button', { hasText: 'По голосу' }).click();
+  await w.locator('.segmented button', { hasText: 'Активация голосом' }).click();
   await w.keyboard.press('Escape');
 
   await w.locator('.nav-row', { hasText: 'мемы' }).click();
@@ -242,6 +252,7 @@ test('chat, groups and profiles in the desktop client', async ({ browser }) => {
   await w.keyboard.press('ControlOrMeta+k');
   await expect(w.locator('.switcher')).toBeVisible();
   await w.locator('.switcher input').fill('бор');
+  await expect(w.locator('.switcher-item', { hasText: 'Борис' })).toBeVisible();
   await snap(w, '16-switcher');
   await w.keyboard.press('Enter');
   await expect(w.locator('.composer textarea[placeholder*="Борис"]')).toBeVisible();
@@ -264,4 +275,39 @@ test('chat, groups and profiles in the desktop client', async ({ browser }) => {
   await bob.context().close();
   await app.close();
   if (shots) writeFileSync(path.join(shots, 'README.txt'), 'Screenshots from e2e/chat.spec.ts (Electron under Xvfb, fake camera/screen).\n');
+});
+
+test('consecutive messages keep their action buttons inside the row and disappear after deletion', async ({ browser }) => {
+  const page = await openClient(browser, stack, 'alice');
+  try {
+    await groupIn(page, 'Киноклуб').click();
+    const sent = [];
+    for (const text of ['Несколько', 'сообщений', 'подряд']) sent.push(await send('alice', mainChannel, text));
+    const second = page.locator(`.msg[data-id="${sent[1].id}"]`);
+    await expect(second).toHaveClass(/grouped/);
+    await second.hover();
+    const geometry = await second.evaluate((el) => {
+      const row = el.getBoundingClientRect();
+      return [...el.querySelectorAll('.msg-actions > button')].map((button) => {
+        const b = button.getBoundingClientRect();
+        return { inside: b.top >= row.top && b.bottom <= row.bottom && b.left >= row.left && b.right <= row.right,
+          reachable: button.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)) };
+      });
+    });
+    expect(geometry.every((b) => b.inside && b.reachable)).toBe(true);
+    await second.getByRole('button', { name: 'Ответить', exact: true }).click();
+    await expect(page.locator('.reply-bar')).toContainText('сообщений');
+    await second.hover();
+    await second.getByRole('button', { name: 'Ещё', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Удалить', exact: true }).click();
+    await page.locator('.modal.ask').getByRole('button', { name: 'Удалить', exact: true }).click();
+    await expect(second).toHaveCount(0);
+    await expect(page.locator(`.msg[data-id="${sent[0].id}"]`)).toBeVisible();
+    await expect(page.locator(`.msg[data-id="${sent[2].id}"]`)).toBeVisible();
+    await page.reload();
+    await expect(page.locator('.shell')).toBeVisible();
+    await expect(second).toHaveCount(0);
+  } finally {
+    await page.context().close();
+  }
 });

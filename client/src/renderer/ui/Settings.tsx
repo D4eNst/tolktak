@@ -1,13 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { bridge, isDesktop, platform, type AppInfo, type DesktopSettings, type Hotkeys, type MediaAccess, type MediaKind } from '../bridge';
 import { accelFromEvent, accelFromMouse, accelLabel, hotkeys, hotkeysAreGlobal, keyLabel, setHotkey } from '../keys';
-import { api, errorText, logout, me, notificationsOn, serverUpdate, session, setNotifications, settingsOpen, type SettingsTab, toast } from '../state';
+import { api, discardPending, orphanedMessages, errorText, logout, me, notificationsOn, serverUpdate, session, setNotifications, settingsOpen, type SettingsTab, toast } from '../state';
+import { loadOutgoingFile } from '../outboxFiles';
+import type { FileMeta } from '../api';
 import type { ChainStats, Denoise, VoiceChain } from '../audio/chain';
+import { SOUND_THEMES } from '../../sounds';
 import { call, micOn, toggleMic, leaveVoice, chainSettings, createVoiceChain, micConstraints, micGain, micLevel, playTone, prefs, restartCamera, restartMic, setPrefs, switchDevices, applyGate, cameraOn } from '../voice';
 import { Avatar, confirmDialog, Icon, Modal, type Option, Select, Slider, Toggle } from './common';
 import { AppearanceSettings } from './Appearance';
 import { WindowsSettings } from './desk';
-import { pickImage } from './GroupSettings';
+import { MAX_IMAGE_MB, pickImage } from './GroupSettings';
 import { intlLocale, LOCALES, locale, setLocale, t, type Locale } from '../i18n';
 
 function useDevices(kind: MediaDeviceKind) {
@@ -62,7 +65,7 @@ function AccessNotice({ kind }: { kind: MediaKind }) {
   );
 }
 
-/** Outside a call it runs the call's processing, and `listen` plays the voice back. */
+// Microphone checks use the same processing as calls.
 function MicMeter({ threshold, listen = false }: { threshold?: number; listen?: boolean }) {
   const [stats, setStats] = useState<ChainStats | null>(null);
   const chainRef = useRef<VoiceChain | null>(null);
@@ -73,30 +76,32 @@ function MicMeter({ threshold, listen = false }: { threshold?: number; listen?: 
     let alive = true;
     let stream: MediaStream | null = null;
     let playback: AudioContext | null = null;
+    let chain: VoiceChain | null = null;
     const stop = () => {
       stream?.getTracks().forEach((tr) => tr.stop());
-      chainRef.current?.close();
-      chainRef.current = null;
+      chain?.close();
+      if (chainRef.current === chain) chainRef.current = null;
       playback?.close().catch(() => {});
     };
     (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() });
         if (!alive) return stop();
-        const chain = await createVoiceChain(stream.getAudioTracks()[0], (s) => alive && setStats(s));
-        chainRef.current = chain;
+        chain = await createVoiceChain(stream.getAudioTracks()[0], (s) => alive && setStats(s));
         if (!alive) return stop();
+        chainRef.current = chain;
         if (listen) {
-          // Half a second late: you hear yourself instead of talking over it.
+          // Delay monitoring by half a second.
           playback = new AudioContext();
           const sink = prefs.value.outputDevice;
           if (sink && sink !== 'default') await (playback as AudioContext & { setSinkId(id: string): Promise<void> }).setSinkId(sink).catch(() => {});
+          if (!alive) return stop();
           const delay = playback.createDelay(1);
           delay.delayTime.value = 0.5;
           playback.createMediaStreamSource(new MediaStream([chain.output])).connect(delay).connect(playback.destination);
         }
       } catch {
-        /* no microphone */
+        stop();
       }
     })();
     return () => {
@@ -259,6 +264,7 @@ function CameraPreview() {
 }
 
 function ProfileTab() {
+  const owner = api();
   const u = me.value!;
   const [name, setName] = useState(u.display_name);
   const [status, setStatus] = useState(u.status ?? '');
@@ -268,9 +274,11 @@ function ProfileTab() {
   const [busy, setBusy] = useState(false);
   const tx = t().settings.profile;
   const save = async (patch: Parameters<ReturnType<typeof api>['updateMe']>[0], done = tx.saved) => {
+    if (session.value?.api !== owner) return;
     setBusy(true);
     try {
-      await api().updateMe(patch);
+      await owner.updateMe(patch);
+      if (session.value?.api !== owner) return;
       toast(done);
     } catch (e) {
       toast(errorText(e), 'error');
@@ -301,7 +309,7 @@ function ProfileTab() {
           <div>
             <div class="strong">{u.display_name}</div>
             <div class="muted small">@{u.username}</div>
-            <p class="muted small">{tx.avatarFormats}</p>
+            <p class="muted small">{tx.avatarFormats(MAX_IMAGE_MB)}</p>
             <div class="row">
               <button
                 class="secondary"
@@ -338,7 +346,7 @@ function ProfileTab() {
         </label>
         <label>
           {tx.about}
-          <textarea rows={3} value={about} maxLength={300} placeholder={tx.aboutPlaceholder} onInput={(e) => setAbout((e.target as HTMLTextAreaElement).value)} />
+          <textarea rows={3} value={about} maxLength={300} onInput={(e) => setAbout((e.target as HTMLTextAreaElement).value)} />
         </label>
         <div class="modal-actions">
           <button class="primary" disabled={busy || !changed || !name.trim()}>
@@ -390,21 +398,63 @@ function ProfileTab() {
   );
 }
 
+function UnsentMessages() {
+  const list = orphanedMessages.value;
+  const tx = t().settings.unsent;
+  const download = async (file: FileMeta) => {
+    const s = session.value;
+    if (!s) return;
+    try {
+      const local = file.local_id ? await loadOutgoingFile(s.api.base, s.me.id, file.local_id) : null;
+      if (session.value?.api !== s.api) return;
+      if (!local) { await bridge.download(s.api.fileUrl(file.id, file.name)); return; }
+      const url = URL.createObjectURL(local.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = local.name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) { if (session.value?.api === s.api) toast(errorText(error), 'error'); }
+  };
+  if (!list.length) return null;
+  return <section class="settings-section unsent-messages">
+    <h3>{tx.title}</h3><p class="hint">{tx.unavailable}</p>
+    {list.map((p) => <div class="unsent-message" key={p.nonce}>
+      <time class="small muted">{new Date(p.created_at).toLocaleString(intlLocale())}</time>
+      {p.text && <textarea readOnly rows={3} value={p.text} aria-label={t().chat.composer.label} />}
+      {p.attachments.map((f) => <button class="link" key={f.id} onClick={() => { void download(f); }}><Icon name="download" size={16} />{f.name}</button>)}
+      <div class="row">
+        {p.text && <button class="secondary small-btn" onClick={() => { void bridge.copy(p.text).catch((e) => toast(errorText(e), 'error')); }}>{t().chat.message.copyText}</button>}
+        <button class="danger-text" onClick={async () => {
+          if (await confirmDialog(tx.discardConfirm, { ok: t().chat.view.discard, danger: true })) discardPending(p.channel_id, p.nonce);
+        }}>{t().chat.view.discard}</button>
+      </div>
+    </div>)}
+  </section>;
+}
+
 function ServerTab() {
   const [busy, setBusy] = useState(false);
   const tx = t().settings.server;
   useEffect(() => {
-    api()
+    const a = api();
+    a
       .serverUpdate()
-      .then((u) => (serverUpdate.value = u))
-      .catch((e) => toast(errorText(e), 'error'));
+      .then((u) => {
+        if (session.value?.api === a) serverUpdate.value = u;
+      })
+      .catch((e) => {
+        if (session.value?.api === a) toast(errorText(e), 'error');
+      });
   }, []);
   const u = serverUpdate.value;
   if (!u) return null;
   const updateNow = async () => {
+    const a = api();
     setBusy(true);
     try {
-      serverUpdate.value = await api().updateServerNow();
+      const update = await a.updateServerNow();
+      if (session.value?.api === a) serverUpdate.value = update;
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -467,14 +517,14 @@ const TABS: { id: SettingsTab; icon: string }[] = [
   { id: 'video', icon: 'video' },
   { id: 'keys', icon: 'keyboard' },
   { id: 'watch', icon: 'monitorPlay' },
-  { id: 'windows', icon: 'tabInside' },
-  { id: 'look', icon: 'sparkles' },
+  { id: 'interface', icon: 'tabInside' },
   { id: 'app', icon: 'settings' },
   { id: 'server', icon: 'shield' },
 ];
 
 export function SettingsDialog() {
-  const tab = (settingsOpen.value || 'voice') as SettingsTab;
+  const requested = settingsOpen.value || 'voice';
+  const tab = requested === 'server' && !me.value?.is_admin ? 'profile' : requested;
   const setTab = (id: SettingsTab) => (settingsOpen.value = id);
   const [desk, setDesk] = useState<DesktopSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -559,7 +609,7 @@ export function SettingsDialog() {
               )}
               <h3 class="section-title">{v.processing}</h3>
               <Select label={v.denoise} value={p.denoise} options={denoiseOptions()} onChange={(d) => processing({ denoise: d })} />
-              <Toggle checked={p.agc} onChange={(on) => setPrefs({ agc: on })} hint={v.agcHint}>
+              <Toggle checked={p.agc} onChange={(on) => setPrefs({ agc: on })}>
                 {v.agc}
               </Toggle>
               {!p.agc && (
@@ -577,7 +627,9 @@ export function SettingsDialog() {
               <Toggle checked={p.sounds} onChange={(on) => setPrefs({ sounds: on })} hint={v.soundsHint}>
                 {v.sounds}
               </Toggle>
-              <button class="secondary" onClick={() => playTone('test')}>
+              <Select label={v.soundTheme} value={p.soundTheme} options={SOUND_THEMES.map(value => ({ value, label: v.soundThemes[value] }))} onChange={soundTheme => setPrefs({ soundTheme })} />
+              <Slider label={v.soundVolume} value={p.soundVolume} max={1} onInput={(vol) => setPrefs({ soundVolume: vol })} />
+              <button class="secondary" disabled={!p.sounds || p.soundVolume === 0} onClick={() => playTone('test')}>
                 <Icon name="speaker" size={16} /> {v.testSound}
               </button>
             </>
@@ -650,7 +702,7 @@ export function SettingsDialog() {
           {tab === 'watch' && (
             <>
               <Slider label={tx.watch.streamVolume} value={p.streamVolume} onInput={(vol) => setPrefs({ streamVolume: vol })} />
-              <Toggle checked={p.ducking} onChange={(on) => setPrefs({ ducking: on })} hint={tx.watch.duckingHint}>
+              <Toggle checked={p.ducking} onChange={(on) => setPrefs({ ducking: on })}>
                 {tx.watch.ducking}
               </Toggle>
               {p.ducking && (
@@ -661,10 +713,21 @@ export function SettingsDialog() {
               </Toggle>
             </>
           )}
-          {tab === 'windows' && <WindowsSettings />}
-          {tab === 'look' && <AppearanceSettings />}
+          {tab === 'interface' && (
+            <>
+              <section class="settings-section">
+                <h3>{tx.sections.windows}</h3>
+                <WindowsSettings />
+              </section>
+              <section class="settings-section">
+                <h3>{tx.sections.appearance}</h3>
+                <AppearanceSettings />
+              </section>
+            </>
+          )}
           {tab === 'app' && desk && (
             <>
+              <UnsentMessages />
               <Select<Locale> label={tx.app.language} value={locale.value} options={LOCALES.map((l) => ({ value: l.id, label: l.name }))} onChange={setLocale} />
               {isDesktop && (
                 <>

@@ -80,6 +80,7 @@ export async function loadHotkeys() {
 }
 
 export function setHotkey(name: keyof Hotkeys, accel: string) {
+  if (name === 'ptt' && (hotkeys.value.ptt ?? '') !== accel) setPushToTalk(false);
   const next = { ...hotkeys.value, [name]: accel || undefined };
   hotkeys.value = next;
   bridge.setSettings({ hotkeys: next });
@@ -98,20 +99,19 @@ export function installHotkeys(): () => void {
   };
   const down = (e: KeyboardEvent) => {
     if (globalKeys || e.repeat) return;
-    const k = hotkeys.value;
-    const a = accelFromEvent(e, true);
-    if (!a) return;
-    if (a === k.ptt && !typing(e)) setPushToTalk(true);
-    if (a === k.mute && !typing(e)) (e.preventDefault(), toggleMic());
-    if (a === k.deafen && !typing(e)) (e.preventDefault(), toggleDeafen());
+    const bindings = hotkeys.value;
+    const accelerator = accelFromEvent(e, true);
+    if (!accelerator) return;
+    if (accelerator === bindings.ptt && !typing(e)) setPushToTalk(true);
+    if (accelerator === bindings.mute && !typing(e)) (e.preventDefault(), toggleMic());
+    if (accelerator === bindings.deafen && !typing(e)) (e.preventDefault(), toggleDeafen());
   };
   const up = (e: KeyboardEvent) => {
     if (globalKeys) return;
-    const k = hotkeys.value.ptt;
-    if (!k) return;
-    const last = k.split('+').pop();
-    const name = accelFromEvent(e, true)?.split('+').pop();
-    if (name === last) setPushToTalk(false);
+    const binding = hotkeys.value.ptt;
+    if (!binding) return;
+    const released = accelFromEvent(e, true)?.split('+').pop();
+    if (released && binding.split('+').includes(released)) setPushToTalk(false);
   };
   const mdown = (e: MouseEvent) => !globalKeys && accelFromMouse(e) === hotkeys.value.ptt && setPushToTalk(true);
   const mup = (e: MouseEvent) => !globalKeys && accelFromMouse(e) === hotkeys.value.ptt && setPushToTalk(false);
@@ -123,6 +123,7 @@ export function installHotkeys(): () => void {
   window.addEventListener('blur', blur);
   return () => {
     off();
+    setPushToTalk(false);
     window.removeEventListener('keydown', down);
     window.removeEventListener('keyup', up);
     window.removeEventListener('mousedown', mdown);
