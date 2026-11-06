@@ -76,18 +76,18 @@
 }
 .w-house-pl-top {
   background:
-    repeating-linear-gradient(0deg, rgba(255, 236, 220, 0.035) 0 1px, transparent 1px 20px),
-    repeating-linear-gradient(90deg, rgba(255, 236, 220, 0.035) 0 1px, transparent 1px 20px),
-    #19171e;
-  box-shadow: inset 0 0 0 1px rgba(255, 236, 220, 0.09);
+    repeating-linear-gradient(0deg, rgba(220, 255, 250, 0.035) 0 1px, transparent 1px 20px),
+    repeating-linear-gradient(90deg, rgba(220, 255, 250, 0.035) 0 1px, transparent 1px 20px),
+    #122024;
+  box-shadow: inset 0 0 0 1px rgba(220, 255, 250, 0.09);
 }
 .w-house-pl-l {
-  background: #1b1920;
-  box-shadow: inset 0 0 0 1px rgba(255, 236, 220, 0.07);
+  background: #16252a;
+  box-shadow: inset 0 0 0 1px rgba(220, 255, 250, 0.07);
 }
 .w-house-pl-r {
-  background: #121015;
-  box-shadow: inset 0 0 0 1px rgba(255, 236, 220, 0.06);
+  background: #091316;
+  box-shadow: inset 0 0 0 1px rgba(220, 255, 250, 0.06);
 }
 .w-house-pl-l b,
 .w-house-pl-r b {
@@ -96,7 +96,7 @@
   top: 14px;
   font: 500 10.5px/1 var(--w-mono);
   letter-spacing: 0.08em;
-  color: #8b8394;
+  color: #819593;
   white-space: nowrap;
 }
 .w-house-pl-r b {
@@ -121,7 +121,7 @@
   animation: w-house-blink 2.4s steps(1) infinite;
 }
 .w-house-leds u:nth-child(3) {
-  background: #3a3541;
+  background: #385057;
   box-shadow: none;
 }
 .w-house-vents {
@@ -130,7 +130,7 @@
   top: 12px;
   width: 64px;
   height: 14px;
-  background: repeating-linear-gradient(90deg, #08070a 0 3px, transparent 3px 7px);
+  background: repeating-linear-gradient(90deg, #050b0d 0 3px, transparent 3px 7px);
   opacity: 0.9;
 }
 @keyframes w-house-blink {
@@ -146,8 +146,8 @@
   padding: 0;
   pointer-events: auto;
   cursor: pointer;
-  background: #1c1a21;
-  box-shadow: inset 0 0 0 1px rgba(255, 236, 220, 0.07);
+  background: #16272c;
+  box-shadow: inset 0 0 0 1px rgba(220, 255, 250, 0.07);
   transition: transform 0.35s var(--w-ease), background-color 0.4s var(--w-ease), box-shadow 0.3s var(--w-ease);
 }
 .w-house-room:focus-visible {
@@ -176,19 +176,19 @@
   width: 52px;
   height: 62px;
   border-radius: 9px;
-  border: 1.5px solid rgba(255, 236, 220, 0.1);
-  background: rgba(17, 16, 21, 0.5);
+  border: 1.5px solid rgba(220, 255, 250, 0.1);
+  background: rgba(8, 17, 20, 0.5);
   transition: border-color 0.12s linear;
 }
 .w-house-tile.is-speaking {
   border-color: var(--w-speak);
 }
 .w-house-wall {
-  background: #141218;
-  box-shadow: inset 0 0 0 1px rgba(255, 236, 220, 0.05);
+  background: #0c171a;
+  box-shadow: inset 0 0 0 1px rgba(220, 255, 250, 0.05);
 }
 .w-house-wall-r {
-  background: #1c1a22;
+  background: #16272c;
 }
 .w-house-seg {
   position: absolute;
@@ -203,15 +203,15 @@
   top: 16px;
   width: 34px;
   height: 50px;
-  background: #0e0d12;
-  box-shadow: inset 0 0 0 1px rgba(255, 236, 220, 0.12);
+  background: #071013;
+  box-shadow: inset 0 0 0 1px rgba(220, 255, 250, 0.12);
   transition: background 0.5s var(--w-ease), box-shadow 0.5s var(--w-ease);
 }
 .w-house-win::before,
 .w-house-win::after {
   content: '';
   position: absolute;
-  background: rgba(17, 16, 21, 0.75);
+  background: rgba(8, 17, 20, 0.75);
 }
 .w-house-win::before {
   left: 50%;
@@ -231,8 +231,8 @@
   width: 124px;
   height: 58px;
   border-radius: 3px;
-  background: #0b0a0e;
-  box-shadow: 0 0 0 2px #2b2832;
+  background: #060d10;
+  box-shadow: 0 0 0 2px #263c42;
   overflow: hidden;
   transition: filter 0.5s var(--w-ease);
   filter: brightness(0.45);
@@ -259,18 +259,18 @@
   padding: 2px 3px;
 }
 .w-house-cap {
-  background: #2b2731;
+  background: #263c42;
 }
 .w-house-par {
-  background: #201d26;
-  box-shadow: inset 0 0 0 1px rgba(255, 236, 220, 0.06);
+  background: #1b2d33;
+  box-shadow: inset 0 0 0 1px rgba(220, 255, 250, 0.06);
 }
 .w-house-fx.w-house-par {
-  background: #26222d;
+  background: #20343b;
 }
 .w-house-part {
-  background: #242029;
-  box-shadow: inset 0 1px 0 rgba(255, 236, 220, 0.12);
+  background: #1e3137;
+  box-shadow: inset 0 1px 0 rgba(220, 255, 250, 0.12);
 }
 .w-house-roof {
   position: absolute;
@@ -322,7 +322,7 @@
   display: grid;
   place-items: center;
   border: 3px solid transparent;
-  background: linear-gradient(#1d1b23, #1d1b23) padding-box, var(--w-grad) border-box;
+  background: linear-gradient(#16252a, #16252a) padding-box, var(--w-grad) border-box;
   pointer-events: auto;
   cursor: grab;
   touch-action: none;
@@ -357,8 +357,8 @@
   height: 14px;
   padding: 0 5px;
   border-radius: 5px;
-  background: #24212b;
-  box-shadow: 0 0 0 1px rgba(255, 236, 220, 0.08);
+  background: #1b2d33;
+  box-shadow: 0 0 0 1px rgba(220, 255, 250, 0.08);
 }
 .w-house-msg b {
   flex: none;
@@ -370,7 +370,7 @@
 .w-house-msg s {
   height: 3px;
   border-radius: 2px;
-  background: #6f6779;
+  background: #677a79;
   text-decoration: none;
 }
 .w-house-msg em {
@@ -390,7 +390,7 @@
 .w-house-pics i {
   flex: 1;
   border-radius: 4px;
-  box-shadow: 0 0 0 1.5px #2b2832;
+  box-shadow: 0 0 0 1.5px #263c42;
   background: linear-gradient(160deg, #ffbe4b, #ff6a63 70%, #6e56cf);
   opacity: 0.6;
 }
@@ -404,8 +404,8 @@
   margin: -30px 0 0 -24px;
   padding: 5px 6px;
   border-radius: 6px;
-  background: #24212b;
-  box-shadow: 0 0 0 1px rgba(255, 236, 220, 0.1);
+  background: #1b2d33;
+  box-shadow: 0 0 0 1px rgba(220, 255, 250, 0.1);
   color: var(--w-accent);
   display: grid;
   grid-template-columns: 12px 1fr;
@@ -415,7 +415,7 @@
 .w-house-pin s {
   height: 3px;
   border-radius: 2px;
-  background: #6f6779;
+  background: #677a79;
   align-self: center;
 }
 .w-house-pin s + s {
@@ -434,8 +434,8 @@
 [data-lit~='shots'] .w-house-room[data-room='shots'],
 [data-lit~='links'] .w-house-room[data-room='links'] {
   background:
-    radial-gradient(closest-side at 50% 42%, rgba(255, 190, 75, 0.26), rgba(255, 138, 76, 0.08) 65%, rgba(255, 106, 99, 0)),
-    #221e24;
+    radial-gradient(closest-side at 50% 42%, rgba(255, 190, 75, 0.26), rgba(230, 178, 92, 0.08) 65%, rgba(230, 178, 92, 0)),
+    #1b2d33;
 }
 [data-lit~='game'] .w-house-room[data-room='game'] .w-house-room-name,
 [data-lit~='lounge'] .w-house-room[data-room='lounge'] .w-house-room-name,
@@ -460,8 +460,8 @@
 [data-here='lounge'] .w-house-room[data-room='lounge'],
 [data-here='game'] .w-house-room[data-room='game'] {
   background:
-    radial-gradient(closest-side at 50% 46%, rgba(255, 200, 90, 0.38), rgba(255, 138, 76, 0.12) 65%, rgba(255, 106, 99, 0)),
-    #262027;
+    radial-gradient(closest-side at 50% 46%, rgba(255, 200, 90, 0.38), rgba(230, 178, 92, 0.12) 65%, rgba(230, 178, 92, 0)),
+    #20343b;
 }
 .w-house-ripple {
   border-radius: 50%;
@@ -512,7 +512,7 @@
   position: absolute;
   left: 0;
   top: 0;
-  background: #1d1b23;
+  background: #16252a;
   border: 1px solid #2f2b36;
   border-radius: 14px;
   box-shadow: var(--w-shadow-window);
@@ -557,7 +557,7 @@
 }
 .w-house-avs .w-ava {
   margin-left: -6px;
-  outline: 2px solid #1d1b23;
+  outline: 2px solid #16252a;
 }
 .w-house-pop {
   width: 300px;
@@ -572,7 +572,7 @@
   font-weight: 600;
   padding-bottom: 8px;
   margin-bottom: 8px;
-  border-bottom: 1px solid #2a2731;
+  border-bottom: 1px solid #263c42;
 }
 .w-house-pop-head span {
   color: var(--w-app-muted);
@@ -615,7 +615,7 @@
   min-width: 300px;
   border-radius: 14px;
   background: var(--w-app-panel);
-  border: 1px solid rgba(54, 208, 143, 0.35);
+  border: 1px solid rgba(61, 220, 151, 0.35);
   color: var(--w-app-text);
   box-shadow: var(--w-shadow-window);
   animation: w-house-note-in 0.35s var(--w-ease);
@@ -625,7 +625,7 @@
   height: 10px;
   border-radius: 50%;
   background: var(--w-speak);
-  box-shadow: 0 0 0 3px rgba(54, 208, 143, 0.2);
+  box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.2);
 }
 .w-house-note-text {
   display: grid;
@@ -658,8 +658,8 @@
   left: calc(var(--x) * 1px - 13px);
   top: calc(var(--y) * 1px - 13px);
   border-radius: 8px;
-  background: rgba(255, 236, 220, 0.05);
-  box-shadow: inset 0 0 0 1px rgba(255, 236, 220, 0.08);
+  background: rgba(220, 255, 250, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(220, 255, 250, 0.08);
 }
 .w-house-tok {
   width: 30px;
@@ -712,7 +712,7 @@
   height: 26px;
   padding: 0 8px;
   border-radius: 9px;
-  background: #1f1d25;
+  background: var(--w-app-raised);
   box-shadow: inset 0 0 0 1px #2f2b36;
   font-size: 13px;
 }
@@ -721,8 +721,8 @@
   font-size: 12.5px;
 }
 .w-house-react.is-mine {
-  box-shadow: inset 0 0 0 1px rgba(255, 138, 61, 0.7);
-  background: rgba(255, 138, 61, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(230, 178, 92, 0.7);
+  background: rgba(230, 178, 92, 0.1);
 }
 
 @media (max-width: 1260px) {

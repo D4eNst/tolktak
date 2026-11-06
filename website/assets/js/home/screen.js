@@ -1,7 +1,7 @@
 import { loop, reducedMotion, visible } from '../site.js';
-import { share, sit } from './world.js';
+import { share } from './world.js';
 
-const section = document.getElementById('w-screen');
+const section = document.querySelector('[data-screen-pane]');
 const copy = JSON.parse(document.getElementById('w-screen-copy').textContent);
 const $ = selector => section.querySelector(selector);
 const $$ = selector => [...section.querySelectorAll(selector)];
@@ -13,12 +13,6 @@ const hint = $('[data-hint]');
 const turnLabel = $('[data-turn]');
 const live = () => app.dataset.state === 'live';
 
-let touched = false;
-let demo = 0;
-function noteTouch() {
-  touched = true;
-  clearTimeout(demo);
-}
 
 const minis = $$('[data-mini] i');
 const pieces = $$('.w-screen-pc').map((el, i) => {
@@ -195,7 +189,6 @@ board.addEventListener('click', e => {
   const el = e.target.closest('.w-screen-pc');
   const piece = el && pieces.find(p => p.el === el);
   if (!piece || !live() || !el.classList.contains('can-move') || (chain && chain !== piece)) return;
-  noteTouch();
   pick(picked === piece && !chain ? null : piece, e.detail === 0);
 });
 
@@ -276,43 +269,35 @@ function startShare() {
 
 tabs.forEach((tab, i) => {
   tab.addEventListener('click', () => {
-    noteTouch();
-    showTab(tab.dataset.tab);
+      showTab(tab.dataset.tab);
   });
   tab.addEventListener('keydown', e => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
     const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-    noteTouch();
-    showTab(next.dataset.tab);
+      showTab(next.dataset.tab);
     next.focus();
   });
 });
 $$('.w-screen-src').forEach(source => {
   source.addEventListener('click', () => {
-    noteTouch();
-    choose(source);
+      choose(source);
   });
   source.addEventListener('dblclick', startShare);
 });
 $('[data-share]').addEventListener('click', () => {
-  noteTouch();
   openPicker(true);
 });
 $('[data-stop]').addEventListener('click', () => {
-  noteTouch();
   pick(null);
   setState('idle');
 });
 $$('[data-pick-cancel]').forEach(button => button.addEventListener('click', () => {
-  noteTouch();
   setState('idle');
 }));
 $('[data-pick-go]').addEventListener('click', () => {
-  noteTouch();
   startShare();
 });
-shareAudio.addEventListener('change', noteTouch);
 picker.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   e.stopPropagation();
@@ -355,10 +340,8 @@ for (const [name, input] of Object.entries(volumes)) {
   paint();
   input.addEventListener('input', () => {
     paint();
-    noteTouch();
-  });
+    });
 }
-duck.addEventListener('change', noteTouch);
 
 let hit = 0;
 function knock(strength) {
@@ -385,28 +368,13 @@ loop(viewer, dt => {
   duckNote.classList.toggle('is-on', streaming && duck.checked && talking);
 });
 
-section.addEventListener('pointerdown', noteTouch);
-function runDemo() {
-  if (touched || app.dataset.state !== 'idle') return;
-  openPicker();
-  demo = setTimeout(() => {
-    if (touched) return;
-    showTab('windows');
-    choose(lists.windows.querySelector('[data-view="board"]'));
-    demo = setTimeout(() => !touched && startShare(), 900);
-  }, 1000);
-}
-
-visible(app, () => sit('screen'), null, 0.45);
-if (reducedMotion) {
-  setState('live');
-} else {
-  setState('idle');
-  let seen = false;
-  visible(app, () => {
-    chat();
-    if (seen) return;
-    seen = true;
-    demo = setTimeout(runDemo, 2200);
-  }, () => clearTimeout(chatter), 0.45);
-}
+section.addEventListener('w-screen-demo', event => {
+  if (event.detail === 'live') {
+    app.dataset.view = viewer.dataset.view = 'notes';
+    $('[data-wtitle]').textContent = document.documentElement.lang === 'ru' ? 'Варианты' : 'Options';
+    setState('live');
+  }
+  if (event.detail === 'idle') setState('idle');
+});
+if (!section.closest('[data-workstory]')) visible(app, () => chat(), () => clearTimeout(chatter), 0.45);
+setState('idle');

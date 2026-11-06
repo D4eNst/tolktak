@@ -1,0 +1,38 @@
+export const workspace = {
+  ru: {
+    chapters: [
+      { id: 'chat', label: 'общий', title: 'Чаты', lead: 'Личные сообщения и каналы в группах.' },
+      { id: 'voice', label: 'Общая', title: 'Звонки', lead: 'Аудио- и видеозвонки.' },
+      { id: 'screen', label: 'Общая', title: 'Показ экрана', lead: 'Экран или отдельное окно со звуком.' },
+      { id: 'layout', label: 'Интерфейс', title: 'Окна и вкладки', lead: 'Настройка расположения, размеров и прозрачности окон с чатами и звонками.' },
+      { id: 'sound', label: 'Настройки', title: 'Звук', lead: 'Шумоподавление, эхоподавление и выравнивание громкости голоса.' },
+      { id: 'appearance', label: 'Оформление', title: 'Темы и цвета', lead: 'Готовые темы и своя палитра.' },
+    ],
+    groups: 'Группы', people: 'Люди', here: 'вы здесь',
+    replay: 'В начало сцены',
+    tabs: 'Вкладки над окном', expand: 'Развернуть', float: 'Свободное окно',
+    popout: 'Открыть в отдельном окне',
+    opacity: 'Непрозрачность',
+    voice: 'Голос', appearance: 'Оформление', settings: 'Настройки', closeSettings: 'Закрыть настройки',
+    custom: 'Своя', hue: 'Оттенок', tint: 'Насыщенность', depth: 'Яркость', contrast: 'Контраст окон', accent: 'Акцент', light: 'Светлая тема',
+    links: ['Материалы', 'https://example.com'],
+  },
+  en: {
+    chapters: [
+      { id: 'chat', label: 'general', title: 'Chats', lead: 'Direct messages and group channels.' },
+      { id: 'voice', label: 'Common room', title: 'Calls', lead: 'Voice and video calls.' },
+      { id: 'screen', label: 'Common room', title: 'Screen sharing', lead: 'A screen or a single window, with sound.' },
+      { id: 'layout', label: 'Interface', title: 'Windows and tabs', lead: 'Custom layouts, window sizes and opacity for chats and calls.' },
+      { id: 'sound', label: 'Settings', title: 'Sound', lead: 'Noise suppression, echo cancellation and voice volume levelling.' },
+      { id: 'appearance', label: 'Appearance', title: 'Themes and colours', lead: 'Preset themes and a custom palette.' },
+    ],
+    groups: 'Groups', people: 'People', here: 'you are here',
+    replay: 'Scene start',
+    tabs: 'Tabs above window', expand: 'Expand', float: 'Floating window',
+    popout: 'Open in a separate window',
+    opacity: 'Opacity',
+    voice: 'Voice', appearance: 'Appearance', settings: 'Settings', closeSettings: 'Close settings',
+    custom: 'Custom', hue: 'Hue', tint: 'Tint', depth: 'Brightness', contrast: 'Pane contrast', accent: 'Accent', light: 'Light theme',
+    links: ['Resources', 'https://example.com'],
+  },
+};

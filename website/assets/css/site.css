@@ -1,8 +1,34 @@
 @font-face {
-  font-family: 'Golos Text';
-  src: url('/fonts/golos-text.woff2') format('woff2');
-  font-weight: 400 900;
+  font-family: 'Onest Variable';
+  font-style: normal;
   font-display: swap;
+  font-weight: 100 900;
+  src: url(/fonts/onest-cyrillic-ext.woff2) format('woff2-variations');
+  unicode-range: U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Onest Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(/fonts/onest-cyrillic.woff2) format('woff2-variations');
+  unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
+}
+@font-face {
+  font-family: 'Onest Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(/fonts/onest-latin-ext.woff2) format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Onest Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(/fonts/onest-latin.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 @font-face {
   font-family: 'JetBrains Mono';
@@ -12,41 +38,44 @@
 }
 
 :root {
-  --w-ground: #111015;
-  --w-panel: #16151b;
-  --w-raised: #1f1d25;
-  --w-hover: #27242e;
-  --w-line: #2a2731;
-  --w-line-2: #3a3642;
-  --w-control: #6b6575;
-  --w-ink: #f3eef0;
-  --w-ink-2: #c9c1cc;
-  --w-muted: #9a91a3;
-  --w-faint: #8a8294;
-  --w-accent: #ff8a3d;
-  --w-on-accent: #17120f;
-  --w-link: #ffa66b;
-  --w-speak: #36d08f;
-  --w-live: #ef4b55;
+  --w-ground: #081114;
+  --w-panel: #0f1b1f;
+  --w-raised: #16252a;
+  --w-hover: #1b2d33;
+  --w-active: #1f3a40;
+  --w-line: rgba(220, 255, 250, 0.06);
+  --w-line-2: rgba(220, 255, 250, 0.12);
+  --w-control: #677a79;
+  --w-ink: #ecf2f1;
+  --w-ink-2: #c7d4d2;
+  --w-muted: #8fa3a1;
+  --w-faint: #819593;
+  --w-accent: #e6b25c;
+  --w-accent-2: #f3d08a;
+  --w-on-accent: #241703;
+  --w-link: #f0c98a;
+  --w-speak: #3ddc97;
+  --w-live: #d93644;
+  --w-danger: #ff6b78;
   --w-you: #ff8a4c;
   /* App windows stay dark when the docs switch to the light theme. */
-  --w-app-bg: #111015;
-  --w-app-panel: #16151b;
-  --w-app-raised: #1f1d25;
-  --w-app-line: #2a2731;
-  --w-app-text: #f3eef0;
-  --w-app-muted: #9a91a3;
-  --w-grad: linear-gradient(135deg, #ff6a63 0%, #ff8a4c 50%, #ffbe4b 100%);
-  --w-ring: 0 0 0 2px var(--w-panel), 0 0 0 4px var(--w-speak), 0 0 14px 2px rgba(54, 208, 143, 0.4);
+  --w-app-bg: #081114;
+  --w-app-panel: #0f1b1f;
+  --w-app-raised: #16252a;
+  --w-app-line: rgba(220, 255, 250, 0.06);
+  --w-app-text: #ecf2f1;
+  --w-app-muted: #8fa3a1;
+  --w-grad: linear-gradient(135deg, #e39a4c 0%, #e6b25c 50%, #f3d08a 100%);
+  --w-ring: 0 0 0 2px var(--w-panel), 0 0 0 4px var(--w-speak), 0 0 14px 2px rgba(61, 220, 151, 0.4);
   --w-shadow-window: 0 14px 44px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   --w-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --w-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --w-sans: 'Golos Text', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --w-sans: 'Onest Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --w-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --w-pad: 48px;
   --w-max: 1344px;
   --w-header: 72px;
-  --focus: #ffbe4b;
+  --focus: #e6b25c;
   color-scheme: dark;
 }
 
@@ -102,7 +131,7 @@ button:disabled {
   outline-offset: 2px;
 }
 ::selection {
-  background: rgba(255, 140, 90, 0.35);
+  background: rgba(230, 178, 92, 0.35);
 }
 .icon {
   flex: none;
@@ -237,8 +266,8 @@ button:disabled {
   min-height: 52px;
   padding: 0 24px;
   border-radius: 12px;
-  border: 1px solid var(--w-control);
-  background: transparent;
+  border: 1px solid var(--w-line-2);
+  background: var(--w-raised);
   color: var(--w-ink);
   font: 600 16.5px/1 var(--w-sans);
   text-decoration: none;
@@ -246,7 +275,7 @@ button:disabled {
   transition: transform 160ms var(--w-ease), background-color 160ms var(--w-ease), border-color 160ms var(--w-ease);
 }
 .w-btn:hover {
-  background: var(--w-raised);
+  background: var(--w-hover);
   border-color: var(--w-muted);
 }
 .w-btn:active {
@@ -256,7 +285,7 @@ button:disabled {
   border: 0;
   background: var(--w-grad);
   color: var(--w-on-accent);
-  box-shadow: 0 10px 30px -12px rgba(255, 106, 99, 0.6);
+  box-shadow: 0 10px 30px -12px rgba(230, 178, 92, 0.6);
 }
 .w-btn--primary:hover {
   background: var(--w-grad);
@@ -309,9 +338,9 @@ button:disabled {
 
 .w-win {
   position: relative;
-  background: var(--w-app-bg);
-  border: 1px solid var(--w-line);
-  border-radius: 18px;
+  background: var(--w-app-panel);
+  border: 1px solid var(--w-app-line);
+  border-radius: 20px;
   box-shadow: var(--w-shadow-window);
   color: var(--w-app-text);
   font-size: 14px;
@@ -426,7 +455,7 @@ button:disabled {
   align-items: flex-start;
   justify-content: center;
   padding: 14vh 16px 16px;
-  background: rgba(8, 7, 10, 0.62);
+  background: rgba(4, 10, 12, 0.62);
 }
 .w-switch[hidden] {
   display: none;
@@ -496,7 +525,7 @@ button:disabled {
 }
 .w-switch-list mark {
   background: none;
-  color: var(--w-accent);
+  color: var(--w-link);
   font-weight: 650;
 }
 .w-switch-empty {

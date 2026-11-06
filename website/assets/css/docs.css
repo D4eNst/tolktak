@@ -1,16 +1,23 @@
 :root[data-theme='light'] {
-  --w-ground: #f4eee5;
-  --w-panel: #fbf7f0;
-  --w-raised: #ebe3d6;
-  --w-line: #ddd3c5;
-  --w-line-2: #cdc1b0;
-  --w-control: #8a7f70;
-  --w-ink: #17141c;
-  --w-ink-2: #453e4b;
-  --w-muted: #675e6e;
-  --w-faint: #675e6e;
-  --w-link: #a8431a;
-  --focus: #17141c;
+  --w-ground: #e8e2d7;
+  --w-panel: #f7f3ec;
+  --w-raised: #ebe4d8;
+  --w-hover: #e4dccf;
+  --w-active: #f4dcc8;
+  --w-line: rgba(60, 40, 20, 0.08);
+  --w-line-2: rgba(60, 40, 20, 0.15);
+  --w-control: #7b6f63;
+  --w-ink: #241e18;
+  --w-ink-2: #4a4037;
+  --w-muted: #6c6055;
+  --w-faint: #6c6055;
+  --w-accent: #e0612b;
+  --w-accent-2: #f09a35;
+  --w-on-accent: #241703;
+  --w-link: #a3421b;
+  --w-grad: linear-gradient(135deg, #ec5547 0%, #e8692f 50%, #f0a035 100%);
+  --w-shadow-window: 0 14px 44px rgba(40, 30, 20, 0.16), 0 2px 8px rgba(40, 30, 20, 0.08);
+  --focus: #a3421b;
   color-scheme: light;
 }
 
@@ -436,7 +443,7 @@
     position: fixed;
     inset: 0;
     z-index: 80;
-    background: rgba(8, 7, 10, 0.55);
+    background: rgba(4, 10, 12, 0.55);
   }
 }
 @media (max-width: 760px) {

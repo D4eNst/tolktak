@@ -22,18 +22,7 @@ const toggle = (name, label) => `<label class="w-sound-switch">
 export default function sound(ctx) {
   const { lang } = ctx;
   const c = copy[lang];
-  return `<section class="w-scene w-sound" id="w-sound" aria-labelledby="w-sound-title">
-  <div class="w-scene-text">
-    <p class="w-room">${icon('settings', 15)}${c.room}</p>
-    <h2 class="w-h2" id="w-sound-title">${c.title}</h2>
-    <p class="w-lead">${c.lead}</p>
-    <ul class="w-facts">
-      <li>${icon('keyboard', 18)}${c.facts[0]}</li>
-      <li>${icon('headphones', 18)}${c.facts[1]}</li>
-      <li>${icon('wave', 18)}${c.facts[2]}</li>
-      <li>${icon('mic', 18)}${c.facts[3]}</li>
-    </ul>
-  </div>
+  return `<div data-sound-pane>
   <div class="w-stage w-sound-stage">
     <div class="w-sound-panel w-win">
       <div class="w-sound-field" data-field>
@@ -101,5 +90,5 @@ export default function sound(ctx) {
     </div>
   </div>
   ${json('w-sound-copy', { hear: c.hear, stop: c.stop })}
-</section>`;
+</div>`;
 }

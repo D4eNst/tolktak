@@ -122,8 +122,8 @@
   width: 0;
   height: 0;
   border-radius: 28px;
-  border: 1px solid rgba(255, 240, 255, 0.13);
-  background: rgba(22, 21, 27, 0.86);
+  border: 1px solid rgba(220, 255, 250, 0.13);
+  background: rgba(15, 27, 31, 0.86);
   opacity: 0;
   transition: opacity 0.35s var(--w-ease);
   pointer-events: none;
@@ -137,7 +137,7 @@
   inset: 0;
   border-radius: inherit;
   overflow: hidden;
-  background: linear-gradient(to top, rgba(255, 138, 76, 0.16), rgba(255, 138, 76, 0) 58%);
+  background: linear-gradient(to top, rgba(230, 178, 92, 0.16), rgba(230, 178, 92, 0) 58%);
 }
 .w-hero-room-floor::after {
   content: '';
@@ -161,7 +161,7 @@
   padding: 0 13px 0 11px;
   border-radius: 999px;
   background: var(--w-panel);
-  border: 1px solid rgba(255, 240, 255, 0.16);
+  border: 1px solid rgba(220, 255, 250, 0.16);
   font-size: 13px;
   line-height: 1;
   white-space: nowrap;
@@ -221,7 +221,7 @@
   position: absolute;
   inset: 6px;
   border-radius: 50%;
-  background: rgba(255, 138, 76, 0.1);
+  background: rgba(230, 178, 92, 0.1);
 }
 .w-hero-you-label {
   position: absolute;
@@ -362,4 +362,12 @@
   .w-hero-ui {
     display: none;
   }
+}
+
+.w-hero-room-placeholder {
+  width: 78px;
+  height: 7px;
+  border-radius: 4px;
+  background: currentColor;
+  opacity: .35;
 }

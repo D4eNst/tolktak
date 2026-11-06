@@ -45,7 +45,7 @@ export default function hero({ lang, release }) {
     <div class="w-stage w-hero-stage">
       <div class="w-hero-play" aria-hidden="true">
         <div class="w-hero-room"><div class="w-hero-room-floor"></div></div>
-        <p class="w-hero-room-head"><span class="w-hero-room-ico">${icon('speaker', 15)}</span><b>${c.room}</b><span class="w-hero-room-count">${fill(c.inRoom, { n: 3 })}</span></p>
+        <p class="w-hero-room-head"><span class="w-hero-room-ico">${icon('speaker', 15)}</span><span class="w-hero-room-placeholder"></span><span class="w-hero-room-count">${fill(c.inRoom, { n: 3 })}</span></p>
         ${people}
         <div class="w-hero-you"><span class="w-hero-you-ring"></span><span class="w-hero-you-label">${person('me', lang).name}</span></div>
       </div>

@@ -15,19 +15,7 @@ export default function screen(ctx) {
   const pieces = [...black.map(at => ['b', at]), ...white.map(at => ['w', at])];
   const check = `<span class="w-screen-check" aria-hidden="true">${icon('check', 13)}</span>`;
   const live = `<span class="w-live">${site[lang].live}</span>`;
-  return `<section class="w-scene w-screen" id="w-screen" aria-labelledby="w-screen-title">
-  <div class="w-scene-text w-screen-text">
-    <div class="w-screen-head">
-      <p class="w-room w-room--voice">${icon('speaker', 15)}${c.room}</p>
-      <h2 class="w-h2" id="w-screen-title">${c.title}</h2>
-      <p class="w-lead">${c.lead}</p>
-    </div>
-    <ul class="w-facts">
-      <li>${icon('screen', 18)}${c.facts[0]}</li>
-      <li>${icon('headphones', 18)}${c.facts[1]}</li>
-      <li>${icon('speaker', 18)}${c.facts[2]}</li>
-    </ul>
-  </div>
+  return `<div data-screen-pane>
   <div class="w-stage w-screen-stage">
     <div class="w-screen-app w-win" data-state="live" data-source="window" data-view="board" data-audio="on">
       <header class="w-screen-bar">
@@ -49,7 +37,7 @@ export default function screen(ctx) {
                 <p class="w-screen-score"><span data-score-w>0</span> : <span data-score-b>0</span></p>
               </div>
             </div>
-            <div class="w-screen-other is-notes" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="w-screen-other is-notes" aria-hidden="true"><div class="w-story-variants"><div><span>01</span><i></i><i></i><b></b></div><div><span>02</span><i></i><i></i><b></b></div></div></div>
             <div class="w-screen-other is-player" aria-hidden="true"><b>${icon('play', 22)}</b><i></i></div>
           </div>
           <figcaption class="w-screen-tag">${live}<span>${c.yourStream}</span><span class="w-screen-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span></figcaption>
@@ -131,5 +119,5 @@ export default function screen(ctx) {
     </aside>
   </div>
   ${json('w-screen-copy', { audio: c.audio, audioHint: c.audioHint, turn: c.turn, piece: c.piece, target: c.target, hint: c.hint, board: c.windows.board })}
-</section>`;
+</div>`;
 }

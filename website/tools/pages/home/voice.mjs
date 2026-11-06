@@ -1,8 +1,9 @@
-import { ava, fill, icon, json, person } from '../../html.mjs';
+import { ava, fill, icon, json, person as profile } from '../../html.mjs';
 import { voice as copy } from '../../../content/home/voice.mjs';
 
-export const room = ['alisa', 'borya', 'vera', 'dima'];
-const online = ['ira', 'pasha', 'lena'];
+export const room = ['pasha', 'lena', 'dima'];
+const online = ['ira', 'borya', 'vera'];
+const person = (id, lang) => ({ ...profile(id, lang), name: ({ ru: { pasha: 'Саша', dima: 'Миша' }, en: { pasha: 'Alex', dima: 'Mike' } })[lang][id] || profile(id, lang).name });
 
 const veraCamera = `<svg class="w-voice-cam" viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
   <defs>
@@ -54,7 +55,7 @@ const yourCamera = `<svg class="w-voice-cam" viewBox="0 0 320 180" preserveAspec
 
 function tile(id, lang, speaking) {
   const p = person(id, lang);
-  if (id === 'vera') {
+  if (id === 'lena') {
     return `<li class="w-voice-tile is-cam" data-who="${id}" style="--c:${p.color}">${veraCamera}<span class="w-voice-name">${icon('video', 13)}${p.name}</span></li>`;
   }
   return `<li class="w-voice-tile${speaking ? ' is-speaking' : ''}" data-who="${id}" style="--c:${p.color}">
@@ -65,21 +66,7 @@ function tile(id, lang, speaking) {
 export default function voice({ lang }) {
   const c = copy[lang];
   const control = (vc, name, label, extra = '') => `<button type="button" class="w-voice-cb${vc === 'leave' ? ' w-voice-cb--leave' : ''}" data-vc="${vc}" aria-label="${label}" title="${label}"${extra}>${icon(name, 20)}</button>`;
-  return `<section class="w-scene w-voice" id="w-voice" aria-labelledby="w-voice-title">
-  <div class="w-scene-text w-voice-intro">
-    <div class="w-voice-intro-a">
-      <p class="w-room w-room--voice">${icon('speaker', 15)}${c.room}</p>
-      <h2 class="w-h2" id="w-voice-title">${c.title}</h2>
-    </div>
-    <div class="w-voice-intro-b">
-      <p class="w-lead">${c.lead}</p>
-      <ul class="w-facts">
-        <li>${icon('speaker', 18)}${c.facts.speaker}</li>
-        <li>${icon('phone', 18)}${c.facts.phone}</li>
-        <li>${icon('video', 18)}${c.facts.video}</li>
-      </ul>
-    </div>
-  </div>
+  return `<div data-voice-pane>
   <div class="w-stage">
     <div class="w-voice-layout" data-voice>
       <div class="w-voice-room w-win" data-voice-room>
@@ -136,5 +123,5 @@ export default function voice({ lang }) {
     inRoom: c.inRoom, status: c.status, controls: c.controls, micOff: c.micOff, disconnect: c.disconnect,
     ringing: c.ringing, directCall: c.directCall, inCall: c.inCall, announce: c.announce,
   })}
-</section>`;
+</div>`;
 }

@@ -7,6 +7,7 @@ import './home/voice.js';
 import './home/screen.js';
 import './home/sound.js';
 import './home/server.js';
+import './home/workspace.js';
 import './home/finale.js';
 
 // CSS loops pause while their section is off screen.

@@ -2,7 +2,7 @@ import { ava, conversation, fill, icon, nameOf, reducedMotion, visible } from '.
 import { draggable } from './drag.js';
 import { seated, sit } from './world.js';
 
-const section = document.getElementById('w-voice');
+const section = document.querySelector('[data-voice-pane]');
 const copy = JSON.parse(document.getElementById('w-voice-copy').textContent);
 const layout = section.querySelector('[data-voice]');
 const room = layout.querySelector('[data-voice-room]');
@@ -26,16 +26,16 @@ let mic = true;
 let sound = true;
 let cam = false;
 let you = null;
+let scripted = false;
 
 const talk = conversation(() => [...tiles.children].filter(t => t !== you || (mic && sound)), { min: 900, max: 2400 });
-if (!reducedMotion) {
+if (!reducedMotion && !section.closest('[data-workstory]')) {
   tiles.querySelector('.is-speaking')?.classList.remove('is-speaking');
   visible(room, () => talk.start(), () => talk.stop());
 }
 
-// FLIP, so the tiles glide to their new places when you join or leave.
 function reflow(change) {
-  if (reducedMotion) return change();
+  if (reducedMotion || scripted) return change();
   const before = new Map([...tiles.children].map(t => [t, t.getBoundingClientRect()]));
   change();
   for (const t of tiles.children) {
@@ -108,7 +108,7 @@ function enter() {
   announce(copy.announce.joined);
   paintYou();
   syncCount();
-  if (reducedMotion) return;
+  if (reducedMotion || scripted) return;
   setTimeout(() => you && mic && sound && you.classList.add('is-speaking'), 650);
   setTimeout(() => you?.classList.remove('is-speaking'), 2200);
 }
@@ -255,3 +255,11 @@ draggable(chip, {
   end: () => layout.classList.remove('is-dragging'),
 });
 chip.addEventListener('click', enter);
+
+section.addEventListener('w-voice-demo', event => {
+  scripted = true;
+  event.detail ? enter() : leave();
+  tiles.querySelectorAll('.is-speaking').forEach(tile => tile.classList.remove('is-speaking'));
+  if (event.detail) tiles.firstElementChild.classList.add('is-speaking');
+  scripted = false;
+});

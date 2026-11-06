@@ -1,10 +1,10 @@
 export const screen = {
   ru: {
-    room: 'Игровой вечер',
+    room: 'Комната 2',
     title: 'Экран и совместный просмотр',
     lead: 'Демонстрация экрана или отдельного окна.',
     facts: ['Весь экран или одно окно', 'Отдельная громкость трансляции и голосов', 'Режим «Тише при разговоре»'],
-    roomTitle: 'Игровой вечер · Выходные',
+    roomTitle: 'Комната 2 · На связи',
     inRoom: '{n} в комнате',
     sharing: 'вы показываете «{name}»',
     audio: { none: 'без звука', app: 'со звуком приложения', system: 'со звуком компьютера' },
@@ -28,11 +28,11 @@ export const screen = {
     duckNote: 'Звук трансляции приглушён во время разговора',
   },
   en: {
-    room: 'Game night',
+    room: 'Room 2',
     title: 'Screen sharing and watching together',
     lead: 'Share a whole screen or a single window.',
     facts: ['A whole screen or one window', 'Separate volume for the stream and for voices', '“Lower while talking” mode'],
-    roomTitle: 'Game night · Weekend',
+    roomTitle: 'Room 2 · In touch',
     inRoom: '{n} in room',
     sharing: 'you are sharing “{name}”',
     audio: { none: 'no sound', app: 'with app sound', system: 'with system sound' },

@@ -11,12 +11,22 @@ view: download the app, or set up a server.
 - The visitor first gathers a group of people with the pointer. Further down the
   same people move into an isometric house: the house is the server, a floor is a
   group, rooms are its text channels and voice rooms, lit where people talk.
-- Below, each feature is a room with its own small interaction that demonstrates
-  the real feature: chat, voice and video, screen sharing and watching together,
-  sound settings, the server itself. The page ends with the house at night and
-  the download block.
-- The section navigation looks like the app's channel list and follows the
-  scroll. Ctrl+K opens a quick switcher like the app's.
+- Below the house, one pinned, illustrated client follows a continuous story:
+  a second channel becomes a tab, a call opens beside the chat, screen sharing
+  starts in that same room, and the chat floats over the stream. Voice settings
+  and appearance finish the sequence. The server and download sections follow.
+- Native scrolling controls the cursor, presses, dragging, window geometry and
+  theme changes on one timeline measured against the pinned frame height.
+  Cursor travel, presses and their results have separate scroll intervals.
+  A 100 ms follower softens wheel steps and settles at the exact scroll position;
+  chapter links and large jumps seek directly. Scrolling back reverses the scene.
+  The sidebar and chapter links navigate the story. There is no window editor,
+  user resizing, or three-column arrangement. Compact screens stack two panes.
+- The demo retains its drawn avatars, flat surfaces and the client's separate
+  tab capsules. Themes affect only the illustrated client. Ctrl+K opens the
+  site's quick switcher.
+- Settings cover the illustrated client with a blurred backdrop. A schematic
+  vertical menu selects sound and appearance in sequence.
 - Every effect says something about the product. Physics, flights and loops stop
   off screen and give way to calm final states with reduced motion. Without
   JavaScript every text and link is present.
@@ -32,12 +42,13 @@ view: download the app, or set up a server.
 
 ## Look
 
-- The app's dark palette: ground `#111015`, panels `#16151b`, ink `#f3eef0`,
-  muted `#9a91a3`, orange accent `#ff8a3d`, green `#36d08f` only for a speaking
-  ring or connected voice, red `#ef4b55` only for LIVE and leaving a call.
-- The logo gradient appears only on the logo and the primary download button.
-- Golos Text for everything, set tight and heavy in headings; JetBrains Mono for
-  room labels, addresses and code. Both are self-hosted.
+- The app's dark palette: Petrol ground `#081114`, panels `#0f1b1f`, ink `#ecf2f1`,
+  muted `#8fa3a1`, amber accent `#e6b25c`, green `#3ddc97` only for a speaking
+  ring or connected voice, red `#d93644` only for LIVE and leaving a call.
+- The logo keeps its original gradient; primary buttons use the app’s amber gradient.
+- Onest for interface and body text, set tight and heavy in headings; JetBrains Mono for
+  room labels, addresses and code. Both are self-hosted. The documentation’s
+  light mode follows the Paper theme.
 - Interface fragments are redrawn from the app with its real labels and icons;
   the people and conversations are sample data.
 
