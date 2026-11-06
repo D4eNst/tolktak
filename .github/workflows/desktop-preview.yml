@@ -7,7 +7,7 @@ on:
     inputs:
       version:
         description: Preview version
-        default: 0.3.0-rc.1
+        default: 0.3.0
 
 permissions:
   contents: read
@@ -36,9 +36,11 @@ jobs:
       - name: Set preview version
         run: npm version --no-git-tag-version --allow-same-version "$PREVIEW_VERSION"
         env:
-          PREVIEW_VERSION: ${{ inputs.version || '0.3.0-rc.1' }}
+          PREVIEW_VERSION: ${{ inputs.version || '0.3.0' }}
       - run: npm run typecheck
       - run: npm run build
+        env:
+          NODE_ENV: production
       - name: Build installer and portable archive
         run: npx electron-builder --win --x64 --publish never
       - name: Check packaged Windows bindings

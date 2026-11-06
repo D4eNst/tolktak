@@ -43,6 +43,8 @@ jobs:
         shell: bash
         run: npm pkg set "build.publish[0].owner=$GITHUB_REPOSITORY_OWNER" "build.publish[0].repo=${GITHUB_REPOSITORY#*/}"
       - run: npm run build
+        env:
+          NODE_ENV: production
       - name: Package and publish
         shell: bash
         run: |
@@ -102,16 +104,15 @@ jobs:
           echo "hub=docker.io/${HUB,,}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
         env:
           HUB: ${{ secrets.DOCKERHUB_USERNAME }}
-      # Pre-releases get only their own tag; latest follows stable releases.
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
+          flavor: latest=false
           images: |
             ${{ steps.image.outputs.name }}
             name=${{ steps.image.outputs.hub }},enable=${{ env.DOCKERHUB }}
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
       - id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -154,3 +155,44 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: deploy-files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      DOCKERHUB: ${{ github.repository == 'D4eNst/tolktak' || secrets.DOCKERHUB_USERNAME != '' }}
+      HUB: ${{ secrets.DOCKERHUB_USERNAME }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        if: env.DOCKERHUB == 'true'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Promote images and publish release
+        shell: bash
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          if [[ "$version" == *-* ]]; then
+            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease --latest=false
+          else
+            for name in tolktak tolktak-server; do
+              image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$name"
+              docker buildx imagetools create --tag "$image:latest" --tag "$image:${version%.*}" "$image:$version"
+              if [[ "$DOCKERHUB" == true ]]; then
+                image="docker.io/${HUB,,}/$name"
+                docker buildx imagetools create --tag "$image:latest" --tag "$image:${version%.*}" "$image:$version"
+              fi
+            done
+            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease=false --latest
+          fi
