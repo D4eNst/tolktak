@@ -144,3 +144,13 @@ jobs:
       - run: gh release upload "$GITHUB_REF_NAME" deploy/install.sh deploy/compose.yaml deploy/example.env --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Add release notes
+        shell: bash
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          notes=".github/release-notes/${version%%-*}.md"
+          if [ -f "$notes" ]; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file "$notes"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
