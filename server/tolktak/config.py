@@ -10,36 +10,38 @@ class ConfigError(Exception):
 @dataclass(frozen=True)
 class Config:
     server_name: str = "TolkTak"
-    # "open", "invite" or "closed". The first account can always be created.
+    # open/invite/closed; the first account is always allowed.
     registration: str = "invite"
-    # ws(s):// URL clients use to reach the SFU; derived from each request when empty.
-    livekit_public_url: str = ""
+    livekit_public_url: str = ""  # legacy: no longer advertised to clients
+    # Public app signaling origin; empty derives it from the request.
+    signaling_public_url: str = ""
+    signaling_private: bool = False
     livekit_internal_url: str = "http://127.0.0.1:7880"
     livekit_api_key: str = ""
     livekit_api_secret: str = ""
-    # Start livekit-server as a child process with keys kept in the data directory.
+    # Start LiveKit with persistent keys in the data directory.
     embedded_livekit: bool = False
     client_download_url: str = ""
-    # Use X-Forwarded-For for rate limiting (enable only behind a reverse proxy).
+    # Trust forwarded headers only behind a reverse proxy.
     trust_proxy: bool = False
     data_dir: Path = Path("data")
-    # SQLite in the data directory unless a postgres:// URL is given.
+    # Empty uses SQLite in the data directory.
     database_url: str = ""
-    # Files go to this S3 bucket instead of the data directory when it is set.
+    # A bucket switches file storage from disk to S3.
     s3_bucket: str = ""
     s3_endpoint: str = ""
     s3_region: str = ""
     s3_access_key: str = ""
     s3_secret_key: str = ""
     max_upload_bytes: int = 50 << 20
-    # Total size of the files one user may keep; 0 for no limit.
+    # Per-user quota; 0 disables it.
     user_quota_bytes: int = 2048 << 20
     listen_host: str = "0.0.0.0"
     listen_port: int = 8080
     debug: bool = False
     # "auto", "manual" or "off".
     updates: str = "manual"
-    # Whose GitHub releases the server follows; release images are built with their own repository.
+    # GitHub release source; set by the release image.
     repository: str = "D4eNst/tolktak"
 
     @property
@@ -97,6 +99,8 @@ def from_env() -> Config:
         server_name=_env("TOLKTAK_SERVER_NAME", "TolkTak"),
         registration=reg,
         livekit_public_url=_env("LIVEKIT_PUBLIC_URL"),
+        signaling_public_url=_env("TOLKTAK_SIGNALING_PUBLIC_URL"),
+        signaling_private=_env("TOLKTAK_SIGNALING_PRIVATE") == "1",
         livekit_internal_url=_env("LIVEKIT_INTERNAL_URL", "http://127.0.0.1:7880").rstrip("/"),
         livekit_api_key=key,
         livekit_api_secret=secret,

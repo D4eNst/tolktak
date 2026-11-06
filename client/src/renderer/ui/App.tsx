@@ -1,25 +1,34 @@
 import { useEffect, useState } from 'preact/hooks';
 import { bridge } from '../bridge';
 import { t } from '../i18n';
-import { installHotkeys, loadHotkeys } from '../keys';
+import { installHotkeys, loadHotkeys, cmd } from '../keys';
 import { boot, booting, incomingCall, session, settingsOpen, switcherOpen, toasts, totalUnread, typing } from '../state';
 import { call, toggleMic } from '../voice';
 import { LightboxHost } from './Chat';
-import { AskHost, MenuHost } from './common';
+import { AskHost, infoDialog, MenuHost } from './common';
 import { IncomingCallDialog, QuickSwitcher } from './Dialogs';
 import { Login } from './Login';
 import { ProfileHost } from './Profile';
+import { ModerationHost } from './Moderation';
 import { SettingsDialog } from './Settings';
 import { Shell, TitleBar } from './Shell';
+import { Tour } from './Tour';
 
 function Toasts() {
   return (
     <div class="toasts" role="status" aria-live="polite">
-      {toasts.value.map((t) => (
-        <div key={t.id} class={'toast ' + t.kind}>
-          {t.text}
-        </div>
-      ))}
+      {toasts.value.map((x) =>
+        x.more ? (
+          <button key={x.id} class={'toast more ' + x.kind} style={{ '--out': `${x.ms - 700}ms` }} onClick={() => infoDialog(x.text, x.more!)}>
+            {x.text}
+            <span class="toast-more">{t().common.more}</span>
+          </button>
+        ) : (
+          <div key={x.id} class={'toast ' + x.kind} style={{ '--out': `${x.ms - 700}ms` }}>
+            {x.text}
+          </div>
+        ),
+      )}
     </div>
   );
 }
@@ -82,11 +91,12 @@ export function App() {
     const offKeys = installHotkeys();
     const keys = (e: KeyboardEvent) => {
       if (!session.value) return;
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+      if (cmd(e) && !e.shiftKey && e.code === 'KeyK') {
+        if (document.querySelector('.modal-backdrop')) return;
         e.preventDefault();
         switcherOpen.value = !switcherOpen.value;
       }
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyM' && call.value) {
+      if (cmd(e) && e.shiftKey && e.code === 'KeyM' && call.value) {
         e.preventDefault();
         toggleMic();
       }
@@ -111,6 +121,12 @@ export function App() {
     };
   }, []);
 
+  const ready = !booting.value;
+  useEffect(() => {
+    // Hidden windows receive no animation frames.
+    if (ready) setTimeout(() => bridge.ready(), 50);
+  }, [ready]);
+
   const unread = totalUnread.value;
   useEffect(() => {
     bridge.setBadge(unread, unread ? badgeImage(unread) : '').catch(() => {});
@@ -133,7 +149,9 @@ export function App() {
       {session.value && switcherOpen.value && <QuickSwitcher />}
       {session.value && settingsOpen.value && <SettingsDialog />}
       {session.value && incomingCall.value && <IncomingCallDialog />}
+      {session.value && <Tour />}
       <ProfileHost />
+      <ModerationHost />
       <LightboxHost />
       <MenuHost />
       <AskHost />

@@ -122,7 +122,7 @@ export async function launchElectron(opts: { electron: string; app: string; args
       for (;;) {
         const ok = await run(
           ([s, t]: [string, string]) => {
-            const el = [...document.querySelectorAll<HTMLElement>(s)].find((e) => !t || (e.textContent ?? '').includes(t));
+            const el = [...document.querySelectorAll<HTMLElement>(s)].find((e) => !t || (e.textContent ?? '').includes(t) || e.getAttribute('aria-label') === t);
             el?.click();
             return !!el;
           },

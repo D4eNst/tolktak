@@ -1,25 +1,24 @@
 import type en from '../en/launch';
 
 const ru: typeof en = {
-  checking: 'Проверяем обновления',
-  checkingDetail: 'Спрашиваем сервер, какая версия нужна',
-  downloading: (v) => `Загружаем ${v}`,
+  checking: 'Проверка обновлений',
+  downloading: (v) => `Загрузка версии ${v}`,
   progress: (done, total, speed) => `${done} из ${total} МБ · ${speed} МБ/с`,
-  installing: 'Устанавливаем',
-  installingDetail: 'Окно закроется и откроется само',
-  starting: 'Запускаем TolkTak',
+  installing: 'Установка обновления',
+  installingDetail: 'TolkTak будет перезапущен автоматически.',
+  starting: 'Запуск TolkTak',
   offline: 'Сервер не отвечает',
-  offlineDetail: 'Запускаем без проверки',
+  offlineDetail: 'Запуск без проверки обновлений',
   failed: 'Загрузка прервалась',
-  required: (v) => `Серверу нужна версия ${v} или новее`,
+  required: (v) => `Для подключения требуется версия ${v} или новее`,
   available: (v) => `Доступна версия ${v}`,
-  manualMac: 'На macOS обновление ставится вручную',
-  manualOther: 'Эта сборка обновляется вручную',
+  manualMac: 'На macOS требуется ручная установка обновления',
+  manualOther: 'Требуется ручная установка обновления',
   retry: 'Повторить',
   downloadManually: 'Скачать вручную',
   download: 'Скачать',
   later: 'Позже',
-  quit: 'Выйти',
+  quit: 'Закрыть приложение',
 };
 
 export default ru;

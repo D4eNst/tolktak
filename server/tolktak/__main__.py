@@ -34,7 +34,7 @@ def serve() -> int:
     app = create_app(cfg)
     log.info(
         "tolktak-server listening addr=%s:%d version=%s registration=%s livekit=%s database=%s files=%s",
-        cfg.listen_host, cfg.listen_port, __version__, cfg.registration, cfg.livekit_public_url or "auto",
+        cfg.listen_host, cfg.listen_port, __version__, cfg.registration, cfg.signaling_public_url or "app-origin",
         "postgres" if cfg.database_url.startswith("postgres") else "sqlite", "s3" if cfg.s3_bucket else "disk",
     )  # fmt: skip
     if not cfg.trust_proxy:

@@ -18,20 +18,21 @@ def event(type_: str, data=None) -> bytes:
 
 
 class Conn:
-    def __init__(self, user_id: int, session: bytes):
+    def __init__(self, user_id: int, session: bytes, profile_scope: str = "all"):
         self.user_id = user_id
         self.session = session
+        self.profile_scope = profile_scope
+        self.watched: set[int] = set()
         self.queue: asyncio.Queue[bytes | None] = asyncio.Queue(SEND_QUEUE)
         self.closed = False
-        # Set by the hub when the connection cannot keep up.
         self.kicked = False
-        # Set by the hub when the session has ended.
         self.revoked = False
 
     def close(self) -> None:
         if not self.closed:
+            self.watched.clear()
             self.closed = True
-            # Wake the writer: a drain or kick always leaves room.
+            # Wake the writer; drain/kick leaves queue space.
             try:
                 self.queue.put_nowait(None)
             except asyncio.QueueFull:
@@ -40,6 +41,7 @@ class Conn:
     def drop(self) -> None:
         """Closes without sending what is still queued."""
         self.closed = True
+        self.watched.clear()
         while not self.queue.empty():
             self.queue.get_nowait()
         self.queue.put_nowait(None)
@@ -55,7 +57,6 @@ class VoiceMember:
     joined_at: int = 0
 
 
-# Returns the users allowed to observe a voice room.
 AudienceFunc = Callable[[str], Awaitable[list[int]]]
 
 
@@ -69,12 +70,12 @@ class Hub:
         self.voice: dict[str, dict[int, VoiceMember]] = {}
         self.audience = audience
 
-    def register(self, user_id: int, session: bytes) -> Conn:
-        c = Conn(user_id, session)
+    def register(self, user_id: int, session: bytes, profile_scope: str = "all") -> Conn:
+        c = Conn(user_id, session, profile_scope)
         first = not self.conns.get(user_id)
         self.conns.setdefault(user_id, set()).add(c)
         if first:
-            self.broadcast_all(event("presence", {"user_id": user_id, "online": True}))
+            self.publish_presence(user_id, True)
         return c
 
     def unregister(self, c: Conn) -> None:
@@ -85,7 +86,7 @@ class Hub:
             self.conns.pop(c.user_id, None)
         c.close()
         if last:
-            self.broadcast_all(event("presence", {"user_id": c.user_id, "online": False}))
+            self.publish_presence(c.user_id, False)
 
     def end_sessions(self, uid: int, sessions: Collection[bytes]) -> None:
         for c in list(self.conns.get(uid, ())):
@@ -99,17 +100,36 @@ class Hub:
     def is_online(self, uid: int) -> bool:
         return bool(self.conns.get(uid))
 
+    def send_conn(self, c: Conn, b: bytes) -> None:
+        if c.closed:
+            return
+        try:
+            c.queue.put_nowait(b)
+        except asyncio.QueueFull:
+            log.warning("dropping slow websocket user=%d", c.user_id)
+            c.kicked = True
+            c.drop()
+
     def _deliver(self, uid: int, b: bytes) -> None:
         for c in list(self.conns.get(uid, ())):
-            if c.closed:
-                continue
-            try:
-                c.queue.put_nowait(b)
-            except asyncio.QueueFull:
-                # Slow consumer: the client reconnects and resyncs.
-                log.warning("dropping slow websocket user=%d", uid)
-                c.kicked = True
-                c.drop()
+            self.send_conn(c, b)
+
+    def _profile_audience(self, uid: int):
+        for conns in self.conns.values():
+            for c in conns:
+                if c.profile_scope == "all" or uid == c.user_id or uid in c.watched:
+                    yield c
+
+    def publish_presence(self, uid: int, online: bool) -> None:
+        b = event("presence", {"user_id": uid, "online": online})
+        for c in self._profile_audience(uid):
+            self.send_conn(c, b)
+
+    def publish_profile(self, kind: str, profile: dict) -> None:
+        b = event(kind, profile)
+        for c in self._profile_audience(profile["id"]):
+            if kind != "user.created" or c.profile_scope == "all":
+                self.send_conn(c, b)
 
     def send_to(self, users, b: bytes) -> None:
         for u in set(users):

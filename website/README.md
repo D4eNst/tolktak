@@ -81,8 +81,8 @@ the browser from the generated local JSON index. Every text and link works
 without JavaScript; scripts add the interactive scenes, search, copy buttons and
 picking the download for the visitor's system.
 
-Golos Text and JetBrains Mono are self-hosted under SIL OFL 1.1
-([Golos Text](assets/fonts/OFL-GolosText.txt),
+Onest and JetBrains Mono are self-hosted under SIL OFL 1.1
+([Onest](assets/fonts/OFL-Onest.txt),
 [JetBrains Mono](assets/fonts/OFL-JetBrainsMono.txt)), subset to Latin and
 Cyrillic. The Markdown generator uses markdown-it (MIT). The direction, palette
 and writing rules are recorded in [DESIGN.md](DESIGN.md).

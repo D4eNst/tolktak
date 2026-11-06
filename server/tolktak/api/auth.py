@@ -4,8 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
-from ..errors import ApiError, Conflict, Forbidden, NotFound
-from ..realtime import event
+from ..errors import ApiError, Conflict, FileMissing, Forbidden, NotFound
 from ..server import admin_user, current_user
 from ..store import files, users, valid_name
 from ..updates import MIN_CLIENT_VERSION
@@ -25,6 +24,17 @@ DAY_MS = 24 * 60 * 60 * 1000
 async def server_info(request: Request):
     s = server(request)
     reg = "first" if await users.count_users() == 0 else s.cfg.registration
+    capabilities = {
+        "history": 1,
+        "changes": 1,
+        "search": 1,
+        "users": 1,
+        "contacts": 2,
+        "profile_watch": 1,
+        "group_order": 1,
+    }
+    if s.cfg.embedded_livekit or s.cfg.signaling_private:
+        capabilities["moderation"] = 1
     return json_response({
         "name": s.cfg.server_name,
         "version": s.version,
@@ -32,6 +42,7 @@ async def server_info(request: Request):
         "livekit_url": s.livekit_url(request),
         "client_download_url": s.cfg.client_download_url,
         "min_client": MIN_CLIENT_VERSION,
+        "capabilities": capabilities,
     })  # fmt: skip
 
 
@@ -55,25 +66,28 @@ async def register(request: Request):
         display = username
     if not 8 <= len(req.password.encode()) <= 256:
         raise ApiError(400, "bad_password", "Password must be 8-256 characters")
-    invite = ""
+    invite = req.invite.strip().upper()
     if await users.count_users() > 0:
         match s.cfg.registration:
             case "open":
                 pass
             case "invite":
-                invite = req.invite.strip().upper()
                 if not invite:
                     raise ApiError(403, "invite_required", "An invite code is required")
             case _:
                 raise ApiError(403, "registration_closed", "Registration is closed on this server")
     try:
-        u = await users.create_user(username, display, req.password, invite)
+        u = await users.create_user(username, display, req.password, invite, s.cfg.registration)
     except Conflict:
         raise ApiError(409, "username_taken", "Username is already taken") from None
     except Forbidden:
+        if s.cfg.registration == "closed":
+            raise ApiError(403, "registration_closed", "Registration is closed on this server") from None
+        if not invite:
+            raise ApiError(403, "invite_required", "An invite code is required") from None
         raise ApiError(403, "invite_invalid", "Invite code is invalid, expired or used up") from None
     log.info("user registered id=%d username=%s admin=%s", u["id"], u["username"], u["is_admin"])
-    s.hub.broadcast_all(event("user.created", u))
+    s.hub.publish_profile("user.created", u)
     return json_response({"user": u}, 201)
 
 
@@ -94,7 +108,6 @@ async def login(request: Request):
     try:
         u = await users.authenticate(username, req.password)
     except NotFound:
-        # The name shows whether the account exists, the password is never logged.
         log.info("login failed username=%r ip=%s", username[:64], ip)
         raise ApiError(401, "bad_credentials", "Invalid username or password") from None
     device = req.device.encode()[:64].decode(errors="ignore")
@@ -162,8 +175,11 @@ async def update_me(request: Request, user: User):
         patch["avatar"] = req.avatar
     s = server(request)
     s.limit(f"profile:{user['id']}", 10, 10, "Too many profile changes, slow down")
-    u = await users.update_profile(user["id"], **patch)
-    s.hub.broadcast_all(event("user.updated", u))
+    try:
+        u = await users.update_profile(user["id"], **patch)
+    except FileMissing:
+        raise ApiError(400, "bad_avatar", "Avatar must be an image you uploaded") from None
+    s.hub.publish_profile("user.updated", u)
     return json_response({"user": u})
 
 

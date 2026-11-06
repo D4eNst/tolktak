@@ -11,7 +11,7 @@ from starlette.routing import Match, Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import __version__, db, sqlite_backend, web
-from .api import auth, chat, files, groups, voice, ws
+from .api import auth, chat, files, groups, moderation, people, signaling, voice, ws
 from .api.common import json_response
 from .config import Config
 from .errors import ApiError, Conflict, Forbidden, NotFound
@@ -23,7 +23,7 @@ log = logging.getLogger("tolktak")
 _API_CORS = [
     (b"access-control-allow-origin", b"*"),
     (b"access-control-allow-headers", b"Authorization, Content-Type"),
-    (b"access-control-allow-methods", b"GET, POST, PATCH, DELETE, OPTIONS"),
+    (b"access-control-allow-methods", b"GET, POST, PATCH, PUT, DELETE, OPTIONS"),
     (b"access-control-max-age", b"600"),
 ]
 _COMMON = [(b"x-content-type-options", b"nosniff"), (b"referrer-policy", b"no-referrer")]
@@ -34,7 +34,18 @@ _PAGES = [
         b"default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
     ),
 ]
-_ROUTERS = (auth.router, chat.router, files.router, groups.router, voice.router, ws.router, web.router)
+_ROUTERS = (
+    auth.router,
+    people.router,
+    chat.router,
+    files.router,
+    groups.router,
+    moderation.router,
+    voice.router,
+    ws.router,
+    signaling.router,
+    web.router,
+)
 
 
 class HeadersMiddleware:
@@ -94,6 +105,7 @@ def create_app(cfg: Config) -> FastAPI:
             log.info("no accounts yet: the first one to register becomes the administrator")
         tasks = [
             asyncio.create_task(voice.reconcile_loop(srv, 20)),
+            asyncio.create_task(srv.moderation.expiry_loop()),
             asyncio.create_task(_prune_loop(srv)),
             asyncio.create_task(_remove_unused_files_loop(srv)),
         ]
@@ -160,6 +172,7 @@ def create_app(cfg: Config) -> FastAPI:
         return PlainTextResponse(str(e.detail), status_code=e.status_code, headers=e.headers)
 
     app.add_middleware(HeadersMiddleware)
+    app.add_middleware(signaling.SignalPrivacy)
     return app
 
 

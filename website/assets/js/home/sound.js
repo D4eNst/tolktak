@@ -1,6 +1,6 @@
 import { clamp, loop, reducedMotion, visible } from '../site.js';
 
-const section = document.getElementById('w-sound');
+const section = document.querySelector('[data-sound-pane]');
 const copy = JSON.parse(document.getElementById('w-sound-copy').textContent);
 const $ = selector => section.querySelector(selector);
 const $$ = selector => [...section.querySelectorAll(selector)];
@@ -12,11 +12,15 @@ const radios = $$('[data-seg] input');
 const thumb = $('.w-sound-thumb');
 const springOut = t => 1 - Math.pow(1 - t, 3) * Math.cos(t * 4.2);
 
+let scripted = !!section.closest('[data-workstory]');
 let touched = false;
 let demo = [];
 function noteTouch() {
   touched = true;
+  scripted = false;
   demo.forEach(clearTimeout);
+  segments.classList.add('is-live');
+  $('[data-field-hint]').style.opacity = '';
 }
 
 let width = 0;
@@ -192,6 +196,7 @@ let barClock = 0;
 let syllable = 0;
 const voiceTrail = [];
 loop(section, dt => {
+  if (scripted) return;
   time += dt;
   if (!width) measure();
   nextFlip -= dt;
@@ -298,7 +303,7 @@ addEventListener('resize', () => {
 let played = false;
 visible(section, () => {
   inView = true;
-  if (played || touched || reducedMotion) return;
+  if (scripted || played || touched || reducedMotion) return;
   played = true;
   demo = [
     [1500, () => setLevel(1)],
@@ -312,3 +317,32 @@ visible(section, () => {
   inView = false;
   press(false);
 }, 0.35);
+
+section.addEventListener('w-sound-demo', event => {
+  scripted = true;
+  demo.forEach(clearTimeout);
+  measure();
+  const { picked, amount: p } = event.detail;
+  level = picked ? 2 : 0;
+  $('[data-field-hint]').classList.toggle('is-off', picked);
+  $('[data-field-hint]').style.opacity = 1 - p;
+  radios.forEach((radio, i) => { radio.checked = i === level; });
+  segments.classList.remove('is-live');
+  field.classList.add('is-live');
+  const box = field.getBoundingClientRect();
+  const option = radios[2].parentElement.getBoundingClientRect();
+  const tx = option.left + option.width / 2 - box.left;
+  const ty = option.top - box.top;
+  for (const word of words) {
+    const amount = word.step <= 2 ? p : 0;
+    word.anim = null;
+    word.out = amount === 1;
+    word.el.classList.toggle('is-out', word.out);
+    word.x = word.hx * width + (tx - word.hx * width) * amount;
+    word.y = word.hy * height + (ty - word.hy * height) * amount;
+    word.scale = 1 - amount * .7;
+    word.alpha = 1 - amount;
+    render(word);
+  }
+  levelBar.style.transform = `scaleX(${.75 - p * .3})`;
+});

@@ -4,9 +4,62 @@ from tortoise.transactions import in_transaction
 
 from .. import db
 from ..db import CONN
-from ..errors import NotFound
+from ..errors import Conflict, Forbidden, NotFound
 from ..models import Channel, ChannelMember, Group, GroupMember, Room, TextChannel, User
-from . import now
+from . import files, now
+
+
+async def lock_group(gid: int, tx: db.BaseDBAsyncClient) -> None:
+    # Always group before channel: revocation and message writes share this order.
+    found = await db.rows("UPDATE groups SET owner_id = owner_id WHERE id = ? RETURNING id", [gid], tx)
+    if not found:
+        raise NotFound
+
+
+async def _require_moderator(gid: int, uid: int, tx: db.BaseDBAsyncClient) -> None:
+    found = await db.rows(
+        "SELECT g.owner_id, m.role FROM groups g JOIN group_members m ON m.group_id = g.id "
+        "WHERE g.id = ? AND m.user_id = ?",
+        [gid, uid],
+        tx,
+    )
+    if not found:
+        raise NotFound
+    if found[0]["owner_id"] != uid and found[0]["role"] != "mod":
+        raise Forbidden
+
+
+async def _require_owner(gid: int, uid: int, tx: db.BaseDBAsyncClient) -> None:
+    await _require_moderator(gid, uid, tx)
+    if not await Group.filter(id=gid, owner_id=uid).using_db(tx).exists():
+        raise Forbidden
+
+
+async def set_order(gid: int, uid: int, ids: list[int], resource: str) -> bool:
+    if resource == "channels":
+        table, key = "text_channels", "channel_id"
+    elif resource == "rooms":
+        table, key = "rooms", "id"
+    else:
+        raise ValueError("Unknown group resource")
+    async with in_transaction(CONN) as tx:
+        await lock_group(gid, tx)
+        await _require_moderator(gid, uid, tx)
+        current = [
+            r["id"]
+            for r in await db.rows(
+                f"SELECT {key} AS id FROM {table} WHERE group_id = ? ORDER BY position, {key}", [gid], tx
+            )
+        ]
+        if len(set(ids)) != len(ids) or set(ids) != set(current):
+            raise Conflict
+        if ids == current:
+            return False
+        await tx.execute_many(
+            db.sql(f"UPDATE {table} SET position = ? WHERE group_id = ? AND {key} = ?", tx),
+            [[position, gid, item] for position, item in enumerate(ids)],
+        )
+        return True
 
 
 def room_dict(r: Room | dict) -> dict:
@@ -29,6 +82,8 @@ def can_moderate(g: dict, uid: int) -> bool:
 
 async def create_group(name: str, owner: int, members: list[int], room_name: str, channel_name: str) -> dict:
     async with in_transaction(CONN) as tx:
+        if len({owner, *members}) > 200:
+            raise Conflict
         t = now()
         ch = await Channel.create(kind="group", created_at=t, using_db=tx)
         g = await Group.create(name=name, owner_id=owner, channel_id=ch.id, created_at=t, using_db=tx)
@@ -94,11 +149,11 @@ async def groups_by_ids(gids: list[int]) -> list[dict]:
             "id": g["id"],
             "name": g["name"],
             "owner_id": g["owner_id"],
-            "channel_id": g["channel_id"],  # the first ("general") text channel
+            "channel_id": g["channel_id"],  # main text channel
             "avatar": g["avatar"],
             "description": g["description"],
             "members": [],
-            "roles": {},  # user id -> "mod"
+            "roles": {},
             "rooms": [],
             "text_channels": [],
             "created_at": g["created_at"],
@@ -117,22 +172,36 @@ async def groups_by_ids(gids: list[int]) -> list[dict]:
     return [out[gid] for gid in gids if gid in out]
 
 
-async def update_group(gid: int, **fields: str) -> None:
-    if fields:
-        await Group.filter(id=gid).update(**fields)
-
-
-async def set_group_role(gid: int, uid: int, r: str) -> None:
-    n = await db.execute("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?", [r, gid, uid])
-    if n == 0:
-        raise NotFound
-
-
-async def create_text_channel(gid: int, name: str) -> tuple[int, int]:
+async def update_group(gid: int, actor: int, **fields: str) -> None:
     async with in_transaction(CONN) as tx:
+        await lock_group(gid, tx)
+        await _require_moderator(gid, actor, tx)
+        if fields.get("avatar"):
+            await files.require_avatar(fields["avatar"], actor, tx)
+        if fields:
+            await Group.filter(id=gid).using_db(tx).update(**fields)
+
+
+async def set_group_role(gid: int, uid: int, r: str, actor: int) -> None:
+    async with in_transaction(CONN) as tx:
+        await lock_group(gid, tx)
+        await _require_owner(gid, actor, tx)
+        if await Group.filter(id=gid, owner_id=uid).using_db(tx).exists():
+            raise Forbidden
+        n = await db.execute("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?", [r, gid, uid], tx)
+        if n == 0:
+            raise NotFound
+
+
+async def create_text_channel(gid: int, name: str, uid: int) -> tuple[int, int]:
+    async with in_transaction(CONN) as tx:
+        await lock_group(gid, tx)
+        await _require_moderator(gid, uid, tx)
         t = now()
         ch = await Channel.create(kind="group", created_at=t, using_db=tx)
         positions = await TextChannel.filter(group_id=gid).using_db(tx).values_list("position", flat=True)
+        if len(positions) >= 30:
+            raise Conflict
         position = max(positions, default=-1) + 1  # ty: ignore[unsupported-operator]
         await TextChannel.create(
             channel_id=ch.id, group_id=gid, name=name, position=position, created_at=t, using_db=tx
@@ -142,12 +211,27 @@ async def create_text_channel(gid: int, name: str) -> tuple[int, int]:
     return ch.id, position
 
 
-async def rename_text_channel(cid: int, name: str) -> None:
-    await db.execute("UPDATE text_channels SET name = ? WHERE channel_id = ?", [name, cid])
+async def rename_text_channel(cid: int, name: str, actor: int) -> None:
+    async with in_transaction(CONN) as tx:
+        channel = await TextChannel.filter(channel_id=cid).using_db(tx).first()
+        if channel is None:
+            raise NotFound
+        await lock_group(channel.group_id, tx)
+        await _require_moderator(channel.group_id, actor, tx)
+        if not await db.execute("UPDATE text_channels SET name = ? WHERE channel_id = ?", [name, cid], tx):
+            raise NotFound
 
 
-async def delete_text_channel(cid: int) -> None:
-    await Channel.filter(id=cid).delete()
+async def delete_text_channel(cid: int, uid: int) -> None:
+    async with in_transaction(CONN) as tx:
+        group = await TextChannel.filter(channel_id=cid).using_db(tx).first()
+        if group is None:
+            raise NotFound
+        await lock_group(group.group_id, tx)
+        await _require_moderator(group.group_id, uid, tx)
+        if not await TextChannel.filter(channel_id=cid).using_db(tx).exists():
+            raise NotFound
+        await Channel.filter(id=cid).using_db(tx).delete()
 
 
 async def groups_for_user(uid: int) -> list[dict]:
@@ -159,34 +243,59 @@ async def is_group_member(gid: int, uid: int) -> bool:
     return await GroupMember.filter(group_id=gid, user_id=uid).exists()
 
 
-async def delete_group(gid: int) -> None:
+async def _delete_group(g: Group, tx: db.BaseDBAsyncClient) -> list[str]:
+    files = await db.rows(
+        "SELECT mf.file_id FROM message_files mf JOIN messages m ON m.id = mf.message_id "
+        "JOIN text_channels t ON t.channel_id = m.channel_id WHERE t.group_id = ?",
+        [g.id],
+        tx,
+    )
+    others = (
+        await TextChannel.filter(group_id=g.id, channel_id__not=g.channel_id)
+        .using_db(tx)
+        .values_list("channel_id", flat=True)
+    )
+    if others:
+        await Channel.filter(id__in=others).using_db(tx).delete()
+    await Group.filter(id=g.id).using_db(tx).delete()
+    await Channel.filter(id=g.channel_id).using_db(tx).delete()
+    return [file["file_id"] for file in files]
+
+
+async def delete_group(gid: int, actor: int) -> tuple[list[str], list[int]]:
     async with in_transaction(CONN) as tx:
+        await lock_group(gid, tx)
+        await _require_owner(gid, actor, tx)
         g = await Group.filter(id=gid).using_db(tx).first()
         if g is None:
             raise NotFound
-        others = (
-            await TextChannel.filter(group_id=gid, channel_id__not=g.channel_id)
-            .using_db(tx)
-            .values_list("channel_id", flat=True)
-        )
-        if others:
-            await Channel.filter(id__in=others).using_db(tx).delete()
-        await Group.filter(id=gid).using_db(tx).delete()
-        await Channel.filter(id=g.channel_id).using_db(tx).delete()
+        members = await GroupMember.filter(group_id=gid).using_db(tx).values_list("user_id", flat=True)
+        return await _delete_group(g, tx), list(members)  # ty: ignore[invalid-return-type]
 
 
-async def add_group_members(gid: int, users: list[int]) -> None:
+async def add_group_members(gid: int, users: list[int], actor: int) -> None:
     async with in_transaction(CONN) as tx:
-        if not await Group.filter(id=gid).using_db(tx).exists():
-            raise NotFound
+        await lock_group(gid, tx)
+        await _require_moderator(gid, actor, tx)
+        members = await GroupMember.filter(group_id=gid).using_db(tx).values_list("user_id", flat=True)
+        if len(set(members) | set(users)) > 200:
+            raise Conflict
         await _add_members(tx, gid, users)
 
 
-async def remove_group_member(gid: int, uid: int) -> None:
+async def remove_group_member(gid: int, uid: int, actor: int) -> tuple[bool, list[str]]:
     async with in_transaction(CONN) as tx:
+        await lock_group(gid, tx)
         g = await Group.filter(id=gid).using_db(tx).first()
         if g is None:
             raise NotFound
+        target = await GroupMember.filter(group_id=gid, user_id=uid).using_db(tx).first()
+        if target is None:
+            raise NotFound
+        if actor != uid:
+            await _require_moderator(gid, actor, tx)
+            if uid == g.owner_id or (target.role == "mod" and actor != g.owner_id):
+                raise Forbidden
         await db.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", [gid, uid], tx)
         await db.execute(
             "DELETE FROM channel_members WHERE user_id = ? AND (channel_id = ? OR channel_id IN "
@@ -194,21 +303,35 @@ async def remove_group_member(gid: int, uid: int) -> None:
             [uid, g.channel_id, gid],
             tx,
         )
+        if not await GroupMember.filter(group_id=gid).using_db(tx).exists():
+            return True, await _delete_group(g, tx)
+        if uid == g.owner_id:
+            await _transfer_ownership(gid, tx)
+        return False, []
 
 
-async def transfer_ownership(gid: int) -> int:
-    nxt = await GroupMember.filter(group_id=gid).order_by("joined_at").limit(1).values_list("user_id", flat=True)
-    if not nxt:
-        raise NotFound
-    await Group.filter(id=gid).update(owner_id=nxt[0])
-    await db.execute("UPDATE group_members SET role = 'member' WHERE group_id = ? AND user_id = ?", [gid, nxt[0]])
-    return nxt[0]  # ty: ignore[invalid-return-type]
+async def _transfer_ownership(gid: int, tx: db.BaseDBAsyncClient) -> None:
+    nxt = (
+        await GroupMember.filter(group_id=gid)
+        .using_db(tx)
+        .order_by("joined_at", "user_id")
+        .limit(1)
+        .values_list("user_id", flat=True)
+    )
+    await Group.filter(id=gid).using_db(tx).update(owner_id=nxt[0])
+    await db.execute("UPDATE group_members SET role = 'member' WHERE group_id = ? AND user_id = ?", [gid, nxt[0]], tx)
 
 
-async def create_room(gid: int, name: str) -> dict:
-    positions = await Room.filter(group_id=gid).values_list("position", flat=True)
-    r = await Room.create(group_id=gid, name=name, position=max(positions, default=-1) + 1, created_at=now())  # ty: ignore[unsupported-operator]
-    return room_dict(r)
+async def create_room(gid: int, name: str, uid: int) -> dict:
+    async with in_transaction(CONN) as tx:
+        await lock_group(gid, tx)
+        await _require_moderator(gid, uid, tx)
+        positions = await Room.filter(group_id=gid).using_db(tx).values_list("position", flat=True)
+        if len(positions) >= 20:
+            raise Conflict
+        position = max(positions, default=-1) + 1  # ty: ignore[unsupported-operator]
+        r = await Room.create(group_id=gid, name=name, position=position, created_at=now(), using_db=tx)
+        return room_dict(r)
 
 
 async def room_by_id(rid: int) -> dict:
@@ -218,9 +341,26 @@ async def room_by_id(rid: int) -> dict:
     return room_dict(r)
 
 
-async def rename_room(rid: int, name: str) -> None:
-    await Room.filter(id=rid).update(name=name)
+async def rename_room(rid: int, name: str, actor: int) -> None:
+    async with in_transaction(CONN) as tx:
+        room = await Room.filter(id=rid).using_db(tx).first()
+        if room is None:
+            raise NotFound
+        await lock_group(room.group_id, tx)
+        await _require_moderator(room.group_id, actor, tx)
+        if not await Room.filter(id=rid).using_db(tx).update(name=name):
+            raise NotFound
 
 
-async def delete_room(rid: int) -> None:
-    await Room.filter(id=rid).delete()
+async def delete_room(rid: int, uid: int) -> None:
+    async with in_transaction(CONN) as tx:
+        room = await Room.filter(id=rid).using_db(tx).first()
+        if room is None:
+            raise NotFound
+        await lock_group(room.group_id, tx)
+        await _require_moderator(room.group_id, uid, tx)
+        if not await Room.filter(id=rid).using_db(tx).exists():
+            raise NotFound
+        if await Room.filter(group_id=room.group_id).using_db(tx).count() <= 1:
+            raise Conflict
+        await Room.filter(id=rid).using_db(tx).delete()

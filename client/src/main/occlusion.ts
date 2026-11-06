@@ -37,7 +37,6 @@ let api: {
 
 function load() {
   if (api || process.platform !== 'win32') return api;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const koffi: Koffi = require('koffi');
   const user32 = koffi.load('user32.dll');
   const gdi32 = koffi.load('gdi32.dll');

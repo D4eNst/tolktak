@@ -1,11 +1,13 @@
 import secrets
 
+from tortoise.transactions import in_transaction
+
 from .. import db
-from ..errors import NotFound
+from ..errors import FileMissing, NotFound
 from ..models import File
 from . import now
 
-# A file is identified by a random 128-bit id: knowing it is what grants read access (see api/files.py).
+# A random 128-bit ID grants read access.
 
 
 def new_file_id() -> str:
@@ -51,6 +53,24 @@ async def file_by_id(fid: str) -> tuple[dict, int]:
     return file_dict(f), f.uploader_id
 
 
+async def lock_files(fids: list[str], tx: db.BaseDBAsyncClient) -> list[dict]:
+    if not fids:
+        return []
+    # Reference writers lock their group/channel/user first, then file IDs in order.
+    suffix = " FOR UPDATE" if db.is_postgres(tx) else ""
+    return await db.rows(
+        f"SELECT id, uploader_id, mime FROM files WHERE id IN ({db.marks(len(fids))}) ORDER BY id{suffix}",
+        fids,
+        tx,
+    )
+
+
+async def require_avatar(fid: str, uid: int, tx: db.BaseDBAsyncClient) -> None:
+    found = await lock_files([fid], tx)
+    if not found or found[0]["uploader_id"] != uid or not found[0]["mime"].startswith("image/"):
+        raise FileMissing
+
+
 _UNUSED = (
     "NOT EXISTS (SELECT 1 FROM message_files WHERE file_id = files.id) "
     "AND id NOT IN (SELECT avatar FROM users UNION SELECT avatar FROM groups)"
@@ -62,11 +82,14 @@ async def delete_unused(fids: list[str]) -> list[dict]:
     if not fids:
         return []
     fids = list(set(fids))
-    return await db.rows(
-        f"DELETE FROM files WHERE id IN ({db.marks(len(fids))}) AND {_UNUSED} "
-        "RETURNING id, uploader_id, name, mime, size, width, height",
-        fids,
-    )
+    async with in_transaction(db.CONN) as tx:
+        await lock_files(fids, tx)
+        return await db.rows(
+            f"DELETE FROM files WHERE id IN ({db.marks(len(fids))}) AND {_UNUSED} "
+            "RETURNING id, uploader_id, name, mime, size, width, height",
+            fids,
+            tx,
+        )
 
 
 async def unused_before(t: int) -> list[str]:

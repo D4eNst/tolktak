@@ -8,7 +8,7 @@
 |---|---|---|
 | 80 и 443 | TCP | HTTPS: Caddy в [установке через Compose](../install/compose.md) или свой обратный прокси. Порт 80 нужен для выпуска сертификата. |
 | 443 | UDP | HTTP/3 в установке через Compose. Необязателен. |
-| 8080 и 7880 | TCP | Прямой доступ к TolkTak и LiveKit без HTTPS: сервер [через `docker run`](../install/docker.md) или вариант установщика с обычным HTTP |
+| 8080 | TCP | TolkTak, включая подключение к звонкам, без HTTPS: сервер [через `docker run`](../install/docker.md) или вариант установщика с обычным HTTP |
 | 7881 | TCP | Звонки по TCP для участников с заблокированным UDP |
 | 7882 | UDP | Звонки. Основной путь для голоса, видео и демонстрации экрана. |
 
@@ -25,7 +25,7 @@ sudo ufw allow 7882/udp
 
 ```sh
 sudo ufw allow 8080/tcp
-sudo ufw allow 7880:7881/tcp
+sudo ufw allow 7881/tcp
 sudo ufw allow 7882/udp
 ```
 
@@ -36,7 +36,7 @@ Docker публикует порты контейнеров своими пра�
 ## Изменение портов
 
 - **HTTP-порт TolkTak** при `docker run`: `-e TOLKTAK_LISTEN=:18480`. В установке через Compose TolkTak слушает только `127.0.0.1`, порт меняется через `TOLKTAK_PORT` в `.env`; это важно при своём обратном прокси.
-- **Порты LiveKit** в образе для `docker run` фиксированы. В установке через Compose они меняются в `.env`: `LIVEKIT_PORT` — локальный порт сигналинга, `LIVEKIT_TCP_PORT` и `LIVEKIT_UDP_PORT` — порты звонков.
+- **Порты LiveKit** в образе для `docker run` фиксированы. В установке через Compose они меняются в `.env`: `LIVEKIT_TCP_PORT` и `LIVEKIT_UDP_PORT` — порты звонков. HTTP LiveKit остаётся внутри сети Docker на порту 7880; приложение обращается к нему через TolkTak.
 
 Все звонки используют один UDP-порт; от числа участников набор портов не зависит.
 

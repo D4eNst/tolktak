@@ -1,6 +1,7 @@
 import functools
 import logging
 import re
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from tortoise import Tortoise, connections
@@ -287,12 +288,92 @@ POSTGRES.append(
     """
 )
 
+# 6: ordered message changes and indexed visible history.
+for migrations in (SQLITE, POSTGRES):
+    migrations.append("""
+        ALTER TABLE channels ADD COLUMN history_version BIGINT NOT NULL DEFAULT 0;
+        ALTER TABLE messages ADD COLUMN revision BIGINT NOT NULL DEFAULT 0;
+        CREATE INDEX messages_visible_channel ON messages(channel_id, id) WHERE deleted = 0;
+        UPDATE channel_members SET last_read_id = COALESCE(
+            (SELECT MAX(id) FROM messages WHERE channel_id = channel_members.channel_id
+                AND id <= channel_members.last_read_id), 0)
+        WHERE last_read_id != 0 AND NOT EXISTS (
+            SELECT 1 FROM messages WHERE channel_id = channel_members.channel_id AND id = channel_members.last_read_id);
+    """)
+
+# 7: bounded latest-state reconciliation by channel revision.
+for migrations in (SQLITE, POSTGRES):
+    migrations.append("CREATE INDEX messages_channel_revision ON messages(channel_id, revision)")
+
+# 8: casefolded literal substring search; native indexes are initialized during backfill.
+for migrations in (SQLITE, POSTGRES):
+    migrations.append("""
+        CREATE TABLE message_search (
+            message_id BIGINT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+            folded TEXT NOT NULL
+        );
+    """)
+
+# 9: private contacts, bounded directory matching and public profile ordering.
+for migrations in (SQLITE, POSTGRES):
+    migrations.append("""
+        ALTER TABLE users ADD COLUMN username_folded TEXT NOT NULL DEFAULT '';
+        ALTER TABLE users ADD COLUMN display_name_folded TEXT NOT NULL DEFAULT '';
+        ALTER TABLE users ADD COLUMN contacts_version BIGINT NOT NULL DEFAULT 0;
+        ALTER TABLE users ADD COLUMN profile_revision BIGINT NOT NULL DEFAULT 0;
+        CREATE TABLE contacts (
+            owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            contact_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at BIGINT NOT NULL,
+            PRIMARY KEY (owner_id, contact_id),
+            CHECK (owner_id != contact_id)
+        );
+        CREATE INDEX contacts_target ON contacts(contact_id);
+    """)
+
+# 10: room-scoped persistent media/entry restrictions and call epochs.
+for migrations, identity in ((SQLITE, "INTEGER PRIMARY KEY AUTOINCREMENT"), (POSTGRES, _ID)):
+    migrations.append(f"""
+        ALTER TABLE rooms ADD COLUMN moderation_version BIGINT NOT NULL DEFAULT 0;
+        ALTER TABLE rooms ADD COLUMN call_id BIGINT NOT NULL DEFAULT 0;
+        ALTER TABLE rooms ADD COLUMN call_active INTEGER NOT NULL DEFAULT 0;
+        CREATE TABLE voice_rules (
+            id {identity},
+            room_id BIGINT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+            user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            source TEXT NOT NULL CHECK (source IN ('microphone', 'camera', 'screen', 'entry')),
+            duration TEXT NOT NULL CHECK (duration IN ('time', 'call', 'permanent')),
+            expires_at BIGINT,
+            call_id BIGINT,
+            created_by BIGINT NOT NULL,
+            UNIQUE (room_id, user_id, source)
+        );
+        CREATE INDEX voice_rules_expiry ON voice_rules(expires_at);
+        CREATE INDEX voice_rules_user ON voice_rules(user_id);
+    """)
+
+# 11: mutual relations; contacts stays as a legacy archive.
+for migrations in (SQLITE, POSTGRES):
+    migrations.append("""
+        CREATE TABLE contact_links (
+            owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            peer_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            state TEXT NOT NULL CHECK (state IN ('contact', 'incoming', 'outgoing')),
+            since BIGINT NOT NULL,
+            request_id TEXT NOT NULL,
+            PRIMARY KEY (owner_id, peer_id),
+            CHECK (owner_id != peer_id)
+        );
+        CREATE INDEX contact_links_owner_state_peer ON contact_links(owner_id, state, peer_id);
+    """)
+
 assert len(SQLITE) == len(POSTGRES)
 
 # Tables in foreign-key order, for copying between databases.
 TABLES = [
     "users", "sessions", "invites", "channels", "channel_members", "groups", "group_members",
     "rooms", "messages", "message_files", "files", "reactions", "text_channels",
+    "message_search", "contacts", "voice_rules", "contact_links",
 ]  # fmt: skip
 
 
@@ -329,6 +410,14 @@ def conn() -> BaseDBAsyncClient:
 
 def is_postgres(c: BaseDBAsyncClient | None = None) -> bool:
     return (c or conn()).capabilities.dialect == "postgres"
+
+
+@asynccontextmanager
+async def read_transaction():
+    async with in_transaction(CONN) as tx:
+        if is_postgres(tx):
+            await tx.execute_query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        yield tx
 
 
 _qmark = re.compile(r"\?")
@@ -392,6 +481,19 @@ async def migrate(c: BaseDBAsyncClient | None = None) -> None:
         async with in_transaction(c.connection_name) as tx:
             for stmt in _statements(migrations[i]):
                 await tx.execute_query(stmt)
+            if i + 1 == 8:
+                from .store.search import backfill, init_index
+
+                await init_index(tx)
+                await backfill(tx)
+            if i + 1 == 9:
+                from .store.users import backfill_directory
+
+                await backfill_directory(tx)
+            if i + 1 == 11:
+                from .store.users import backfill_contact_links
+
+                await backfill_contact_links(tx)
             await tx.execute_query(sql("UPDATE schema_version SET version = ?", tx), [i + 1])
         log.info("database migrated to schema %d", i + 1)
 
@@ -427,6 +529,9 @@ async def init(url: str, data_dir: Path) -> None:
     data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     # The lifespan and requests run in different tasks.
     await Tortoise.init(config=db_config(url, data_dir), _enable_global_fallback=True)
+    from .store.search import check_features
+
+    await check_features(conn())
     await migrate()
 
 

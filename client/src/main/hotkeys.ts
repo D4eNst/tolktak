@@ -2,18 +2,17 @@
 // and unlike RegisterHotKey never takes the key away from the game.
 import { globalShortcut } from 'electron';
 
-export type HotkeyName = 'mute' | 'deafen' | 'ptt';
+export type HotkeyName = 'mute' | 'deafen' | 'ptt' | 'window';
 export type Hotkeys = Partial<Record<HotkeyName, string>>;
 
 type Koffi = typeof import('koffi');
-let getKey: ((vk: number) => number) | null = null;
+let keyState: ((vk: number) => number) | null = null;
 
-function loadUser32() {
-  if (getKey || process.platform !== 'win32') return getKey;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+function loadKeyState() {
+  if (keyState || process.platform !== 'win32') return keyState;
   const koffi: Koffi = require('koffi');
-  getKey = koffi.load('user32.dll').func('int16 __stdcall GetAsyncKeyState(int vKey)');
-  return getKey;
+  keyState = koffi.load('user32.dll').func('int16 __stdcall GetAsyncKeyState(int vKey)');
+  return keyState;
 }
 
 const NAMED: Record<string, number> = {
@@ -69,24 +68,24 @@ export function parseAccelerator(accel: string): { mods: number[]; key: number }
 }
 
 let timer: NodeJS.Timeout | null = null;
+let releasePtt: (() => void) | null = null;
 
-/** `fire` receives "toggleMute", "toggleDeafen", "ptt:down" or "ptt:up". */
+/** `fire` receives "toggleMute", "toggleDeafen", "toggleWindow", "ptt:down" or "ptt:up". */
 export function installHotkeys(keys: Hotkeys, fire: (name: string) => void) {
   uninstallHotkeys();
 
-  const user32 = (() => {
-    try {
-      return loadUser32();
-    } catch (err) {
-      console.error('hotkeys: user32 unavailable', err);
-      return null;
-    }
-  })();
+  let readKeyState = null;
+  try {
+    readKeyState = loadKeyState();
+  } catch (error) {
+    console.error('hotkeys: user32 unavailable', error);
+  }
 
-  if (!user32) {
+  if (!readKeyState) {
     for (const [name, event] of [
       ['mute', 'toggleMute'],
       ['deafen', 'toggleDeafen'],
+      ['window', 'toggleWindow'],
     ] as const) {
       const accel = keys[name];
       if (!accel || accel.startsWith('Mouse')) continue;
@@ -99,19 +98,25 @@ export function installHotkeys(keys: Hotkeys, fire: (name: string) => void) {
     return;
   }
 
-  const parsed = (['mute', 'deafen', 'ptt'] as const)
+  const bindings = (['mute', 'deafen', 'ptt', 'window'] as const)
     .map((name) => ({ name, combo: keys[name] ? parseAccelerator(keys[name]!) : null, down: false }))
     .filter((x) => x.combo);
-  if (!parsed.length) return;
-  const isDown = (vk: number) => (user32(vk) & 0x8000) !== 0;
+  if (!bindings.length) return;
+  releasePtt = () => {
+    for (const key of bindings) if (key.name === 'ptt' && key.down) {
+      key.down = false;
+      fire('ptt:up');
+    }
+  };
+  const isDown = (vk: number) => (readKeyState(vk) & 0x8000) !== 0;
   timer = setInterval(() => {
-    for (const k of parsed) {
-      const c = k.combo!;
-      const now = isDown(c.key) && c.mods.every(isDown);
-      if (now === k.down) continue;
-      k.down = now;
-      if (k.name === 'ptt') fire(now ? 'ptt:down' : 'ptt:up');
-      else if (now) fire(k.name === 'mute' ? 'toggleMute' : 'toggleDeafen');
+    for (const binding of bindings) {
+      const combo = binding.combo!;
+      const pressed = isDown(combo.key) && combo.mods.every(isDown);
+      if (pressed === binding.down) continue;
+      binding.down = pressed;
+      if (binding.name === 'ptt') fire(pressed ? 'ptt:down' : 'ptt:up');
+      else if (pressed) fire(binding.name === 'mute' ? 'toggleMute' : binding.name === 'deafen' ? 'toggleDeafen' : 'toggleWindow');
     }
   }, 25);
 }
@@ -119,6 +124,8 @@ export function installHotkeys(keys: Hotkeys, fire: (name: string) => void) {
 export function uninstallHotkeys() {
   if (timer) clearInterval(timer);
   timer = null;
+  releasePtt?.();
+  releasePtt = null;
   globalShortcut.unregisterAll();
 }
 

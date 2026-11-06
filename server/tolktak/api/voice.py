@@ -2,11 +2,13 @@ import asyncio
 import logging
 from typing import Annotated
 
+import httpx
 import orjson
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
-from ..errors import ApiError
+from .. import db
+from ..errors import ApiError, NotFound
 from ..livekit import WebhookError
 from ..realtime import VoiceMember, event
 from ..server import Server, background, current_user, dm_room_name, group_room_name, parse_room_name
@@ -47,8 +49,17 @@ async def voice_join(request: Request, user: User):
     room = await resolve_room(req, user["id"])
     s = server(request)
     meta = orjson.dumps({"username": user["username"], "color": user["color"]}).decode()
-    token = s.lk.join_token(str(user["id"]), user["display_name"], meta, room, TOKEN_TTL)
-    return json_response({"url": s.livekit_url(request), "token": token, "room": room})
+    parsed = parse_room_name(room)
+    if parsed is not None and parsed[0] == "group":
+        permissions = await s.moderation.permissions(parsed[2], user["id"])
+    else:
+        from ..moderation import allowed_all
+
+        permissions = allowed_all(user["id"])
+    if not permissions["allowed"]["entry"]:
+        raise ApiError(403, "voice_forbidden", "You cannot enter this call")
+    token = s.lk.join_token(str(user["id"]), user["display_name"], meta, room, TOKEN_TTL, permissions["allowed"])
+    return json_response({"url": s.livekit_url(request), "token": token, "room": room, "permissions": permissions})
 
 
 class LeaveReq(Body):
@@ -97,11 +108,13 @@ async def call_cancel(request: Request, user: User):
 
 
 async def remove_from_sfu(s: Server, room: str, uid: int) -> None:
-    try:
-        await s.lk.remove_participant(room, str(uid))
-    except Exception as e:
-        log.warning("remove participant room=%s user=%d err=%s", room, uid, e)
-    await s.hub.voice_leave(room, uid)
+    async with s.moderation.lock(room):
+        await s.moderation.close_bridges(room, uid)
+        try:
+            await s.lk.remove_participant(room, str(uid))
+        except Exception as e:
+            log.warning("remove participant room=%s user=%d kind=%s", room, uid, type(e).__name__)
+        await s.hub.voice_leave(room, uid)
 
 
 def track_flags(source: str, on: bool) -> dict:
@@ -152,6 +165,12 @@ async def livekit_webhook(request: Request):
         case "room_finished":
             await s.hub.voice_replace(room, [])
             await maybe_end_call(s, room)
+    if ev.get("event") in ("participant_joined", "participant_left", "participant_connection_aborted", "room_finished"):
+        try:
+            async with s.moderation.lock(room):
+                await s.moderation.refresh(room)
+        except OSError, RuntimeError, NotFound, httpx.HTTPError:
+            log.debug("voice webhook policy reconciliation deferred room=%s", room)
     return Response(status_code=200)
 
 
@@ -196,6 +215,21 @@ async def reconcile_once(s: Server) -> None:
                     setattr(m, k, v)
             members.append(m)
         await s.hub.voice_replace(name, members)
+        try:
+            async with s.moderation.lock(name):
+                await s.moderation.refresh(name, parts)
+                for participant in members:
+                    await s.moderation.apply(name, participant.user_id, parts)
+        except OSError, RuntimeError, NotFound, httpx.HTTPError:
+            log.debug("voice reconciliation permissions deferred room=%s", name)
+    for row in await db.rows("SELECT id, group_id FROM rooms WHERE call_active = 1"):
+        name = group_room_name(row["group_id"], row["id"])
+        if name not in active:
+            try:
+                async with s.moderation.lock(name):
+                    await s.moderation.refresh(name)
+            except OSError, RuntimeError, NotFound, httpx.HTTPError:
+                log.debug("voice call-end observation deferred room=%s", name)
     for r in s.hub.voice_rooms():
         if r not in active:
             await s.hub.voice_replace(r, [])

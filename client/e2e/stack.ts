@@ -9,7 +9,7 @@ export const PORTS = { api: 18080, livekit: 17880, rtcTcp: 17881, web: 18090 };
 const KEY = 'e2ekey';
 const SECRET = 'e2e-secret-0123456789abcdefghijklmnopqrstuv';
 
-export type Stack = { api: string; web: string; dataDir: string; stop(): Promise<void>; restartLivekit(): Promise<void> };
+export type Stack = { api: string; web: string; dataDir: string; stop(): Promise<void>; restartLivekit(): Promise<void>; restartServer(beforeStart?: () => Promise<void>): Promise<void> };
 
 function hostIP(): string {
   // Chromium ignores loopback ICE candidates.
@@ -53,7 +53,7 @@ export async function startStack(): Promise<Stack> {
   writeFileSync(
     lkConf,
     `port: ${PORTS.livekit}
-bind_addresses: ["0.0.0.0"]
+bind_addresses: ["127.0.0.1"]
 rtc:
   tcp_port: ${PORTS.rtcTcp}
   port_range_start: 50000
@@ -88,7 +88,7 @@ logging:
 `,
   );
   let livekit = run(livekitBin, ['--config', lkConf], {}, 'livekit');
-  const server = run(
+  const startServer = () => run(
     serverBin,
     [],
     {
@@ -97,12 +97,22 @@ logging:
       TOLKTAK_REGISTRATION: 'open',
       LIVEKIT_API_KEY: KEY,
       LIVEKIT_API_SECRET: SECRET,
-      LIVEKIT_PUBLIC_URL: `ws://${ip}:${PORTS.livekit}`,
+      TOLKTAK_SIGNALING_PRIVATE: '1',
+      TOLKTAK_SIGNALING_PUBLIC_URL: `ws://127.0.0.1:${PORTS.api}`,
       LIVEKIT_INTERNAL_URL: `http://127.0.0.1:${PORTS.livekit}`,
       TOLKTAK_SERVER_NAME: 'E2E',
     },
     'server',
   );
+  let server = startServer();
+  const stopProcess = async (process: ChildProcess) => {
+    if (process.exitCode !== null || process.signalCode !== null) return;
+    const exited = new Promise((resolve) => process.once('exit', resolve));
+    process.kill('SIGTERM');
+    const timer = setTimeout(() => process.kill('SIGKILL'), 10_000);
+    await exited;
+    clearTimeout(timer);
+  };
   const dist = path.join(__dirname, '..', 'dist');
   const web: Server = createServer((req, res) => {
     const u = new URL(req.url ?? '/', 'http://x');
@@ -126,18 +136,15 @@ logging:
       livekit = run(livekitBin, ['--config', lkConf], {}, 'livekit');
       await waitHttp(`http://127.0.0.1:${PORTS.livekit}/`);
     },
+    async restartServer(beforeStart) {
+      await stopProcess(server);
+      await beforeStart?.();
+      server = startServer();
+      await waitHttp(`http://127.0.0.1:${PORTS.api}/healthz`);
+    },
     async stop() {
       // A new stack must not find the old LiveKit still holding its ports.
-      await Promise.all(
-        [livekit, server].map(async (p) => {
-          if (p.exitCode !== null || p.signalCode !== null) return;
-          const exited = new Promise((r) => p.once('exit', r));
-          p.kill('SIGTERM');
-          const t = setTimeout(() => p.kill('SIGKILL'), 10_000);
-          await exited;
-          clearTimeout(t);
-        }),
-      );
+      await Promise.all([livekit, server].map(stopProcess));
       web.close();
     },
   };

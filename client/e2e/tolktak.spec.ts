@@ -1,5 +1,5 @@
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
-import { expectFlowing, joinRoom, openClient, stats } from './helpers';
+import { expectFlowing, groupIn, joinRoom, openClient, person, stats } from './helpers';
 import { loginToken, register, startStack, type Stack } from './stack';
 
 let stack: Stack;
@@ -14,13 +14,13 @@ test.afterAll(async () => stack?.stop());
 test('DM: realtime delivery, unread badge, reply', async ({ browser }) => {
   const alice = await openClient(browser, stack, 'alice');
   const bob = await openClient(browser, stack, 'bob');
-  await alice.locator('.side-item', { hasText: 'Bob' }).click();
+  await (await person(alice, 'Bob')).click();
   await alice.locator('.composer textarea').fill('Привет, Боб!');
   await alice.keyboard.press('Enter');
   await expect(alice.locator('.msg-text', { hasText: 'Привет, Боб!' })).toBeVisible();
   await expect(alice.locator('.msg.pending')).toHaveCount(0);
 
-  const bobItem = bob.locator('.side-item', { hasText: 'Alice' });
+  const bobItem = await person(bob, 'Alice');
   await expect(bobItem.locator('.badge')).toHaveText('1');
   await bobItem.click();
   await expect(bob.locator('.msg-text', { hasText: 'Привет, Боб!' })).toBeVisible();
@@ -44,25 +44,24 @@ test('messages sent or received while the first page loads stay in the chat', as
   const { channel } = await call('/dms', { user_id: ids.carol });
   await call(`/channels/${channel.id}/messages`, { text: 'до загрузки', nonce: crypto.randomUUID() });
 
-  const carol = await openClient(browser, stack, 'carol');
   let pageFetched!: () => void;
   let releasePage!: () => void;
   const fetched = new Promise<void>((r) => (pageFetched = r));
   const released = new Promise<void>((r) => (releasePage = r));
-  await carol.route(`**/channels/${channel.id}/messages?limit=50`, async (route) => {
+  const carol = await openClient(browser, stack, 'carol', 'password123', async (page) => { await page.route(`**/channels/${channel.id}/history?*`, async (route) => {
     const page = await route.fetch();
     pageFetched();
     await released;
     await route.fulfill({ response: page });
-  });
-  const bobItem = carol.locator('.side-item', { hasText: 'Bob' });
+  }); });
+  const bobItem = await person(carol, 'Bob');
   await bobItem.click();
   await fetched;
   await call(`/channels/${channel.id}/messages`, { text: 'во время загрузки', nonce: crypto.randomUUID() });
-  await expect(bobItem.locator('.side-item-sub')).toHaveText('во время загрузки');
+  await expect(bobItem.locator('.nav-person-sub')).toHaveText('во время загрузки');
   await carol.locator('.composer textarea').fill('отправлено при загрузке');
   await carol.keyboard.press('Enter');
-  await expect(bobItem.locator('.side-item-sub')).toHaveText('отправлено при загрузке');
+  await expect(bobItem.locator('.nav-person-sub')).toHaveText('отправлено при загрузке');
   releasePage();
 
   await expect(carol.locator('.msg-text', { hasText: 'до загрузки' })).toBeVisible();
@@ -80,7 +79,7 @@ test('an expired session shows one notice after signing in again', async ({ brow
     ws.connectToServer();
     socket = ws;
   });
-  const expired = page.locator('.toast', { hasText: 'Сессия завершена' });
+  const expired = page.locator('.toast', { hasText: 'Сеанс завершён' });
   await page.goto(stack.web);
   for (let round = 0; round < 2; round++) {
     await page.fill('input[name=server]', stack.api);
@@ -102,32 +101,33 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   const alice = await openClient(browser, stack, 'alice');
   const bob = await openClient(browser, stack, 'bob');
 
-  await alice.click('.rail-btn.add');
+  await alice.locator('.nav-tabs button', { hasText: 'Группы' }).click();
+  await alice.locator('button', { hasText: /Создайте группу|Новая группа/ }).click();
   await alice.fill('.modal input[maxlength="60"]', 'Кино');
   for (const n of ['Bob', 'Carol']) await alice.locator('.user-row', { hasText: n }).click();
   await alice.click('.modal button.primary');
-  await expect(bob.locator('.rail-btn.group', { hasText: 'КИ' })).toBeVisible();
+  await expect(groupIn(bob, 'Кино')).toBeVisible();
 
   await joinRoom(alice, 'Кино');
   await joinRoom(bob, 'Кино');
   await expect(alice.locator('.tile')).toHaveCount(2);
   await expect(bob.locator('.tile')).toHaveCount(2);
   const carol = await openClient(browser, stack, 'carol');
-  await carol.locator('.rail-btn.group', { hasText: 'КИ' }).click();
-  await expect(carol.locator('.room-member')).toHaveCount(2);
+  await groupIn(carol, 'Кино').click();
+  await expect(carol.locator('.nav-sub')).toHaveCount(2);
 
   const a2b = await expectFlowing(bob, ids.alice, 'microphone', 20);
   const b2a = await expectFlowing(alice, ids.bob, 'microphone', 20);
   test.info().annotations.push({ type: 'audio', description: JSON.stringify({ a2b, b2a }) });
 
   // No process loopback in a browser: opt in.
-  await alice.click('button[aria-label="Демонстрация"]');
+  await alice.click('.capsule button[aria-label="Показать экран"]');
   await alice.locator('.warn-box input[type=checkbox]').check();
   await alice.click('.modal button.primary');
-  await expect(alice.locator('.stream-card')).toHaveCount(1);
-  await expect(carol.locator('.room-member .live')).toHaveCount(1);
+  // One stream: everyone sees it big, with its sound («Крупно» by default).
+  await expect(alice.locator('.theater')).toBeVisible();
+  await expect(carol.locator('.nav-sub .live-icon')).toHaveCount(1);
 
-  await bob.locator('.stream-card').click();
   await expect(bob.locator('.theater')).toBeVisible();
   const video = await expectFlowing(bob, ids.alice, 'screen_share', 40);
   const sound = await expectFlowing(bob, ids.alice, 'screen_share_audio', 50);
@@ -135,20 +135,16 @@ test('group voice room: two-way audio, stream with sound, late join, host leaves
   const out = (await stats(alice)).outbound.filter((o) => o.source === 'screen_share');
   test.info().annotations.push({ type: 'encoder', description: JSON.stringify(out) });
 
-  await carol.locator('.room-join', { hasText: 'Общая' }).click();
-  await expect(carol.locator('.stream-card')).toHaveCount(1);
-  const carolBefore = (await stats(carol)).inbound.find((x) => x.source === 'screen_share_audio');
-  expect(carolBefore, 'stream audio must not be received before watching').toBeUndefined();
-  await carol.locator('.stream-card').click();
+  await carol.locator('.nav-row', { hasText: 'Общая' }).click();
+  await expect(carol.locator('.theater')).toBeVisible();
   await expectFlowing(carol, ids.alice, 'screen_share', 40);
   await expectFlowing(carol, ids.alice, 'screen_share_audio', 50);
 
-  await alice.click('button[aria-label="Выйти из комнаты"]');
+  await alice.click('.capsule button[aria-label="Выйти из звонка"]');
   await expect(bob.locator('.theater')).toHaveCount(0);
-  await expect(bob.locator('.stream-card')).toHaveCount(0);
   await expect(bob.locator('.tile')).toHaveCount(2);
   await expectFlowing(bob, ids.carol, 'microphone', 20);
-  await expect(carol.locator('.room-member')).toHaveCount(2);
+  await expect(carol.locator('.nav-sub')).toHaveCount(2);
 
   for (const p of [alice, bob, carol]) await p.context().close();
 });
@@ -161,7 +157,7 @@ test('signing out leaves voice, also while the join request is in flight', async
     body: JSON.stringify({ name: 'Выход', members: [], room_name: 'Общая' }),
   });
   const logOut = async (p: Page) => {
-    await p.click('.self-id');
+    await p.click('.topbar-avatar');
     await p.locator('.self-menu button.danger-text').click();
     await p.click('.modal .danger-btn');
     await expect(p.locator('input[name=username]')).toBeVisible();
@@ -169,9 +165,14 @@ test('signing out leaves voice, also while the join request is in flight', async
 
   const inCall = await openClient(browser, stack, 'carol');
   await joinRoom(inCall, 'Выход');
-  const left = inCall.waitForResponse('**/api/v1/voice/leave');
+  await expect.poll(() => inCall.evaluate(() => {
+    const w = globalThis as any;
+    w.__testMic = w.__tolktak.room.localParticipant.getTrackPublication('microphone')?.track?.mediaStreamTrack;
+    return w.__testMic?.readyState;
+  })).toBe('live');
   await logOut(inCall);
-  expect((await left).status(), 'the room must be left while the token is still valid').toBe(204);
+  await expect.poll(() => inCall.evaluate(() => (globalThis as any).__tolktak.room)).toBeNull();
+  expect(await inCall.evaluate(() => (globalThis as any).__testMic?.readyState), 'signing out must stop microphone capture').toBe('ended');
   await inCall.context().close();
 
   const joining = await openClient(browser, stack, 'carol');
@@ -185,8 +186,9 @@ test('signing out leaves voice, also while the join request is in flight', async
     await released;
     await route.fulfill({ response: res });
   });
-  await joining.locator('.rail-btn.group', { hasText: 'ВЫ' }).click();
-  await joining.locator('.room-join', { hasText: 'Общая' }).click();
+  await joining.locator('.nav-tabs button', { hasText: 'Группы' }).click();
+  await groupIn(joining, 'Выход').click();
+  await joining.locator('.nav-row', { hasText: 'Общая' }).click();
   await sent;
   await logOut(joining);
   releaseJoin();
@@ -206,17 +208,12 @@ test('message previews, the keyboard message menu and labels after midnight', as
   const { channel } = await call('/dms', { user_id: ids.carol });
   await call(`/channels/${channel.id}/messages`, { text: 'Открой **config_file.py** и _снова_ проверь snake_case * 2', nonce: crypto.randomUUID() });
 
-  const ctx = await browser.newContext({ locale: 'ru-RU' });
-  const carol = await ctx.newPage();
   const now = new Date();
-  await carol.clock.install({ time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 30) });
-  await carol.goto(stack.web);
-  await carol.fill('input[name=server]', stack.api);
-  await carol.fill('input[name=username]', 'carol');
-  await carol.fill('input[name=password]', 'password123');
-  await carol.click('button[type=submit]');
-  const aliceItem = carol.locator('.side-item', { hasText: 'Alice' });
-  await expect(aliceItem.locator('.side-item-sub')).toHaveText('Открой config_file.py и снова проверь snake_case * 2');
+  const carol = await openClient(browser, stack, 'carol', 'password123', (page) =>
+    page.clock.install({ time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 30) }),
+  );
+  const aliceItem = await person(carol, 'Alice');
+  await expect(aliceItem.locator('.nav-person-sub')).toHaveText('Открой config_file.py и снова проверь snake_case * 2');
 
   await aliceItem.click();
   const msg = carol.locator('.msg', { hasText: 'snake_case' });
@@ -237,5 +234,5 @@ test('message previews, the keyboard message menu and labels after midnight', as
   // Before the socket's watchdog, now behind the clock, reconnects and redraws everything.
   await expect(time).toContainText('вчера', { timeout: 2000 });
   await expect(carol.locator('.day-divider', { hasText: 'Вчера' })).toBeVisible({ timeout: 2000 });
-  await ctx.close();
+  await carol.context().close();
 });

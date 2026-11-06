@@ -42,8 +42,7 @@ To follow the logs: `docker logs -f tolktak`.
 
 | Port | Protocol | Purpose |
 |---|---|---|
-| 8080 | TCP | TolkTak: the website, the API and chat |
-| 7880 | TCP | LiveKit: joining a call |
+| 8080 | TCP | TolkTak: the website, the API, chat and call admission |
 | 7881 | TCP | Calls when a participant's network blocks UDP |
 | 7882 | UDP | Voice, video and screen sharing |
 
@@ -51,7 +50,7 @@ With `ufw`:
 
 ```sh
 sudo ufw allow 8080/tcp
-sudo ufw allow 7880:7881/tcp
+sudo ufw allow 7881/tcp
 sudo ufw allow 7882/udp
 ```
 
@@ -76,8 +75,8 @@ docker rm -f tolktak
 All settings are listed in the [configuration reference](../operations/configuration.md). Some apply to this image in particular:
 
 - **Server on a home or office network.** LiveKit finds the server's public address through STUN. If participants reach the server by its local address, pass that address: `-e NODE_IP=192.168.1.20`.
-- **HTTPS.** Put a [reverse proxy](../guides/reverse-proxy.md) in front of the server and add `-e TOLKTAK_TRUST_PROXY=1 -e TOLKTAK_LISTEN=127.0.0.1:8080`. The proxy sends the domain to port 8080 and the path `/rtc` to port 7880. Close ports 8080 and 7880 in the firewall; 7881 and 7882 stay open.
-- **LiveKit's ports** 7880, 7881 and 7882 are fixed in this image. If they are taken on the server, use [Docker Compose](compose.md), where LiveKit runs in its own container.
+- **HTTPS.** Put a [reverse proxy](../guides/reverse-proxy.md) in front of the server and add `-e TOLKTAK_TRUST_PROXY=1 -e TOLKTAK_LISTEN=127.0.0.1:8080`. The proxy sends every path, including `/rtc`, to port 8080. Close port 8080 in the firewall; 7881 and 7882 stay open. Embedded LiveKit HTTP on 7880 is loopback-only.
+- **LiveKit's ports** 7880 (private HTTP), 7881 and 7882 (public media) are fixed in this image. If they are taken on the server, use [Docker Compose](compose.md), where LiveKit runs in its own container.
 
 ## 5. Upgrade
 

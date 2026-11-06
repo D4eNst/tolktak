@@ -70,6 +70,20 @@ def test_s3_range(s3_env):
     assert r.status_code == 200 and r.content == DATA
 
 
+@pytest.mark.parametrize(
+    "header",
+    ["bytes=" + "9" * 5000 + "-", "bytes=-" + "9" * 5000, "bytes=0-" + "9" * 5000],
+    ids=["start", "suffix", "end"],
+)
+def test_s3_excessive_range_integer_is_rejected(s3_env, header):
+    e, _ = s3_env
+    token, _ = e.user("alice")
+    fid = e.upload(token, "a.mp3", DATA)[1]["file"]["id"]
+    response = e.c.get(f"/api/v1/files/{fid}", headers={"Range": header})
+    assert response.status_code == 416
+    assert response.headers["content-range"] == "bytes */1024"
+
+
 def test_s3_missing_object(s3_env):
     e, store = s3_env
     token, _ = e.user("alice")

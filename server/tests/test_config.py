@@ -24,6 +24,7 @@ SECRET = "x" * 32
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
     for k in [
+        "TOLKTAK_SIGNALING_PRIVATE", "TOLKTAK_SIGNALING_PUBLIC_URL",
         "LIVEKIT_PUBLIC_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "TOLKTAK_EMBEDDED_LIVEKIT",
         "TOLKTAK_S3_BUCKET", "TOLKTAK_S3_ENDPOINT", "TOLKTAK_S3_REGION", "TOLKTAK_S3_ACCESS_KEY",
         "TOLKTAK_S3_SECRET_KEY", "NODE_IP",
@@ -39,6 +40,18 @@ def with_keys(monkeypatch):
 def test_public_url_optional(monkeypatch):
     with_keys(monkeypatch)
     assert from_env().livekit_public_url == ""
+
+
+def test_private_signaling_configuration(monkeypatch):
+    with_keys(monkeypatch)
+    assert from_env().signaling_private is False
+    monkeypatch.setenv("TOLKTAK_SIGNALING_PRIVATE", "1")
+    monkeypatch.setenv("TOLKTAK_SIGNALING_PUBLIC_URL", "wss://app.example.com")
+    cfg = from_env()
+    assert cfg.signaling_private is True and cfg.signaling_public_url == "wss://app.example.com"
+    embedded = livekit_config(cfg)
+    assert embedded["bind_addresses"] == ["127.0.0.1"]
+    assert "bind_addresses" not in embedded["rtc"]
 
 
 def test_embedded_skips_livekit_keys(monkeypatch):
@@ -74,12 +87,12 @@ def test_s3_fields(monkeypatch):
 @pytest.mark.parametrize(
     "trust_proxy, headers, url",
     [
-        (False, {"Host": "203.0.113.10:8080"}, "ws://203.0.113.10:7880"),
-        (False, {"Host": "[2001:db8::1]:8080"}, "ws://[2001:db8::1]:7880"),
+        (False, {"Host": "203.0.113.10:8080"}, "ws://203.0.113.10:8080"),
+        (False, {"Host": "[2001:db8::1]:8080"}, "ws://[2001:db8::1]:8080"),
         (True, {"Host": "chat.example.com", "X-Forwarded-Proto": "https"}, "wss://chat.example.com"),
         (True, {"Host": "127.0.0.1:8080", "X-Forwarded-Host": "chat.example.com", "X-Forwarded-Proto": "https"},
          "wss://chat.example.com"),
-        (False, {"Host": "chat.example.com", "X-Forwarded-Proto": "https"}, "ws://chat.example.com:7880"),
+        (False, {"Host": "chat.example.com", "X-Forwarded-Proto": "https"}, "ws://chat.example.com"),
     ],
 )  # fmt: skip
 def test_livekit_url_from_request(tmp_path, trust_proxy, headers, url):
@@ -95,10 +108,10 @@ def test_livekit_url_from_request(tmp_path, trust_proxy, headers, url):
 
 
 def test_livekit_url_configured(tmp_path):
-    cfg = make_config(tmp_path, livekit_public_url="wss://lk.example.com")
+    cfg = make_config(tmp_path, signaling_public_url="wss://calls-through-app.example.com")
     with TestClient(create_app(cfg)) as c:
         assert c.get("/api/v1/server", headers={"Host": "chat.example.com"}).json()["livekit_url"] == (
-            "wss://lk.example.com"
+            "wss://calls-through-app.example.com"
         )
 
 

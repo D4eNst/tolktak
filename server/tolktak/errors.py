@@ -2,6 +2,10 @@ class NotFound(Exception):
     pass
 
 
+class FileMissing(Exception):
+    pass
+
+
 class Conflict(Exception):
     pass
 

@@ -17,6 +17,7 @@ import {
 } from 'electron';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { SOUND_ASSETS } from '../sounds';
 import { fileURLToPath } from 'node:url';
 import { globalPushToTalk, type HotkeyName, type Hotkeys, installHotkeys, uninstallHotkeys } from './hotkeys';
 import { watchOcclusion } from './occlusion';
@@ -56,22 +57,22 @@ const settingsFile = () => path.join(app.getPath('userData'), 'tolktak.json');
 
 // Settings come from a file and from the renderer: only known keys of the expected types are kept.
 function cleanSettings(raw: unknown): Persisted {
-  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const out: Persisted = {};
-  if (typeof r.server === 'string' && (r.server === '' || /^https?:\/\/[^\s]{1,2000}$/i.test(r.server))) out.server = r.server;
-  if (typeof r.token === 'string' && /^[\x21-\x7e]{0,256}$/.test(r.token)) out.token = r.token;
+  const input = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const cleaned: Persisted = {};
+  if (typeof input.server === 'string' && (input.server === '' || /^https?:\/\/[^\s]{1,2000}$/i.test(input.server))) cleaned.server = input.server;
+  if (typeof input.token === 'string' && /^[\x21-\x7e]{0,256}$/.test(input.token)) cleaned.token = input.token;
   for (const k of ['minimizeToTray', 'openAtLogin', 'allowWin10Loopback'] as const) {
-    if (typeof r[k] === 'boolean') out[k] = r[k];
+    if (typeof input[k] === 'boolean') cleaned[k] = input[k];
   }
-  if (r.hotkeys && typeof r.hotkeys === 'object') {
-    const keys = r.hotkeys as Record<string, unknown>;
-    out.hotkeys = {};
-    for (const name of ['mute', 'deafen', 'ptt'] as HotkeyName[]) {
+  if (input.hotkeys && typeof input.hotkeys === 'object') {
+    const keys = input.hotkeys as Record<string, unknown>;
+    cleaned.hotkeys = {};
+    for (const name of ['mute', 'deafen', 'ptt', 'window'] as HotkeyName[]) {
       const accel = keys[name];
-      if (typeof accel === 'string' && accel.length <= 64) out.hotkeys[name] = accel;
+      if (typeof accel === 'string' && accel.length <= 64) cleaned.hotkeys[name] = accel;
     }
   }
-  return out;
+  return cleaned;
 }
 
 async function readSettings(): Promise<Persisted> {
@@ -118,8 +119,8 @@ let settings: Persisted = {};
 
 // The main process has no renderer dictionaries: it follows the OS language.
 const STRINGS = {
-  en: { open: 'Open TolkTak', toggleMic: 'Mute / unmute microphone', toggleSound: 'Mute / unmute sound', quit: 'Quit', inVoice: 'TolkTak — in voice', unread: (n: number) => `Unread: ${n}` },
-  ru: { open: 'Открыть TolkTak', toggleMic: 'Микрофон вкл/выкл', toggleSound: 'Звук вкл/выкл', quit: 'Выход', inVoice: 'TolkTak — в голосе', unread: (n: number) => `Непрочитанных: ${n}` },
+  en: { open: 'Open TolkTak', toggleMic: 'Mute / unmute microphone', toggleSound: 'Mute / unmute sound', quit: 'Quit', inVoice: 'TolkTak — in call', unread: (n: number) => `Unread: ${n}` },
+  ru: { open: 'Открыть TolkTak', toggleMic: 'Микрофон вкл/выкл', toggleSound: 'Звук вкл/выкл', quit: 'Выход', inVoice: 'TolkTak — в звонке', unread: (n: number) => `Непрочитанные сообщения: ${n}` },
 };
 const str = () => (app.getLocale().toLowerCase().startsWith('ru') ? STRINGS.ru : STRINGS.en);
 
@@ -173,6 +174,20 @@ function installDisplayMediaHandler() {
   });
 }
 
+function toBrowser(url: string) {
+  if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+  return { action: 'deny' as const };
+}
+
+let revealMain = () => {};
+let colors = { app: '#0b1327', island: '#131d37', symbol: '#97a3c5' };
+const popped = new Set<BrowserWindow>();
+
+function paintWindow(w: BrowserWindow, bg: string) {
+  w.setBackgroundColor(bg);
+  if (process.platform !== 'darwin') w.setTitleBarOverlay({ color: bg, symbolColor: colors.symbol });
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
@@ -180,14 +195,14 @@ function createWindow() {
     minWidth: 940,
     minHeight: 560,
     show: false,
-    backgroundColor: '#0e0c12',
+    backgroundColor: '#0b1327',
     title: 'TolkTak',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     ...(process.platform === 'darwin'
-      ? { trafficLightPosition: { x: 14, y: 12 } }
-      : { titleBarOverlay: { color: '#0e0c12', symbolColor: '#b9b1c6', height: 34 } }),
+      ? { trafficLightPosition: { x: 18, y: 21 } }
+      : { titleBarOverlay: { color: '#0b1327', symbolColor: '#97a3c5', height: 56 } }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -198,16 +213,44 @@ function createWindow() {
     },
   });
   win.removeMenu();
-  win.once('ready-to-show', () => {
+  // Keep the launch window until the renderer reports its first screen.
+  let revealed = false;
+  revealMain = () => {
+    if (revealed) return;
+    revealed = true;
     if (!process.argv.includes('--hidden')) win?.show();
     closeLaunchWindow();
-  });
+  };
+  win.once('ready-to-show', () => setTimeout(() => revealMain(), 15_000));
   win.loadFile(path.join(__dirname, 'index.html'));
 
   win.webContents.on('will-navigate', (e) => e.preventDefault());
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
-    return { action: 'deny' };
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    // A window of the desk on its own: a blank page of the same origin that the desk draws into.
+    if (url === 'about:blank' && frameName.startsWith('tolktak-pop'))
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          minWidth: 320,
+          minHeight: 240,
+          backgroundColor: colors.island,
+          autoHideMenuBar: true,
+          icon: path.join(__dirname, 'assets', 'icon.png'),
+          // No title bar of its own: the window's head is the bar, as in the main window.
+          titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+          ...(process.platform === 'darwin'
+            ? { trafficLightPosition: { x: 14, y: 15 } }
+            : { titleBarOverlay: { color: colors.island, symbolColor: colors.symbol, height: 46 } }),
+        },
+      };
+    return toBrowser(url);
+  });
+  // Popped-out windows show the same chats, so their links leave for the browser too.
+  win.webContents.on('did-create-window', (child) => {
+    popped.add(child);
+    child.on('closed', () => popped.delete(child));
+    child.webContents.on('will-navigate', (e) => e.preventDefault());
+    child.webContents.setWindowOpenHandler(({ url }) => toBrowser(url));
   });
   win.on('close', (e) => {
     if (!quitting && (process.platform === 'darwin' || settings.minimizeToTray !== false)) {
@@ -245,7 +288,11 @@ function createTray() {
 }
 
 function registerShortcuts() {
-  installHotkeys(settings.hotkeys ?? {}, (name) => win?.webContents.send('shortcut', name));
+  installHotkeys(settings.hotkeys ?? {}, (name) => {
+    if (name !== 'toggleWindow') return win?.webContents.send('shortcut', name);
+    if (win?.isVisible() && win.isFocused()) win.hide();
+    else (win?.show(), win?.focus());
+  });
 }
 
 // Only the app's own page may use the main process.
@@ -282,8 +329,15 @@ function installIpc() {
     else app.setBadgeCount(count);
   });
   // fetch() cannot read large assets from file://.
-  const assets = new Set(['dfn/df_bg.wasm', 'dfn/model.tar.gz']);
+  const assets = new Set(['dfn/df_bg.wasm', 'dfn/model.tar.gz', ...SOUND_ASSETS]);
   handle('asset:read', (name: string) => (assets.has(name) ? readFileSync(path.join(__dirname, 'assets', name)) : null));
+  handle('app:ready', () => revealMain());
+  handle('app:colors', (c: typeof colors) => {
+    if (![c?.app, c?.island, c?.symbol].every((x) => typeof x === 'string' && /^#[0-9a-f]{6}$/i.test(x))) return;
+    colors = { app: c.app, island: c.island, symbol: c.symbol };
+    if (win) paintWindow(win, colors.app);
+    popped.forEach((w) => paintWindow(w, colors.island));
+  });
   handle('app:info', () => ({
     version: app.getVersion(),
     platform: process.platform,
@@ -383,7 +437,7 @@ app.whenReady().then(async () => {
   // Packaged builds take the dock icon from the bundle.
   if (process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, 'assets', 'icon-512.png'));
   settings = await readSettings();
-  // First, so that nothing failing below can keep the app from receiving a fix.
+  // Install first so startup failures cannot disable updates.
   installUpdater(() => win);
   restrictFileProtocol();
   installPermissions();

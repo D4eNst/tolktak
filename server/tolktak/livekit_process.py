@@ -33,7 +33,8 @@ def livekit_config(cfg: Config) -> dict:
         host = f"[{host}]"
     return {
         "port": PORT,
-        # STUN discovery overrides NODE_IP, so an explicit address turns it off.
+        "bind_addresses": ["127.0.0.1"],
+        # Explicit NODE_IP must disable STUN discovery.
         "rtc": {"tcp_port": 7881, "udp_port": 7882, "use_external_ip": not os.environ.get("NODE_IP")},
         "keys": {cfg.livekit_api_key: cfg.livekit_api_secret},
         "webhook": {
@@ -42,7 +43,7 @@ def livekit_config(cfg: Config) -> dict:
         },
         "room": {
             "empty_timeout": 60,
-            # Adds H.264 42001f: Chromium encodes it on the GPU, the default 42e01f only in software.
+            # Chromium can encode 42001f on the GPU; default 42e01f uses software.
             "enabled_codecs": [
                 {"mime": "audio/opus"},
                 {"mime": "audio/red"},
@@ -84,7 +85,7 @@ def run_with(server: uvicorn.Server, cfg: Config) -> int:
             server.should_exit = True
 
     threading.Thread(target=watch, daemon=True).start()
-    # uvicorn re-raises SIGTERM after shutdown, which would skip the finally below when not PID 1.
+    # Uvicorn re-raises SIGTERM outside PID 1; keep child cleanup in finally.
     signal.signal(signal.SIGTERM, signal.default_int_handler)
     try:
         server.run()

@@ -42,7 +42,7 @@ const builds = [
     format: 'esm',
     jsx: 'automatic',
     jsxImportSource: 'preact',
-    loader: { '.css': 'css' },
+    loader: { '.css': 'css', '.woff2': 'file' },
     external: ['assets/*'],
     plugins: [inlineFiles],
   },

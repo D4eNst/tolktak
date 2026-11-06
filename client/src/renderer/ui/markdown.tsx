@@ -4,18 +4,28 @@ import { useState } from 'preact/hooks';
 import { bridge } from '../bridge';
 import { t } from '../i18n';
 import { me, users } from '../state';
+import { Icon } from './common';
+import { copyText } from './Profile';
 
 // A URL may hold one level of balanced parentheses, as in …/wiki/Mercury_(planet).
 const INLINE =
   /(`[^`\n]+`)|(\|\|[\s\S]+?\|\|)|(\*\*[\s\S]+?\*\*)|(__[\s\S]+?__)|(~~[\s\S]+?~~)|(\*[^*\s](?:[^*]*[^*\s])?\*)|(\b_[^_\s](?:[^_]*[^_\s])?_\b)|(\[[^\]\n]+\]\(https?:\/\/(?:[^\s()]|\([^\s()]*\))+\))|(https?:\/\/(?:[^\s<>"'()]|\([^\s<>"'()]*\))*(?:[^\s<>"'.,;:!?()\]]|\([^\s<>"'()]*\)))|(@[a-z0-9_.-]{2,32})/gi;
 
+// A span lets spoilers wrap inline.
 function Spoiler({ children }: { children: ComponentChildren }) {
   const [open, setOpen] = useState(false);
   if (open) return <span class="spoiler open">{children}</span>;
   return (
-    <button class="spoiler" onClick={(e) => (e.stopPropagation(), setOpen(true))} title={t().chat.markdown.spoiler}>
+    <span
+      class="spoiler"
+      role="button"
+      tabIndex={0}
+      title={t().chat.markdown.spoiler}
+      onClick={(e) => (e.stopPropagation(), setOpen(true))}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setOpen(true))}
+    >
       {children}
-    </button>
+    </span>
   );
 }
 
@@ -55,7 +65,7 @@ function inline(text: string, key = 'i'): ComponentChildren[] {
     else if (m[6] || m[7]) out.push(<em key={k}>{inline(tok.slice(1, -1), k)}</em>);
     else if (m[8]) {
       const [, label, href] = /^\[([^\]]+)\]\((.+)\)$/.exec(tok)!;
-      // The label can claim any address, so the real host follows it.
+      // Show the actual host beside an arbitrary link label.
       const host = URL.parse(href)?.hostname ?? href;
       out.push(
         <ExternalLink key={k} href={href}>
@@ -121,6 +131,9 @@ export function Markdown({ text }: { text: string }) {
         i % 2 === 1 ? (
           <pre key={i} class="code-block">
             <code>{p.replace(/\n$/, '')}</code>
+            <button class="code-copy" onClick={() => copyText(p.replace(/\n$/, ''))} title={t().chat.markdown.copyCode} aria-label={t().chat.markdown.copyCode}>
+              <Icon name="copy" size={14} />
+            </button>
           </pre>
         ) : p ? (
           lines(p.replace(/^\n|\n$/g, ''), 'b' + i)

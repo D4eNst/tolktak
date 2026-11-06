@@ -3,6 +3,7 @@ import { computed, signal } from '@preact/signals';
 import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { intlLocale, t } from '../i18n';
+import { useKnownUsers } from './usePeople';
 import { avatarUrl, groups, online, users } from '../state';
 
 const paths: Record<string, string> = {
@@ -21,10 +22,15 @@ const paths: Record<string, string> = {
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5',
   users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
   hash: 'M4 9h16M4 15h16M10 3 8 21M16 3l-2 18',
+  speakerOff: 'M11 5 6 9H2v6h4l5 4zM22 9l-6 6M16 9l6 6',
   speaker: 'M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14',
   maximize: 'M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3',
   x: 'M18 6 6 18M6 6l12 12',
+  reset: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5',
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
+  navigation: 'M3 11l19-9-9 19-2-8z',
+  tabInside: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 9h18',
+  tabAbove: 'M6 3h12a2 2 0 0 1 0 4H6a2 2 0 0 1 0-4zM5 10h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
@@ -47,7 +53,9 @@ const paths: Record<string, string> = {
   shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
   check: 'M20 6 9 17l-5-5',
   alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+  chevronUp: 'M6 15l6-6 6 6',
   chevronDown: 'M6 9l6 6 6-6',
+  chevronLeft: 'M15 6l-6 6 6 6',
   chevronRight: 'M9 6l6 6-6 6',
   keyboard: 'M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10',
   user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
@@ -55,11 +63,16 @@ const paths: Record<string, string> = {
   bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
   bellOff: 'M8.7 3A6 6 0 0 1 18 8c0 2.8.5 4.8 1.1 6.2M17 17H3s3-2 3-9c0-.8.1-1.5.4-2.2M13.7 21a2 2 0 0 1-3.4 0M3 3l18 18',
   arrowDown: 'M12 5v14M19 12l-7 7-7-7',
+  arrowLeft: 'M19 12H5M12 19l-7-7 7-7',
   sticker: 'M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9.5L21 14.5V5a2 2 0 0 0-2-2zM14 21v-5a2 2 0 0 1 2-2h5M8 10h.01M14 10h.01M8.5 14.5s1.5 1.5 3.5 1.5',
   stop: 'M6 6h12v12H6z',
   link: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
   sparkles: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9zM5 2l.6 1.4L7 4l-1.4.6L5 6l-.6-1.4L3 4l1.4-.6z',
   wave: 'M2 12h2M6 8v8M10 5v14M14 8v8M18 10v4M22 12h0',
+  layoutBig: 'M3 4h18v11H3zM3 19h4M10 19h4M17 19h4',
+  layoutGrid: 'M3 4h8v7H3zM13 4h8v7h-8zM3 13h8v7H3zM13 13h8v7h-8z',
+  eyeOff: 'M3 3l18 18M10.6 5.1A11 11 0 0 1 12 5c7 0 11 7 11 7a18 18 0 0 1-3.2 4M6.6 6.6C3.4 8.5 1 12 1 12s4 8 11 8a10 10 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2',
+  external: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
   eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   quote: 'M3 21c3 0 7-1 7-8V5H3v8h4M14 21c3 0 7-1 7-8V5h-7v8h4',
   bold: 'M6 4h8a4 4 0 0 1 0 8H6zM6 12h9a4 4 0 0 1 0 8H6z',
@@ -97,6 +110,7 @@ export function Avatar({
   speaking?: boolean;
   showPresence?: boolean;
 }) {
+  useKnownUsers([id]);
   const u = users.value.get(id);
   const name = u?.display_name ?? '?';
   const src = u?.avatar ? avatarUrl(u.avatar) : '';
@@ -117,11 +131,13 @@ export function GroupAvatar({ id, size = 44 }: { id: number; size?: number }) {
   if (!g) return null;
   const src = g.avatar ? avatarUrl(g.avatar) : '';
   return (
-    <span class={'group-avatar' + (src ? ' has-img' : '')} style={{ width: `${size}px`, height: `${size}px`, fontSize: `${size * 0.36}px` }}>
-      {src ? <img src={src} alt="" draggable={false} /> : g.name.slice(0, 2).toUpperCase()}
+    <span class={'group-avatar' + (src ? ' has-img' : '')} style={{ width: `${size}px`, height: `${size}px`, fontSize: `${size * 0.38}px`, '--c': `var(--user-${id % 8})` }}>
+      {src ? <img src={src} alt="" draggable={false} /> : (/\s/.test(g.name.trim()) ? initials(g.name) : g.name.slice(0, 2)).toUpperCase()}
     </span>
   );
 }
+
+const modalBackgrounds = new WeakMap<HTMLElement, { count: number; inert: boolean }>();
 
 export function Modal({
   title,
@@ -137,28 +153,69 @@ export function Modal({
   class?: string;
 }) {
   const [closing, setClosing] = useState(false);
+  const [opened] = useState(inputWindow);
+  const win = opened.closed ? window : opened;
+  const [opener] = useState(() => win.document.activeElement as HTMLElement | null);
   const ref = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
+  const currentClose = useRef(onClose);
+  currentClose.current = onClose;
   const close = () => {
-    if (closing) return;
+    if (closing || closeTimer.current !== null) return;
     setClosing(true);
-    setTimeout(onClose, 140);
+    closeTimer.current = win.setTimeout(() => {
+      closeTimer.current = null;
+      currentClose.current();
+    }, 140);
   };
-  useEffect(() => {
+  useLayoutEffect(() => () => {
+    if (closeTimer.current !== null) win.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }, [win]);
+  useLayoutEffect(() => {
+    const roots = [...win.document.querySelectorAll<HTMLElement>('.shell, .topbar, .popout-win')];
+    for (const root of roots) {
+      const state = modalBackgrounds.get(root) ?? { count: 0, inert: root.inert };
+      state.count++;
+      modalBackgrounds.set(root, state);
+      root.inert = true;
+    }
+    if (!ref.current?.contains(win.document.activeElement)) ref.current?.focus({ preventScroll: true });
+    return () => {
+      for (const root of roots) {
+        const state = modalBackgrounds.get(root)!;
+        if (--state.count === 0) {
+          root.inert = state.inert;
+          modalBackgrounds.delete(root);
+        }
+      }
+      if (opener?.isConnected && !opener.closest('[inert]')) opener.focus({ preventScroll: true });
+    };
+  }, [win]);
+  useLayoutEffect(() => {
     const k = (e: KeyboardEvent) => {
-      // Escape closes only the top layer: menus and popovers sit above modals, and a later modal above an earlier one.
-      const top = !document.querySelector('.menu, .popover') && ref.current === [...document.querySelectorAll('.modal')].at(-1);
+      // Only the top overlay handles Escape and focus trapping.
+      const top = !win.document.querySelector('.menu, .popover') && ref.current === [...win.document.querySelectorAll('.modal')].at(-1);
+      if (e.key === 'Tab' && !e.defaultPrevented && top) {
+        const items = [...ref.current!.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]')].filter((el) => el.tabIndex >= 0 && !el.matches(':disabled') && el.getClientRects().length);
+        const active = win.document.activeElement;
+        if (!items.length || !ref.current!.contains(active) || active === ref.current || active === (e.shiftKey ? items[0] : items.at(-1))) {
+          e.preventDefault();
+          (e.shiftKey ? items.at(-1) : items[0])?.focus();
+        }
+      }
       if (e.key === 'Escape' && !e.defaultPrevented && top) {
         e.preventDefault();
         close();
       }
     };
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    win.addEventListener('keydown', k);
+    return () => win.removeEventListener('keydown', k);
   });
   // In <body>: an ancestor with a transform would become the containing block.
   return createPortal(
     <div class={'modal-backdrop' + (closing ? ' closing' : '')} onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div class={'modal' + (wide ? ' wide' : '') + ' ' + cls} ref={ref} role="dialog" aria-label={title}>
+      <div class={'modal' + (wide ? ' wide' : '') + ' ' + cls} ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
         <header>
           <h2>{title}</h2>
           <button class="icon-btn" onClick={close} aria-label={t().common.close}>
@@ -168,21 +225,32 @@ export function Modal({
         <div class="modal-body">{children}</div>
       </div>
     </div>,
-    document.body,
+    win.document.body,
   );
 }
 
-type Ask =
-  | { kind: 'confirm'; title: string; text?: string; ok: string; danger?: boolean; resolve: (v: boolean) => void }
-  | { kind: 'prompt'; title: string; label: string; initial: string; ok: string; max: number; resolve: (v: string | null) => void };
+type Ask = { id: number } & (
+  | { kind: 'confirm' | 'info'; title: string; text?: string; ok: string; danger?: boolean; resolve: (v: boolean) => void }
+  | { kind: 'prompt'; title: string; label: string; initial: string; ok: string; max: number; resolve: (v: string | null) => void }
+);
 const asking = signal<Ask | null>(null);
+let nextAskId = 0;
+function replaceAsk(next: Ask) {
+  const previous = asking.peek();
+  asking.value = next;
+  if (previous?.kind === 'prompt') previous.resolve(null);
+  else previous?.resolve(false);
+}
 
 export function confirmDialog(title: string, opts: { text?: string; ok?: string; danger?: boolean } = {}): Promise<boolean> {
-  return new Promise((resolve) => (asking.value = { kind: 'confirm', title, text: opts.text, ok: opts.ok ?? t().common.yes, danger: opts.danger, resolve }));
+  return new Promise((resolve) => replaceAsk({ id: ++nextAskId, kind: 'confirm', title, text: opts.text, ok: opts.ok ?? t().common.yes, danger: opts.danger, resolve }));
+}
+export function infoDialog(title: string, text: string) {
+  replaceAsk({ id: ++nextAskId, kind: 'info', title, text, ok: t().common.ok, resolve: () => {} });
 }
 export function promptDialog(title: string, opts: { label?: string; initial?: string; ok?: string; max?: number } = {}): Promise<string | null> {
   return new Promise((resolve) =>
-    (asking.value = { kind: 'prompt', title, label: opts.label ?? t().common.name, initial: opts.initial ?? '', ok: opts.ok ?? t().common.save, max: opts.max ?? 60, resolve }),
+    replaceAsk({ id: ++nextAskId, kind: 'prompt', title, label: opts.label ?? t().common.name, initial: opts.initial ?? '', ok: opts.ok ?? t().common.save, max: opts.max ?? 60, resolve }),
   );
 }
 
@@ -194,17 +262,20 @@ export function AskHost() {
   }, [a]);
   if (!a) return null;
   const done = (val: boolean | string | null) => {
+    if (asking.value !== a) return;
     asking.value = null;
     (a.resolve as (x: unknown) => void)(val);
   };
-  if (a.kind === 'confirm') {
+  if (a.kind !== 'prompt') {
     return (
-      <Modal title={a.title} onClose={() => done(false)} class="ask">
+      <Modal key={a.id} title={a.title} onClose={() => done(false)} class="ask">
         {a.text && <p class="ask-text">{a.text}</p>}
         <div class="modal-actions">
-          <button class="secondary" onClick={() => done(false)}>
-            {t().common.cancel}
-          </button>
+          {a.kind === 'confirm' && (
+            <button class="secondary" onClick={() => done(false)}>
+              {t().common.cancel}
+            </button>
+          )}
           <button class={a.danger ? 'danger-btn' : 'primary'} onClick={() => done(true)} autoFocus>
             {a.ok}
           </button>
@@ -213,7 +284,7 @@ export function AskHost() {
     );
   }
   return (
-    <Modal title={a.title} onClose={() => done(null)} class="ask">
+    <Modal key={a.id} title={a.title} onClose={() => done(null)} class="ask">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -280,6 +351,7 @@ export function Slider({
         style={{ '--p': pct + '%' }}
         onInput={(e) => onInput(Number((e.target as HTMLInputElement).value))}
         aria-label={label}
+        aria-valuetext={format(value)}
       />
       <span class="slider-val">{format(value)}</span>
     </label>
@@ -348,17 +420,35 @@ export function Select<T extends string>({ value, options, onChange, label }: { 
 }
 
 export type MenuItem = { label: string; icon?: string; danger?: boolean; run: () => void; hint?: string } | 'sep';
-type MenuState = { x: number; y: number; items: MenuItem[]; header?: ComponentChildren };
+type MenuState = { x: number; y: number; items: MenuItem[]; header?: ComponentChildren; win: Window };
 const menuState = signal<MenuState | null>(null);
+
+window.addEventListener('tolktak:session-reset', () => {
+  menuState.value = null;
+  const a = asking.value;
+  asking.value = null;
+  if (a?.kind === 'prompt') a.resolve(null);
+  else a?.resolve(false);
+});
+
+let lastInput: Window = window;
+// Open overlays in the window that received the last input, including popouts.
+export function followInput(w: Window) {
+  const mark = () => (lastInput = w);
+  w.addEventListener('pointerdown', mark, true);
+  w.addEventListener('keydown', mark, true);
+}
+followInput(window);
+export const inputWindow = () => (lastInput.closed ? window : lastInput);
 
 export function openMenu(e: { clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void }, items: MenuItem[], header?: ComponentChildren) {
   e.preventDefault?.();
   e.stopPropagation?.();
-  menuState.value = { x: e.clientX, y: e.clientY, items, header };
+  menuState.value = { x: e.clientX, y: e.clientY, items, header, win: inputWindow() };
 }
 export function openMenuAt(el: Element, items: MenuItem[]) {
   const r = el.getBoundingClientRect();
-  menuState.value = { x: r.left, y: r.bottom + 4, items };
+  menuState.value = { x: r.left, y: r.bottom + 4, items, win: el.ownerDocument.defaultView ?? window };
 }
 
 function useClampedPosition(x: number, y: number, deps: unknown[]) {
@@ -368,7 +458,8 @@ function useClampedPosition(x: number, y: number, deps: unknown[]) {
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setPos({ x: Math.max(8, Math.min(x, innerWidth - r.width - 8)), y: Math.max(8, Math.min(y, innerHeight - r.height - 8)) });
+    const v = el.ownerDocument.defaultView ?? window;
+    setPos({ x: Math.max(8, Math.min(x, v.innerWidth - r.width - 8)), y: Math.max(8, Math.min(y, v.innerHeight - r.height - 8)) });
   }, deps);
   return { ref, pos };
 }
@@ -378,7 +469,8 @@ export function MenuHost() {
   const { ref, pos } = useClampedPosition(m?.x ?? 0, m?.y ?? 0, [m]);
   useEffect(() => {
     if (!m) return;
-    const opener = document.activeElement;
+    const w = m.win;
+    const opener = w.document.activeElement;
     ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus();
     const close = () => (menuState.value = null);
     const k = (e: KeyboardEvent) => {
@@ -387,20 +479,20 @@ export function MenuHost() {
         close();
       }
     };
-    window.addEventListener('mousedown', close);
-    window.addEventListener('blur', close);
-    window.addEventListener('keydown', k);
-    window.addEventListener('resize', close);
+    w.addEventListener('mousedown', close);
+    w.addEventListener('blur', close);
+    w.addEventListener('keydown', k);
+    w.addEventListener('resize', close);
     return () => {
-      window.removeEventListener('mousedown', close);
-      window.removeEventListener('blur', close);
-      window.removeEventListener('keydown', k);
-      window.removeEventListener('resize', close);
-      if (document.activeElement === document.body && opener instanceof HTMLElement) opener.focus();
+      w.removeEventListener('mousedown', close);
+      w.removeEventListener('blur', close);
+      w.removeEventListener('keydown', k);
+      w.removeEventListener('resize', close);
+      if (w.document.activeElement === w.document.body) (opener as HTMLElement | null)?.focus?.();
     };
   }, [m]);
   if (!m) return null;
-  return (
+  return createPortal(
     <div
       class="menu pop-in"
       ref={ref}
@@ -408,7 +500,7 @@ export function MenuHost() {
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role=menuitem]')];
-        const i = items.indexOf(document.activeElement as HTMLElement);
+        const i = items.indexOf(e.currentTarget.ownerDocument.activeElement as HTMLElement);
         const next = ({ ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: -1 } as Record<string, number>)[e.key];
         if (next === undefined) return;
         e.preventDefault();
@@ -436,25 +528,28 @@ export function MenuHost() {
           </button>
         ),
       )}
-    </div>
+    </div>,
+    m.win.document.body,
   );
 }
 
 export function Popover({ x, y, onClose, children, class: cls = '' }: { x: number; y: number; onClose: () => void; children: ComponentChildren; class?: string }) {
   const { ref, pos } = useClampedPosition(x, y, [x, y]);
   useEffect(() => {
+    const w = ref.current?.ownerDocument.defaultView ?? window;
     const off = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && onClose();
     const k = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('.menu')) {
+      if (e.key === 'Escape' && !e.defaultPrevented && !w.document.querySelector('.menu')) {
         e.preventDefault();
         onClose();
       }
     };
-    setTimeout(() => window.addEventListener('mousedown', off));
-    window.addEventListener('keydown', k);
+    const timer = w.setTimeout(() => w.addEventListener('mousedown', off));
+    w.addEventListener('keydown', k);
     return () => {
-      window.removeEventListener('mousedown', off);
-      window.removeEventListener('keydown', k);
+      w.clearTimeout(timer);
+      w.removeEventListener('mousedown', off);
+      w.removeEventListener('keydown', k);
     };
   }, [onClose]);
   return (
@@ -470,7 +565,7 @@ function isYesterday(d: Date, now: Date) {
   return d.toDateString() === y.toDateString();
 }
 
-// Building a formatter costs far more than formatting, and every message shows a time.
+// Reuse formatters across message rows.
 export const dateFormats = computed(() => {
   const l = intlLocale();
   return {
@@ -481,7 +576,7 @@ export const dateFormats = computed(() => {
   };
 });
 
-// Memoised message rows read it, so their labels change at midnight.
+// Invalidate memoized date labels at midnight.
 const today = signal(new Date().toDateString());
 setInterval(() => (today.value = new Date().toDateString()), 60_000);
 

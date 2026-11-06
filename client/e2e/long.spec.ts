@@ -25,11 +25,11 @@ test('long movie session', async ({ browser }) => {
   test.setTimeout((MIN + 5) * 60_000);
   const [alice, bob, carol] = await Promise.all(['alice', 'bob', 'carol'].map((u) => openClient(browser, stack, u)));
   for (const p of [alice, bob, carol]) await joinRoom(p, 'Марафон');
-  await alice.click('button[aria-label="Демонстрация"]');
+  await alice.click('.capsule button[aria-label="Показать экран"]');
   await alice.locator('.warn-box input[type=checkbox]').check();
-  await alice.selectOption('.share-options select', '720p30');
+  await alice.locator('.share-options button[aria-haspopup=listbox]').click();
+  await alice.getByRole('option', { name: /720p.*30/ }).click();
   await alice.click('.modal button.primary');
-  for (const p of [bob, carol]) await p.locator('.stream-card').click();
   await expectFlowing(bob, ids.alice, 'screen_share', 40);
   const rows: string[] = [];
   const heap = (p: typeof alice) => p.evaluate(() => Math.round(((performance as any).memory?.usedJSHeapSize ?? 0) / 1e6));

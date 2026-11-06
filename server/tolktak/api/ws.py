@@ -1,5 +1,4 @@
-"""The token comes in the first frame, never in the URL. The 25 s ping detects half-open connections and ended
-sessions."""
+"""Authenticate in the first frame; 25 s pings detect ended sessions and half-open connections."""
 
 import asyncio
 import contextlib
@@ -54,7 +53,7 @@ def _bool(v) -> bool:
 @router.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     s: Server = ws.app.state.server
-    # Desktop clients send Origin "file://" or the dev server; authentication is by token.
+    # Desktop origins vary; authentication uses the first-frame token.
     await ws.accept()
     try:
         first = await asyncio.wait_for(_read(ws), 10)
@@ -70,18 +69,23 @@ async def ws_endpoint(ws: WebSocket):
         await _close(ws, 4001, "invalid token")
         return
 
-    conn = s.hub.register(user["id"], users.token_hash(token))
+    scope = first.get("profile_scope", "all")
+    if scope not in ("all", "watched"):
+        await _close(ws, 4002, "unsupported profile scope")
+        return
+    conn = s.hub.register(user["id"], users.token_hash(token), scope)
     writer = None
     try:
         hello = {
             "user": user,
-            "online": s.hub.online(),
+            "online": [user["id"]] if scope == "watched" else s.hub.online(),
+            "profile_scope": scope,
             "voice": await s.hub.visible_voice(s.can_see_room(user["id"])),
             "server": {"name": s.cfg.server_name, "version": s.version, "min_client": MIN_CLIENT_VERSION},
         }
         await ws.send_text(event("hello", hello).decode())
         writer = asyncio.create_task(_writer(ws, conn, token))
-        reader = asyncio.create_task(_reader(ws, s, user["id"]))
+        reader = asyncio.create_task(_reader(ws, s, conn))
         done, _ = await asyncio.wait({writer, reader}, return_when=asyncio.FIRST_COMPLETED)
         for t in done:
             e = t.exception()
@@ -128,25 +132,51 @@ async def _writer(ws: WebSocket, conn: Conn, token: str) -> None:
         await asyncio.wait_for(ws.send_text(b.decode()), 10)
 
 
-async def _reader(ws: WebSocket, s: Server, uid: int) -> None:
+async def _reader(ws: WebSocket, s: Server, conn: Conn) -> None:
+    uid = conn.user_id
     while True:
         f = await _read(ws)
         if f is None or not s.rl.allow(f"ws:{uid}", 20, 300):
             continue
         match f.get("type"):
+            case "users.watch":
+                ids = f.get("user_ids")
+                request_id = f.get("request_id")
+                valid = (
+                    conn.profile_scope == "watched"
+                    and isinstance(ids, list)
+                    and len(ids) <= 500
+                    and all(isinstance(i, int) and not isinstance(i, bool) and 0 < i < 1 << 63 for i in ids)
+                    and (request_id is None or isinstance(request_id, str) and len(request_id) <= 64)
+                )
+                if not valid:
+                    s.hub.send_conn(
+                        conn, event("error", {"code": "bad_watch", "message": "Invalid profile watch list"})
+                    )
+                    continue
+                assert isinstance(ids, list)
+                conn.watched = set(ids)
+                profiles = await users.profiles_by_ids(sorted(conn.watched))
+                data = {
+                    "users": [u | {"online": s.hub.is_online(u["id"])} for u in profiles],
+                    "user_ids": sorted(conn.watched),
+                }
+                if request_id is not None:
+                    data["request_id"] = request_id
+                s.hub.send_conn(conn, event("users.snapshot", data))
             case "typing":
                 cid = _int(f.get("channel_id"))
                 if await chat.is_channel_member(cid, uid):
                     others = [m for m in await chat.channel_members(cid) if m != uid]
                     s.hub.send_to(others, event("typing", {"channel_id": cid, "user_id": uid}))
             case "voice.state":
-                # Only flags of a room the user is actually in (per SFU) are accepted.
+                # The hub accepts flags only for current SFU participants.
                 await s.hub.voice_update(
                     _str(f.get("room")), uid, muted=_bool(f.get("muted")), deafened=_bool(f.get("deafened"))
                 )
             case "voice.joined":
                 # Optimistic presence until the SFU webhook arrives.
                 room = _str(f.get("room"))
-                if await s.can_see_room(uid)(room):
+                if uid in await s.room_audience(room):
                     await s.hub.voice_join(room, uid)
                     await s.hub.voice_update(room, uid, muted=_bool(f.get("muted")), deafened=_bool(f.get("deafened")))

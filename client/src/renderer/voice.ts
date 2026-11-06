@@ -14,8 +14,13 @@ import {
   VideoPreset,
   VideoPresets,
   VideoQuality,
+  type LocalTrack,
+  type TrackPublishOptions,
 } from 'livekit-client';
 import { VoiceChain, type ChainSettings, type ChainStats, type Denoise } from './audio/chain';
+import { configureSounds, playSound as playTone } from './audio/sounds';
+import { SOUND_THEMES, type SoundTheme } from '../sounds';
+import { ApiError, type Api, type VoiceModerationEvent, type VoicePermissions, type VoiceSource } from './api';
 import { bridge, platform, type AudioMode } from './bridge';
 import { t } from './i18n';
 import { api, appActive, callEvents, errorText, me, sendRealtime, session, toast, userName, windowHidden } from './state';
@@ -35,9 +40,10 @@ export type Prefs = {
   streamVolume: number; // 0..2
   ducking: boolean;
   duckLevel: number; // 0..1, stream volume factor while someone talks
-  autoWatch: boolean;
   userVolume: Record<string, number>; // identity -> 0..2
   sounds: boolean;
+  soundVolume: number;
+  soundTheme: SoundTheme;
   micMuted: boolean;
   deafened: boolean;
   micMode: 'voice' | 'ptt';
@@ -46,6 +52,7 @@ export type Prefs = {
   pttRelease: number; // ms the mic stays open after the key is released
   cameraQuality: '720p' | '1080p';
   mirrorCamera: boolean;
+  cameraPreview: boolean; // a look at the camera before turning it on
   streamReactions: boolean;
   backgroundSaver: boolean;
 };
@@ -65,9 +72,10 @@ const defaultPrefs: Prefs = {
   streamVolume: 1,
   ducking: true,
   duckLevel: 0.4,
-  autoWatch: false,
   userVolume: {},
   sounds: true,
+  soundVolume: 0.7,
+  soundTheme: 'tok-tak',
   micMuted: false,
   deafened: false,
   micMode: 'voice',
@@ -75,6 +83,7 @@ const defaultPrefs: Prefs = {
   vadThreshold: -50,
   pttRelease: 200,
   cameraQuality: '720p',
+  cameraPreview: true,
   mirrorCamera: true,
   streamReactions: true,
   backgroundSaver: true,
@@ -87,13 +96,19 @@ function loadPrefs(): Prefs {
     if (saved.denoise === undefined && saved.noiseSuppression === false) saved.denoise = 'off';
     saved.denoise = ({ webrtc: 'light', rnnoise: 'light', gtcrn: 'medium' } as Record<string, Denoise>)[saved.denoise] ?? saved.denoise;
     if (saved.agc === undefined && saved.autoGainControl === false) saved.agc = false;
-    return { ...defaultPrefs, ...saved };
+    const soundVolume = typeof saved.soundVolume === 'number' && Number.isFinite(saved.soundVolume)
+      ? Math.max(0, Math.min(1, saved.soundVolume)) : defaultPrefs.soundVolume;
+    const soundTheme = SOUND_THEMES.includes(saved.soundTheme) ? saved.soundTheme : defaultPrefs.soundTheme;
+    return { ...defaultPrefs, ...saved, soundVolume, soundTheme };
   } catch {
     return { ...defaultPrefs };
   }
 }
 
 export const prefs = signal<Prefs>(loadPrefs());
+effect(() => configureSounds(prefs.value));
+export { playTone };
+export { ringing } from './audio/sounds';
 
 export const lowPower = computed(() => prefs.value.backgroundSaver && !appActive.value);
 effect(() => {
@@ -159,17 +174,258 @@ export type Floater = { id: number; emoji: string; from: number; x: number };
 export const floaters = signal<Floater[]>([]);
 export const cameraOn = signal(false);
 export const sharing = signal<(ShareOptions & { audioInfo: string }) | null>(null);
+export const voicePermissions = signal<VoicePermissions | null>(null);
 export const watching = signal<string | null>(null);
+// Hover previews play at reduced volume.
+export const previewing = signal<string | null>(null);
+// Rendered screen heights in device pixels determine the subscribed layer.
+export const screenHeights = signal<Record<string, number>>({});
 export const speakingRemote = signal(false);
 export const speaking = signal<ReadonlySet<string>>(new Set());
 
 export const streams = computed(() => peers.value.filter((p) => p.shared));
 
 let room: Room | null = null;
+let callApi: Api | null = null;
+let callGeneration = 0;
+let voiceCleanup = Promise.resolve();
 let leaving = false;
-// Room of the running rejoin loop: a call joined later gets its own.
-let rejoining = '';
+let rejoining = 0;
 let screenTracks: { video?: LocalVideoTrack; audio?: LocalAudioTrack } = {};
+let shareGeneration = 0;
+let joiningTarget: CallTarget | null = null;
+let permissionsOwner: Api | null = null;
+let permissionsUser = 0;
+const permissionCache = new Map<number, VoicePermissions>();
+const moderationSeen = new Map<number, number>();
+let permissionRefresh: { owner: Api; generation: number; roomID: number; controller: AbortController; promise: Promise<void> } | null = null;
+const captureEpoch: Record<VoiceSource, number> = { microphone: 0, camera: 0, screen: 0 };
+const captureIntent: Record<VoiceSource, boolean> = { microphone: false, camera: false, screen: false };
+const sourceQueues = new WeakMap<Room, Partial<Record<VoiceSource, Promise<unknown>>>>();
+const publishingEpoch = new WeakMap<Room, Partial<Record<VoiceSource, number>>>();
+const pendingTracks = new Map<Room, Set<{ source: VoiceSource; track: LocalTrack | MediaStreamTrack }>>();
+const pendingDisplays = new Set<MediaStream>();
+const guardedTracks = new WeakMap<LocalTrack, { room: Room; source: VoiceSource }>();
+const expectedUnpublishes = new WeakMap<Room, Map<LocalTrack | MediaStreamTrack, number>>();
+const sourceOf = (source?: Track.Source): VoiceSource | undefined => source === Track.Source.Microphone ? 'microphone' : source === Track.Source.Camera ? 'camera' : source === Track.Source.ScreenShare || source === Track.Source.ScreenShareAudio ? 'screen' : undefined;
+const roomID = (target?: CallTarget | null) => target && 'room_id' in target ? target.room_id : null;
+
+function bindPermissions(owner: Api | null, uid: number) {
+  if (permissionsOwner === owner && permissionsUser === uid) return;
+  permissionRefresh?.controller.abort();
+  permissionRefresh = null;
+  permissionsOwner = owner;
+  permissionsUser = uid;
+  permissionCache.clear();
+  moderationSeen.clear();
+  voicePermissions.value = null;
+}
+
+export function mediaAllowed(source: VoiceSource): boolean {
+  const c = call.value;
+  const s = session.value;
+  if (!c || !s || callApi !== s.api) return true;
+  const permissions = voicePermissions.value;
+  return !permissions || permissionsOwner !== s.api || permissions.user_id !== s.me.id || permissions.room_id !== roomID(c.target) || (permissions.allowed.entry && permissions.allowed[source]);
+}
+
+function blocked(source: VoiceSource) { toast(t().moderation.permissionDenied(source), 'error'); }
+function sourceCurrent(r: Room, source: VoiceSource, epoch: number) {
+  return currentRoom(r) && captureEpoch[source] === epoch && captureIntent[source] && mediaAllowed(source);
+}
+function queueSource<T>(r: Room, source: VoiceSource, task: () => Promise<T>): Promise<T> {
+  let queues = sourceQueues.get(r);
+  if (!queues) sourceQueues.set(r, queues = {});
+  const next = (queues[source] ?? Promise.resolve()).catch(() => {}).then(task);
+  queues[source] = next;
+  return next;
+}
+function waitForStop(r: Room, source: VoiceSource, stopping: Promise<unknown>) {
+  let queues = sourceQueues.get(r);
+  if (!queues) sourceQueues.set(r, queues = {});
+  queues[source] = Promise.allSettled([queues[source], stopping]);
+  return queues[source]!.then(() => {});
+}
+async function retireTrack(r: Room, track: LocalTrack | MediaStreamTrack) {
+  track.stop();
+  await unpublishOwned(r, track).catch(() => {});
+}
+
+async function expectingUnpublish<T>(r: Room, track: LocalTrack | MediaStreamTrack, action: () => Promise<T>): Promise<T> {
+  let expected = expectedUnpublishes.get(r);
+  if (!expected) expectedUnpublishes.set(r, expected = new Map());
+  expected.set(track, (expected.get(track) ?? 0) + 1);
+  try { return await action(); }
+  finally {
+    const count = (expected.get(track) ?? 1) - 1;
+    if (count) expected.set(track, count);
+    else expected.delete(track);
+  }
+}
+function unpublishOwned(r: Room, track: LocalTrack | MediaStreamTrack) {
+  return expectingUnpublish(r, track, () => r.localParticipant.unpublishTrack(track));
+}
+
+/** LiveKit's internal republish bypasses publishTrack and may restart an old device track. */
+function guardTrack(r: Room, source: VoiceSource, candidate: LocalTrack | MediaStreamTrack) {
+  if (!('mediaStreamTrack' in candidate)) return;
+  const track = candidate as LocalTrack;
+  const old = guardedTracks.get(track);
+  guardedTracks.set(track, { room: r, source });
+  if (old) return;
+  for (const method of ['restartTrack', 'unmute'] as const) {
+    const original = track[method].bind(track) as (...args: unknown[]) => Promise<unknown>;
+    const guarded = async (...args: unknown[]) => {
+      const context = guardedTracks.get(track)!;
+      const epoch = publishingEpoch.get(context.room)?.[context.source];
+      const current = () => epoch !== undefined && sourceCurrent(context.room, context.source, epoch) &&
+        (context.source !== 'microphone' || (!prefs.value.micMuted && !deafened.value));
+      if (!current()) { track.stop(); throw new DOMException('Capture cancelled', 'AbortError'); }
+      let pending = pendingTracks.get(context.room);
+      if (!pending) pendingTracks.set(context.room, pending = new Set());
+      const entry = { source: context.source, track };
+      pending.add(entry);
+      try {
+        const result = await original(...args);
+        if (!current()) { await retireTrack(context.room, track); throw new DOMException('Capture cancelled', 'AbortError'); }
+        return result;
+      } finally {
+        pending.delete(entry);
+        if (!pending.size && pendingTracks.get(context.room) === pending) pendingTracks.delete(context.room);
+      }
+    };
+    (track as unknown as Record<string, unknown>)[method] = guarded;
+  }
+}
+
+function retireSource(r: Room, source: VoiceSource): Promise<void> {
+  const tracks = new Set<LocalTrack | MediaStreamTrack>();
+  for (const publication of r.localParticipant.trackPublications.values()) if (sourceOf(publication.source) === source && publication.track) tracks.add(publication.track);
+  for (const pending of pendingTracks.get(r) ?? []) if (pending.source === source) tracks.add(pending.track);
+  for (const track of tracks) track.stop();
+  return Promise.all([...tracks].map((track) => retireTrack(r, track))).then(() => {});
+}
+function stopSource(source: VoiceSource): Promise<void> {
+  if (source === 'screen') return stopShare();
+  ++captureEpoch[source];
+  captureIntent[source] = false;
+  if (source === 'microphone') {
+    if (!prefs.value.micMuted) setPrefs({ micMuted: true });
+    micOn.value = false;
+    micOpen.value = false;
+    micLevel.value = 0;
+  } else cameraOn.value = false;
+  const r = room;
+  const stopped = r ? waitForStop(r, source, retireSource(r, source)) : Promise.resolve();
+  reportState();
+  scheduleRefresh();
+  return stopped;
+}
+
+/** Guard SDK-internal publishes too, including reconnect republishing after a one-shot off. */
+function guardPublishing(r: Room) {
+  const unpublish = r.localParticipant.unpublishTrack.bind(r.localParticipant);
+  // SDK 2.23 supplies an explicit bool for republish/disconnect, unlike server source removal.
+  r.localParticipant.unpublishTrack = (track, stopOnUnpublish) => stopOnUnpublish === undefined
+    ? unpublish(track)
+    : expectingUnpublish(r, track, () => unpublish(track, stopOnUnpublish));
+  const original = r.localParticipant.publishTrack.bind(r.localParticipant);
+  r.localParticipant.publishTrack = async (track: LocalTrack | MediaStreamTrack, options?: TrackPublishOptions) => {
+    const source = sourceOf(options?.source ?? (track as LocalTrack).source);
+    if (!source) return original(track, options);
+    guardTrack(r, source, track);
+    // Ordinary mute keeps an existing muted microphone warm; moderation off stops it entirely.
+    const mutedMic = () => source === 'microphone' && (track as LocalTrack).isMuted && (track as LocalTrack).mediaStreamTrack?.readyState === 'live' && (prefs.value.micMuted || deafened.value);
+    const epoch = mutedMic() ? captureEpoch[source] : publishingEpoch.get(r)?.[source];
+    const current = () => epoch !== undefined && currentRoom(r) && captureEpoch[source] === epoch && mediaAllowed(source) && (captureIntent[source] || mutedMic());
+    if (!current()) { track.stop(); throw new DOMException('Capture cancelled', 'AbortError'); }
+    let pending = pendingTracks.get(r);
+    if (!pending) pendingTracks.set(r, pending = new Set());
+    const entry = { source, track };
+    pending.add(entry);
+    try {
+      const publication = await original(track, options);
+      if (!current()) {
+        await retireTrack(r, track);
+        throw new DOMException('Capture cancelled', 'AbortError');
+      }
+      return publication;
+    } finally {
+      pending.delete(entry);
+      if (!pending.size && pendingTracks.get(r) === pending) pendingTracks.delete(r);
+    }
+  };
+}
+function allowPublishing(r: Room, source: VoiceSource, epoch = captureEpoch[source]) {
+  let epochs = publishingEpoch.get(r);
+  if (!epochs) publishingEpoch.set(r, epochs = {});
+  epochs[source] = epoch;
+}
+
+function rememberPermissions(permissions: VoicePermissions, owner: Api): boolean {
+  const s = session.value;
+  if (!s || s.api !== owner || permissions.user_id !== s.me.id) return false;
+  bindPermissions(owner, s.me.id);
+  const rid = permissions.room_id;
+  if (rid !== null) {
+    const old = permissionCache.get(rid);
+    if (old && old.moderation_version > permissions.moderation_version) return false;
+    permissionCache.delete(rid);
+    permissionCache.set(rid, permissions);
+    while (permissionCache.size > 100) {
+      const expired = permissionCache.keys().next().value!;
+      permissionCache.delete(expired); moderationSeen.delete(expired);
+    }
+  }
+  const target = call.value?.target ?? joiningTarget;
+  if (target && roomID(target) !== rid) return true;
+  voicePermissions.value = permissions;
+  if (!target || callApi !== owner) return true;
+  if (!permissions.allowed.entry) {
+    toast(t().moderation.removed, 'error');
+    void leaveVoice();
+    return true;
+  }
+  for (const source of ['microphone', 'camera', 'screen'] as const) if (!permissions.allowed[source]) void stopSource(source);
+  return true;
+}
+
+export function handleVoiceModeration(event: VoiceModerationEvent): void {
+  const s = session.value;
+  if (!s || event.user_id !== s.me.id || event.permissions.user_id !== s.me.id || event.permissions.room_id !== event.room_id) return;
+  bindPermissions(s.api, s.me.id);
+  const version = event.permissions.moderation_version;
+  if (version < (permissionCache.get(event.room_id)?.moderation_version ?? -1) || version <= (moderationSeen.get(event.room_id) ?? -1)) return;
+  moderationSeen.set(event.room_id, version);
+  const applies = callApi === s.api && roomID(call.value?.target ?? joiningTarget) === event.room_id;
+  if (!rememberPermissions(event.permissions, s.api) || !applies) return;
+  if (event.action === 'off' && event.source !== 'entry') void stopSource(event.source);
+  if (event.action === 'set' && event.source !== 'entry' && !event.permissions.allowed[event.source]) blocked(event.source);
+}
+
+export async function refreshVoicePermissions(): Promise<void> {
+  const s = session.value;
+  const c = call.value;
+  const rid = roomID(c?.target) ?? (!c ? voicePermissions.value?.room_id : null);
+  if (!s || rid === null || rid === undefined || !s.server.capabilities?.moderation) return;
+  bindPermissions(s.api, s.me.id);
+  const generation = callGeneration;
+  if (permissionRefresh?.owner === s.api && permissionRefresh.generation === generation && permissionRefresh.roomID === rid) return permissionRefresh.promise;
+  permissionRefresh?.controller.abort();
+  const controller = new AbortController();
+  const task = (async () => {
+    const permissions = await s.api.roomPermissions(rid, controller.signal);
+    if (controller.signal.aborted || session.value?.api !== s.api || session.value.me.id !== s.me.id || callGeneration !== generation || (c && call.value !== c && roomID(call.value?.target) !== rid)) return;
+    rememberPermissions(permissions, s.api);
+  })();
+  const request = { owner: s.api, generation, roomID: rid, controller, promise: task };
+  permissionRefresh = request;
+  try { await task; }
+  finally { if (permissionRefresh === request) permissionRefresh = null; }
+}
+
+callEvents.addEventListener('voice.moderation', (event) => handleVoiceModeration((event as CustomEvent<VoiceModerationEvent>).detail));
+callEvents.addEventListener('voice.resync', () => { void refreshVoicePermissions().catch(() => {}); });
 
 // For tests and diagnostics.
 (globalThis as unknown as Record<string, unknown>).__tolktak = {
@@ -177,6 +433,11 @@ let screenTracks: { video?: LocalVideoTrack; audio?: LocalAudioTrack } = {};
     return room;
   },
   stats: () => collectStats(),
+  // Layout fixture without an SFU connection.
+  mock: (c: typeof call.value, list: PeerView[]) => {
+    call.value = c;
+    peers.value = list;
+  },
   share: (o: ShareOptions) => startShare(o),
   stopShare: () => stopShare(),
   setPrefs: (p: Partial<Prefs>) => setPrefs(p),
@@ -185,32 +446,47 @@ let screenTracks: { video?: LocalVideoTrack; audio?: LocalAudioTrack } = {};
 };
 
 export async function joinVoice(target: CallTarget, label: string, opts: { ringing?: boolean } = {}) {
-  if (call.value) {
-    if (sameTarget(call.value.target, target)) return;
-    await leaveVoice();
-  }
+  const owner = api();
+  if (call.value && callApi === owner && sameTarget(call.value.target, target)) return callGeneration;
+  const generation = ++callGeneration;
+  const current = () => generation === callGeneration && session.value?.api === owner;
+  if (call.value) await clearVoice();
+  else await voiceCleanup;
+  if (!current()) return;
+  callApi = owner;
+  joiningTarget = target;
+  bindPermissions(owner, session.value!.me.id);
+  voicePermissions.value = roomID(target) === null ? null : permissionCache.get(roomID(target)!) ?? null;
   leaving = false;
-  const { url, token, room: roomName } = await api().joinVoice(target);
-  if (!session.value) return;
-  call.value = { room: roomName, label, target, status: opts.ringing ? 'ringing' : 'connecting' };
-  bridge.setInCall(true);
   try {
-    await connect(url, token, false);
+    const { url, token, room: roomName, permissions } = await owner.joinVoice(target);
+    if (!current()) return;
+    if (permissions) rememberPermissions(permissions, owner);
+    else voicePermissions.value = null; // Older servers have no moderation contract.
+    if (!current()) return;
+    call.value = { room: roomName, label, target, status: opts.ringing ? 'ringing' : 'connecting' };
+    joiningTarget = null;
+    bridge.setInCall(true);
+    if (!(await connect(url, token, false, current))) return;
+    sendRealtime({ type: 'voice.joined', room: roomName, muted: !micOn.value, deafened: deafened.value });
+    playTone('join');
+    return generation;
   } catch (e) {
-    call.value = null;
-    bridge.setInCall(false);
-    room = null;
+    if (!current()) return;
+    await clearVoice();
     throw e;
   }
-  sendRealtime({ type: 'voice.joined', room: roomName, muted: !micOn.value, deafened: deafened.value });
-  playTone('join');
 }
 
 function sameTarget(a: CallTarget, b: CallTarget) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-async function connect(url: string, token: string, isRejoin: boolean) {
+function currentRoom(r: Room) {
+  return r === room && callApi === session.value?.api;
+}
+
+async function connect(url: string, token: string, isRejoin: boolean, current: () => boolean) {
   const r = new Room({
     // adaptiveStream picks the layer by <video> size: narrow windows got blurry 720p.
     adaptiveStream: false,
@@ -228,27 +504,42 @@ async function connect(url: string, token: string, isRejoin: boolean) {
     audioOutput: { deviceId: prefs.value.outputDevice || 'default' },
   });
   room = r;
+  guardPublishing(r);
   wire(r);
   startSpeakingLoop();
-  // Stream audio is fetched only for the watched stream.
-  await r.connect(url, token, { autoSubscribe: false });
-  if (r !== room) return;
-  syncSubscriptions(r);
-  if (call.value) call.value = { ...call.value, status: call.value.status === 'ringing' ? 'ringing' : 'connected' };
-  if (!isRejoin && prefs.value.startMuted) setPrefs({ micMuted: true });
-  const wantMic = !prefs.value.micMuted && !deafened.value;
   try {
-    await r.localParticipant.setMicrophoneEnabled(wantMic, micConstraints());
-    micOn.value = wantMic;
-    await applyGate();
-    await applyOutputDevice(r);
-  } catch (e) {
-    micOn.value = false;
-    toast(t().core.voice.micUnavailable(errorText(e)), 'error');
+    // Stream audio is fetched only for the watched stream.
+    await r.connect(url, token, { autoSubscribe: false });
+    if (!current() || !currentRoom(r)) return false;
+    syncSubscriptions(r);
+    if (call.value) call.value = { ...call.value, status: call.value.status === 'ringing' ? 'ringing' : 'connected' };
+    if (!isRejoin && prefs.value.startMuted) setPrefs({ micMuted: true });
+    const wantMic = !prefs.value.micMuted && !deafened.value && mediaAllowed('microphone');
+    try {
+      if (wantMic) await enableMicrophone(r);
+      else micOn.value = false;
+      if (!current() || !currentRoom(r)) return false;
+      await applyOutputDevice(r);
+    } catch (e) {
+      if (!current() || !currentRoom(r)) return false;
+      micOn.value = false;
+      toast(t().core.voice.micUnavailable(errorText(e)), 'error');
+    }
+    if (!current() || !currentRoom(r)) return false;
+    if (screenTracks.video?.mediaStreamTrack.readyState === 'ended') { stopScreenTracks(); sharing.value = null; }
+    if (screenTracks.video && sharing.value && mediaAllowed('screen')) {
+      captureIntent.screen = true;
+      allowPublishing(r, 'screen');
+      await publishScreen(r, sharing.value, screenTracks.video, screenTracks.audio);
+    }
+    if (!current() || !currentRoom(r)) return false;
+    if (cameraOn.value) await setCamera(true);
+    if (!current() || !currentRoom(r)) return false;
+    refresh();
+    return true;
+  } finally {
+    if (!current() || !currentRoom(r)) await r.disconnect().catch(() => {});
   }
-  if (screenTracks.video) await publishScreen(r, sharing.value!, screenTracks.video, screenTracks.audio);
-  if (cameraOn.value) await setCamera(true);
-  refresh();
 }
 
 export function micConstraints() {
@@ -256,7 +547,7 @@ export function micConstraints() {
   return {
     deviceId: p.inputDevice && p.inputDevice !== 'default' ? { ideal: p.inputDevice } : undefined,
     echoCancellation: p.echoCancellation,
-    // The browser's filters are only a fallback: its AGC makes voices pump.
+    // Browser AGC can cause volume pumping; prefer the worklet chain.
     noiseSuppression: chainBroken && p.denoise !== 'off',
     autoGainControl: chainBroken && p.agc,
     channelCount: 1,
@@ -264,10 +555,26 @@ export function micConstraints() {
 }
 
 export async function leaveVoice() {
+  ++callGeneration;
+  await clearVoice();
+}
+
+function clearVoice() {
   const c = call.value;
+  callApi = null;
+  joiningTarget = null;
+  permissionRefresh?.controller.abort();
+  permissionRefresh = null;
+  for (const source of ['microphone', 'camera', 'screen'] as const) { captureEpoch[source]++; captureIntent[source] = false; }
   leaving = true;
+  window.clearTimeout(ringTimeout);
   stopScreenTracks();
   const r = room;
+  if (r) {
+    for (const pub of r.localParticipant.trackPublications.values()) pub.track?.stop();
+    for (const pending of pendingTracks.get(r) ?? []) pending.track.stop();
+    pendingTracks.delete(r);
+  }
   room = null;
   batch(() => {
     call.value = null;
@@ -283,24 +590,27 @@ export async function leaveVoice() {
     micOn.value = !prefs.value.micMuted && !deafened.value;
   });
   bridge.setInCall(false);
-  if (r) await r.disconnect();
   audioSink().replaceChildren();
   lastBytes.clear();
-  if (c) {
-    playTone('leave');
-    await session.value?.api.leaveVoice(c.room).catch(() => {});
-  }
+  if (c) playTone('leave');
+  const cleanup = r?.disconnect().catch(() => {});
+  // Close the old transport before reconnecting with the same identity.
+  voiceCleanup = Promise.all([voiceCleanup, cleanup]).then(() => {});
+  return voiceCleanup;
 }
 
 effect(() => {
-  if (!session.value && call.value) leaveVoice();
+  const s = session.value;
+  const owner = s?.api;
+  if (callApi && owner !== callApi) void leaveVoice();
+  bindPermissions(owner ?? null, s?.me.id ?? 0);
 });
 
 function wantSubscribed(source: Track.Source, identity: string) {
-  return source !== Track.Source.ScreenShareAudio || watching.value === identity;
+  return source !== Track.Source.ScreenShareAudio || watching.value === identity || previewing.value === identity;
 }
 
-/** The SFU stops forwarding voices: resubscribing brought them back silent. */
+// Use the SFU forwarding flag; resubscribing can leave tracks silent.
 function applyDeafen(r: Room) {
   for (const p of r.remoteParticipants.values()) {
     const pub = p.getTrackPublication(Track.Source.Microphone) as RemoteTrackPublication | undefined;
@@ -330,20 +640,24 @@ async function applyOutputDevice(r: Room) {
 }
 
 function wire(r: Room) {
-  const update = () => r === room && scheduleRefresh();
+  const update = () => currentRoom(r) && scheduleRefresh();
   const reconnecting = () => {
+    if (!currentRoom(r)) return;
     if (call.value) call.value = { ...call.value, status: 'reconnecting' };
   };
   r.on(RoomEvent.ParticipantConnected, (p) => {
+    if (!currentRoom(r)) return;
     update();
     if (call.value?.status === 'ringing') call.value = { ...call.value, status: 'connected' };
-    if (p.identity !== String(me.value?.id)) playTone('join');
+    if (p.identity !== String(me.value?.id)) playTone('peer-join');
   })
     .on(RoomEvent.ParticipantDisconnected, () => {
+      if (!currentRoom(r)) return;
       update();
-      playTone('leave');
+      playTone('peer-leave');
     })
     .on(RoomEvent.TrackSubscribed, (track, pub, p) => {
+      if (!currentRoom(r)) return;
       if (track.kind === Track.Kind.Audio) {
         // livekit-client plays remote audio only once it is attached.
         const el = track.attach();
@@ -361,17 +675,42 @@ function wire(r: Room) {
     })
     .on(RoomEvent.TrackMuted, update)
     .on(RoomEvent.TrackUnmuted, update)
-    .on(RoomEvent.LocalTrackPublished, update)
-    .on(RoomEvent.LocalTrackUnpublished, update)
+    .on(RoomEvent.LocalTrackPublished, (publication) => {
+      if (!currentRoom(r)) { publication.track?.stop(); return; }
+      const source = sourceOf(publication.source);
+      if (source && publication.track) {
+        guardTrack(r, source, publication.track);
+        const epoch = publishingEpoch.get(r)?.[source];
+        const mutedMic = source === 'microphone' && publication.isMuted && (prefs.value.micMuted || deafened.value) && publication.track.mediaStreamTrack.readyState === 'live';
+        if (!mediaAllowed(source) || (epoch === undefined || !sourceCurrent(r, source, epoch)) && !mutedMic) {
+          void retireTrack(r, publication.track);
+          return;
+        }
+      }
+      update();
+    })
+    .on(RoomEvent.LocalTrackUnpublished, (publication) => {
+      const source = sourceOf(publication.source);
+      const track = publication.track;
+      const expected = expectedUnpublishes.get(r);
+      const owned = track && (expected?.has(track) || expected?.has(track.mediaStreamTrack));
+      if (currentRoom(r) && source && track && !owned && captureIntent[source]) {
+        // A server one-shot off may arrive even if the app websocket event was lost.
+        track.stop();
+        void stopSource(source);
+      }
+      update();
+    })
     .on(RoomEvent.TrackPublished, (pub, p) => {
+      if (!currentRoom(r)) return;
       (pub as RemoteTrackPublication).setSubscribed(wantSubscribed(pub.source, p.identity));
       if (pub.source === Track.Source.ScreenShare) {
         toast(t().core.voice.streamStarted(p.name || userName(Number(p.identity))));
-        if (prefs.value.autoWatch && !watching.value) watch(p.identity);
       }
       update();
     })
     .on(RoomEvent.TrackUnpublished, (pub, p) => {
+      if (!currentRoom(r)) return;
       if (pub.source === Track.Source.ScreenShare && watching.value === p.identity) {
         watching.value = null;
         toast(t().core.voice.streamEnded);
@@ -382,11 +721,13 @@ function wire(r: Room) {
     .on(RoomEvent.Reconnecting, reconnecting)
     .on(RoomEvent.SignalReconnecting, reconnecting)
     .on(RoomEvent.Reconnected, () => {
+      if (!currentRoom(r)) return;
       if (call.value) call.value = { ...call.value, status: 'connected' };
+      void refreshVoicePermissions().catch(() => {});
       toast(t().core.voice.reconnected);
     })
     .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
-      if (r !== room || leaving) return;
+      if (!currentRoom(r) || leaving) return;
       if (reason === DisconnectReason.CLIENT_INITIATED) return;
       if (reason === DisconnectReason.PARTICIPANT_REMOVED || reason === DisconnectReason.ROOM_DELETED) {
         toast(t().core.voice.removed, 'error');
@@ -396,9 +737,11 @@ function wire(r: Room) {
       // Past LiveKit's own resume window.
       rejoin();
     })
-    .on(RoomEvent.MediaDevicesError, (e: Error) => toast(t().core.voice.deviceError(e.message), 'error'))
+    .on(RoomEvent.MediaDevicesError, (e: Error) => {
+      if (currentRoom(r)) toast(t().core.voice.deviceError(e.message), 'error');
+    })
     .on(RoomEvent.DataReceived, (payload: Uint8Array, p?: RemoteParticipant, _kind?: unknown, topic?: string) => {
-      if (topic !== 'react' || !p) return;
+      if (!currentRoom(r) || topic !== 'react' || !p) return;
       try {
         const msg = JSON.parse(new TextDecoder().decode(payload));
         if (msg.t === 'react' && STREAM_REACTIONS.includes(msg.e)) showFloater(msg.e, Number(p.identity));
@@ -408,36 +751,48 @@ function wire(r: Room) {
     });
 }
 
-// A failed connect also fires Disconnected: one loop retries until it gets back in.
+// Connect failures also emit Disconnected; keep one retry loop.
 async function rejoin() {
   const c = call.value;
-  if (!c || rejoining === c.room) return;
-  rejoining = c.room;
+  const owner = callApi;
+  const generation = callGeneration;
+  if (!c || !owner || rejoining === generation) return;
+  const current = () => generation === callGeneration && session.value?.api === owner && call.value?.room === c.room;
+  rejoining = generation;
   call.value = { ...c, status: 'reconnecting' };
   for (let attempt = 0; ; attempt++) {
     await new Promise((res) => setTimeout(res, Math.min(30000, 1000 * 2 ** attempt)));
-    if (call.value?.room !== c.room) break;
+    if (!current()) break;
     try {
-      const { url, token } = await api().joinVoice(c.target);
-      if (call.value?.room !== c.room) break;
+      const { url, token, permissions } = await owner.joinVoice(c.target);
+      if (!current()) break;
+      if (permissions) rememberPermissions(permissions, owner);
+      if (!current()) break;
       await room?.disconnect().catch(() => {});
-      await connect(url, token, true);
-      if (call.value?.room !== c.room) break;
+      if (!current()) break;
+      if (!(await connect(url, token, true, current))) break;
+      if (!current()) break;
       if (room?.state === ConnectionState.Disconnected) continue;
       toast(t().core.voice.rejoined);
       break;
-    } catch {
+    } catch (error) {
+      if (!current()) break;
+      if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+        toast(errorText(error), 'error');
+        await leaveVoice();
+        break;
+      }
       /* try again */
     }
   }
-  if (rejoining === c.room) rejoining = '';
+  if (rejoining === generation) rejoining = 0;
 }
 
 let refreshQueued = false;
 function scheduleRefresh() {
   if (refreshQueued) return;
   refreshQueued = true;
-  // A hidden window gets no animation frames, hence the timer.
+  // Hidden windows require timer-based updates.
   const run = () => {
     if (!refreshQueued) return;
     cancelAnimationFrame(frame);
@@ -480,48 +835,87 @@ function refresh() {
   if (watching.value && !list.some((p) => p.identity === watching.value && p.shared)) watching.value = null;
 }
 
+async function enableMicrophone(r: Room): Promise<boolean> {
+  const epoch = captureEpoch.microphone;
+  captureIntent.microphone = true;
+  return queueSource(r, 'microphone', async () => {
+    const current = () => sourceCurrent(r, 'microphone', epoch) && !prefs.value.micMuted && !deafened.value;
+    if (!current()) return false;
+    allowPublishing(r, 'microphone', epoch);
+    try {
+      const publication = await r.localParticipant.setMicrophoneEnabled(true, micConstraints());
+      if (!current()) {
+        if (publication?.track) await retireTrack(r, publication.track);
+        return false;
+      }
+      if (!publication?.track || publication.track.mediaStreamTrack.readyState === 'ended') return false;
+      micOn.value = true;
+      await applyGate(r);
+      if (!current()) { await retireTrack(r, publication.track); return false; }
+      return true;
+    } catch (error) {
+      if (!current()) return false;
+      micOn.value = false;
+      throw error;
+    }
+  });
+}
+
+function muteMicrophone(r: Room): Promise<void> {
+  ++captureEpoch.microphone;
+  captureIntent.microphone = false;
+  micOn.value = false;
+  micOpen.value = false;
+  const stopping = r.localParticipant.setMicrophoneEnabled(false).then(() => {}).catch(() => {});
+  return waitForStop(r, 'microphone', stopping);
+}
+
 export async function toggleMic() {
+  const r = room;
   const next = !micOn.value;
+  if (next && !mediaAllowed('microphone')) { blocked('microphone'); return; }
   if (next && deafened.value) {
     // Unmuting also undeafens.
     deafened.value = false;
     setPrefs({ deafened: false });
-    if (room) applyDeafen(room);
+    if (r) applyDeafen(r);
   }
   setPrefs({ micMuted: !next });
-  if (!room) {
+  if (!r) {
     micOn.value = next;
-    playTone(next ? 'unmute' : 'mute');
+    if (micOn.value === next) playTone(next ? 'unmute' : 'mute');
     return;
   }
   try {
-    await room.localParticipant.setMicrophoneEnabled(next, micConstraints());
-    micOn.value = next;
-    if (next) await applyGate();
-    playTone(next ? 'unmute' : 'mute');
+    if (next) await enableMicrophone(r);
+    else await muteMicrophone(r);
+    if (!currentRoom(r)) return;
+    if (micOn.value === next) playTone(next ? 'unmute' : 'mute');
   } catch (e) {
+    if (!currentRoom(r)) return;
     toast(t().core.voice.micUnavailable(errorText(e)), 'error');
   }
   reportState();
 }
 
 export async function toggleDeafen() {
+  const r = room;
   const next = !deafened.value;
   deafened.value = next;
   setPrefs({ deafened: next });
   if (next) {
-    if (room && micOn.value) await room.localParticipant.setMicrophoneEnabled(false);
+    if (r) await muteMicrophone(r);
+    if (r && !currentRoom(r)) return;
     micOn.value = false;
   } else {
-    const want = !prefs.value.micMuted;
-    if (room && want) {
-      await room.localParticipant.setMicrophoneEnabled(true, micConstraints()).catch(() => {});
-      await applyGate();
-    }
-    micOn.value = want;
+    const want = !prefs.value.micMuted && mediaAllowed('microphone');
+    if (r && want) {
+      await enableMicrophone(r).catch(() => undefined);
+      if (!currentRoom(r)) return;
+    } else micOn.value = want;
   }
   playTone(next ? 'mute' : 'unmute');
-  if (room) applyDeafen(room);
+  if (r) applyDeafen(r);
   applyVolumes();
   reportState();
 }
@@ -530,6 +924,7 @@ export async function toggleDeafen() {
 
 let pttHeld = false;
 export function setPushToTalk(down: boolean) {
+  if (down && call.value && !mediaAllowed('microphone')) { pttHeld = false; activeChain?.set({ ptt: false }); return; }
   if (pttHeld === down) return;
   pttHeld = down;
   activeChain?.set({ ptt: down });
@@ -573,6 +968,8 @@ class VoiceProcessor {
   name = 'tolktak-voice';
   processedTrack?: MediaStreamTrack;
   private chain?: VoiceChain;
+  private generation = 0;
+  constructor(private current: () => boolean) {}
 
   async init(opts: { track: MediaStreamTrack }) {
     await this.setup(opts.track);
@@ -585,7 +982,9 @@ class VoiceProcessor {
     this.teardown();
   }
   private async setup(track: MediaStreamTrack) {
+    const generation = ++this.generation;
     const chain = await createVoiceChain(track, (s) => {
+      if (!this.current() || !micOn.value || generation !== this.generation) return;
       lastGain = s.gain;
       rememberGain();
       const g = Math.round(s.gain);
@@ -595,16 +994,24 @@ class VoiceProcessor {
       micLevel.value = Math.max(0, Math.min(1, (s.level + 70) / 60));
       localOut = { db: s.out, at: performance.now() };
     });
+    if (!this.current() || generation !== this.generation || track.readyState === 'ended') {
+      chain.close();
+      return;
+    }
     this.chain = chain;
     activeChain = chain;
     this.processedTrack = chain.output;
   }
   private teardown() {
-    rememberGain(true);
-    if (activeChain === this.chain) activeChain = null;
+    this.generation++;
+    if (activeChain === this.chain) {
+      rememberGain(true);
+      activeChain = null;
+      micOpen.value = false;
+    }
     this.chain?.close();
     this.chain = undefined;
-    micOpen.value = false;
+    this.processedTrack = undefined;
   }
 }
 
@@ -612,23 +1019,27 @@ function wantsChain(p = prefs.value) {
   return !chainBroken && (p.denoise !== 'off' || p.agc || p.inputGain !== 0 || p.micMode === 'ptt' || !p.vadAuto);
 }
 
-export async function applyGate() {
-  const pub = room?.localParticipant.getTrackPublication(Track.Source.Microphone);
+export async function applyGate(r = room) {
+  if (!r || !currentRoom(r) || !micOn.value || !captureIntent.microphone || !mediaAllowed('microphone')) return;
+  const pub = r.localParticipant.getTrackPublication(Track.Source.Microphone);
   const track = pub?.track as LocalAudioTrack | undefined;
   if (!track) return;
   const want = wantsChain();
   const current = track.getProcessor() as VoiceProcessor | undefined;
   try {
-    if (want && !current) await track.setProcessor(new VoiceProcessor() as never);
+    if (want && !current) await track.setProcessor(new VoiceProcessor(() => currentRoom(r) && captureIntent.microphone && mediaAllowed('microphone')) as never);
     if (!want && current) {
       await track.stopProcessor();
-      micOpen.value = false;
+      if (r === room) micOpen.value = false;
     }
   } catch (e) {
+    if (!currentRoom(r) || !mediaAllowed('microphone') || !captureIntent.microphone || track.mediaStreamTrack.readyState === 'ended') return;
     console.warn('voice processing unavailable', e);
     chainBroken = true;
     await track.stopProcessor().catch(() => {});
-    await restartMic();
+    if (!currentRoom(r)) return;
+    // Processor recovery runs after the current source operation leaves its queue.
+    void restartMic().catch(() => {});
   }
 }
 
@@ -638,7 +1049,7 @@ effect(() => {
   activeChain?.set(s);
 });
 
-// Levels are measured here: LiveKit's active-speaker events arrive late and smoothed.
+// Measure levels locally; LiveKit speaker events are delayed and smoothed.
 const SPEAK_ON_DB = -45;
 const SPEAK_OFF_DB = -52;
 const SPEAK_HOLD = 450;
@@ -659,7 +1070,7 @@ function meterFor(identity: string, track: MediaStreamTrack): Meter | null {
   if (m) m.src.disconnect();
   try {
     if (!meterCtx || meterCtx.state === 'closed') {
-      // Each AudioContext is another audio thread: reuse the room's.
+      // Reuse the room context to avoid another audio thread.
       const shared = (room as unknown as { audioContext?: AudioContext } | null)?.audioContext;
       ownMeterCtx = !shared || shared.state === 'closed';
       meterCtx = ownMeterCtx ? new AudioContext({ latencyHint: 'playback' }) : shared!;
@@ -756,39 +1167,36 @@ function showFloater(emoji: string, from: number) {
   floaters.value = [...floaters.value.slice(-30), f];
   setTimeout(() => (floaters.value = floaters.value.filter((x) => x.id !== f.id)), 3200);
 }
-export function sendFloater(emoji: string) {
-  if (!room) return;
-  showFloater(emoji, me.value?.id ?? 0);
-  const data = new TextEncoder().encode(JSON.stringify({ t: 'react', e: emoji.slice(0, 16) }));
-  room.localParticipant.publishData(data, { reliable: false, topic: 'react' }).catch(() => {});
-}
-
 function reportState() {
   if (call.value) sendRealtime({ type: 'voice.state', room: call.value.room, muted: !micOn.value, deafened: deafened.value });
 }
 
 export async function setCamera(on: boolean) {
-  if (!room) return;
-  try {
-    if (!on) {
-      // Unpublish, not mute: the camera light goes off.
-      const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
-      if (pub?.track) await room.localParticipant.unpublishTrack(pub.track as LocalVideoTrack);
+  const r = room;
+  if (!r) return;
+  if (!on) return stopSource('camera');
+  if (!mediaAllowed('camera')) { blocked('camera'); return; }
+  const epoch = captureEpoch.camera;
+  captureIntent.camera = true;
+  await queueSource(r, 'camera', async () => {
+    if (!sourceCurrent(r, 'camera', epoch)) return;
+    allowPublishing(r, 'camera', epoch);
+    try {
+      const camera = await r.localParticipant.setCameraEnabled(true,
+        { resolution: camPreset().resolution, deviceId: prefs.value.cameraDevice || undefined },
+        { simulcast: true, videoCodec: VIDEO_CODEC, backupCodec: false, videoEncoding: camPreset().encoding });
+      if (!sourceCurrent(r, 'camera', epoch)) {
+        if (camera?.track) await retireTrack(r, camera.track);
+        return;
+      }
+      cameraOn.value = !!camera?.track && camera.track.mediaStreamTrack.readyState !== 'ended';
+    } catch (error) {
+      if (!sourceCurrent(r, 'camera', epoch)) return;
       cameraOn.value = false;
-      scheduleRefresh();
-      return;
+      toast(t().core.voice.cameraUnavailable(errorText(error)), 'error');
     }
-    await room.localParticipant.setCameraEnabled(
-      on,
-      { resolution: camPreset().resolution, deviceId: prefs.value.cameraDevice || undefined },
-      { simulcast: true, videoCodec: VIDEO_CODEC, backupCodec: false, videoEncoding: camPreset().encoding },
-    );
-    cameraOn.value = on;
-  } catch (e) {
-    cameraOn.value = false;
-    toast(t().core.voice.cameraUnavailable(errorText(e)), 'error');
-  }
-  scheduleRefresh();
+    scheduleRefresh();
+  });
 }
 
 function camPreset() {
@@ -796,34 +1204,59 @@ function camPreset() {
 }
 
 export async function restartCamera() {
-  if (!room || !cameraOn.value) return;
+  const r = room;
+  if (!r || !cameraOn.value) return;
+  const epoch = captureEpoch.camera;
   await setCamera(false);
+  if (!currentRoom(r) || captureEpoch.camera !== epoch + 1 || !mediaAllowed('camera')) return;
   await setCamera(true);
 }
 
 export async function switchDevices() {
-  if (!room) return;
+  const r = room;
+  if (!r) return;
   const p = prefs.value;
+  const micEpoch = captureEpoch.microphone, cameraEpoch = captureEpoch.camera;
   try {
-    if (micOn.value) await room.switchActiveDevice('audioinput', p.inputDevice || 'default');
-    await room.switchActiveDevice('audiooutput', p.outputDevice || 'default');
-    if (cameraOn.value && p.cameraDevice) await room.switchActiveDevice('videoinput', p.cameraDevice);
+    if (micOn.value && mediaAllowed('microphone')) await queueSource(r, 'microphone', async () => {
+      if (!sourceCurrent(r, 'microphone', micEpoch)) return;
+      await r.switchActiveDevice('audioinput', p.inputDevice || 'default');
+      if (!sourceCurrent(r, 'microphone', micEpoch)) await retireSource(r, 'microphone');
+    });
+    if (!currentRoom(r)) return;
+    await r.switchActiveDevice('audiooutput', p.outputDevice || 'default');
+    if (!currentRoom(r)) return;
+    if (cameraOn.value && p.cameraDevice && mediaAllowed('camera')) await queueSource(r, 'camera', async () => {
+      if (!sourceCurrent(r, 'camera', cameraEpoch)) return;
+      await r.switchActiveDevice('videoinput', p.cameraDevice);
+      if (!sourceCurrent(r, 'camera', cameraEpoch)) await retireSource(r, 'camera');
+    });
   } catch (e) {
+    if (!currentRoom(r)) return;
     toast(t().core.voice.switchDeviceFailed(errorText(e)), 'error');
+  } finally {
+    if (!currentRoom(r)) for (const pub of r.localParticipant.trackPublications.values()) pub.track?.stop();
   }
 }
 
 export async function restartMic() {
-  if (!room || !micOn.value) return;
-  const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
-  if (!track) return;
-  try {
-    if (track.getProcessor()) await track.stopProcessor();
-    await track.restartTrack(micConstraints());
-  } catch (e) {
-    toast(t().core.voice.micUnavailable(errorText(e)), 'error');
-  }
-  await applyGate();
+  const r = room;
+  if (!r || !micOn.value || !mediaAllowed('microphone')) return;
+  const epoch = captureEpoch.microphone;
+  await queueSource(r, 'microphone', async () => {
+    const track = r.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
+    if (!track || !sourceCurrent(r, 'microphone', epoch)) return;
+    try {
+      if (track.getProcessor()) await track.stopProcessor();
+      if (!sourceCurrent(r, 'microphone', epoch)) { track.stop(); return; }
+      await track.restartTrack(micConstraints());
+      if (!sourceCurrent(r, 'microphone', epoch)) { await retireTrack(r, track); return; }
+    } catch (error) {
+      if (!sourceCurrent(r, 'microphone', epoch)) { track.stop(); return; }
+      toast(t().core.voice.micUnavailable(errorText(error)), 'error');
+    }
+    await applyGate(r);
+  });
 }
 
 // LiveKit ramps each volume change through the web audio mix.
@@ -865,7 +1298,8 @@ function applyVolumeFor(p: RemoteParticipant) {
   const deaf = deafened.value;
   const user = pr.userVolume[p.identity] ?? 1;
   p.setVolume(deaf ? 0 : pr.voiceVolume * user, Track.Source.Microphone);
-  p.setVolume(deaf ? 0 : pr.streamVolume * duckFactor, Track.Source.ScreenShareAudio);
+  const quiet = p.identity === watching.value ? 1 : 0.3;
+  p.setVolume(deaf ? 0 : pr.streamVolume * duckFactor * quiet, Track.Source.ScreenShareAudio);
 }
 
 export function applyVolumes() {
@@ -880,12 +1314,18 @@ export function setUserVolume(identity: string, v: number) {
 export function watch(identity: string | null) {
   const r = room;
   watching.value = identity;
+  previewing.value = null;
   if (!r) return;
-  for (const p of r.remoteParticipants.values()) {
-    const a = p.getTrackPublication(Track.Source.ScreenShareAudio) as RemoteTrackPublication | undefined;
-    a?.setSubscribed(p.identity === identity);
-  }
+  syncSubscriptions(r);
   applyVideoPolicy();
+  applyVolumes();
+}
+
+export function preview(identity: string | null) {
+  if (previewing.value === identity) return;
+  previewing.value = identity;
+  if (!room) return;
+  syncSubscriptions(room);
   applyVolumes();
 }
 
@@ -898,7 +1338,8 @@ function applyVideoPolicy() {
     if (scr?.isSubscribed) {
       const watched = watching.value === p.identity;
       scr.setEnabled(watched ? !windowHidden.value || !prefs.value.backgroundSaver : front);
-      scr.setVideoQuality(watched ? VideoQuality.HIGH : VideoQuality.LOW);
+      // Request full quality above the half-size layer's height.
+      scr.setVideoQuality(watched || (screenHeights.value[p.identity] ?? 0) > 540 ? VideoQuality.HIGH : VideoQuality.LOW);
     }
     const cam = p.getTrackPublication(Track.Source.Camera) as RemoteTrackPublication | undefined;
     if (cam?.isSubscribed) cam.setEnabled(front);
@@ -908,6 +1349,7 @@ function applyVideoPolicy() {
 effect(() => {
   void lowPower.value;
   void windowHidden.value;
+  void screenHeights.value;
   applyVideoPolicy();
 });
 
@@ -922,76 +1364,110 @@ const QUALITY: Record<ShareQuality, { w: number; h: number; fps: number; motion:
 const shareFps = (o: ShareOptions) => (o.mode === 'detail' ? Math.min(QUALITY[o.quality].fps, 30) : QUALITY[o.quality].fps);
 
 export async function startShare(opts: ShareOptions) {
-  if (!room) throw new Error(t().core.voice.joinRoomFirst);
+  const r = room;
+  if (!r) throw new Error(t().core.voice.joinRoomFirst);
+  if (!mediaAllowed('screen')) throw new Error(t().moderation.permissionDenied('screen'));
+  const generation = ++shareGeneration;
+  const epoch = captureEpoch.screen;
+  captureIntent.screen = true;
+  allowPublishing(r, 'screen', epoch);
+  const current = () => sourceCurrent(r, 'screen', epoch) && generation === shareGeneration;
   const q = QUALITY[opts.quality];
   const fps = shareFps(opts);
-  await bridge.selectCapture({ id: opts.sourceId, audio: opts.audio });
-  const stream = await navigator.mediaDevices.getDisplayMedia({
-    video: { width: { max: q.w }, height: { max: q.h }, frameRate: { ideal: fps, max: fps } },
-    audio:
-      opts.audio === 'none'
-        ? false
-        : ({
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            channelCount: 2,
-            sampleRate: 48000,
-          } as MediaTrackConstraints),
-    selfBrowserSurface: 'exclude',
-    systemAudio: opts.audio === 'none' ? 'exclude' : 'include',
-  } as DisplayMediaStreamOptions);
-  const [raw] = stream.getVideoTracks();
-  const [a] = stream.getAudioTracks();
-  raw.contentHint = opts.mode === 'motion' ? 'motion' : 'detail';
-  // Stop the previous capture only after switching.
-  const previous = rawCapture;
-  rawCapture = raw;
-  let v = raw;
-  if (platform === 'win32' && opts.sourceId.startsWith('window:')) {
-    const redrawn = redrawFrames(raw);
-    // The layers are sized from the window's first frame: the capture starts out at the screen's size.
-    await Promise.race([redrawn.firstFrame, new Promise((res) => setTimeout(res, 1000))]);
-    v = redrawn.track;
-    v.contentHint = raw.contentHint;
-  } else {
-    await alignFrameSize(raw, fps);
-    const { width = 0, height = 0 } = raw.getSettings();
-    captureSize = { width, height };
-  }
-  const audioInfo = await describeAudio(opts.audio, !!a);
-
-  // Same publication: viewers stay in the stream.
-  if (screenTracks.video && sharing.value) {
-    await screenTracks.video.replaceTrack(v, true).finally(() => previous?.stop());
-    if (screenTracks.audio && a) await screenTracks.audio.replaceTrack(a, true);
-    else if (screenTracks.audio && !a) {
-      await room.localParticipant.unpublishTrack(screenTracks.audio);
-      screenTracks.audio = undefined;
-    } else if (!screenTracks.audio && a) {
-      screenTracks.audio = new LocalAudioTrack(a, undefined, true);
-      await publishScreenAudio(room, screenTracks.audio);
+  let stream: MediaStream | undefined;
+  let v: MediaStreamTrack | undefined;
+  let published: { video: LocalVideoTrack; audio?: LocalAudioTrack } | undefined;
+  try {
+    await bridge.selectCapture({ id: opts.sourceId, audio: opts.audio });
+    if (!current()) return;
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { max: q.w }, height: { max: q.h }, frameRate: { ideal: fps, max: fps } },
+      audio:
+        opts.audio === 'none'
+          ? false
+          : ({
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              channelCount: 2,
+              sampleRate: 48000,
+            } as MediaTrackConstraints),
+      selfBrowserSurface: 'exclude',
+      systemAudio: opts.audio === 'none' ? 'exclude' : 'include',
+    } as DisplayMediaStreamOptions);
+    pendingDisplays.add(stream);
+    if (!current()) return;
+    const [raw] = stream.getVideoTracks();
+    const [a] = stream.getAudioTracks();
+    raw.contentHint = opts.mode === 'motion' ? 'motion' : 'detail';
+    // Stop the previous capture only after switching.
+    const previous = rawCapture;
+    rawCapture = raw;
+    v = raw;
+    if (platform === 'win32' && opts.sourceId.startsWith('window:')) {
+      const redrawn = redrawFrames(raw);
+      // Size layers after the first frame; capture initially reports screen dimensions.
+      await Promise.race([redrawn.firstFrame, new Promise((res) => setTimeout(res, 1000))]);
+      v = redrawn.track;
+      if (!current()) return;
+      v.contentHint = raw.contentHint;
+    } else {
+      await alignFrameSize(raw, fps);
+      if (!current()) return;
+      const { width = 0, height = 0 } = raw.getSettings();
+      captureSize = { width, height };
     }
-    raw.addEventListener('ended', () => stopShare());
+    const audioInfo = await describeAudio(opts.audio, !!a);
+    if (!current()) return;
+
+    // Preserve the publication when replacing its capture track.
+    const tracks = screenTracks;
+    if (tracks.video && sharing.value) {
+      await tracks.video.replaceTrack(v, true).finally(() => previous?.stop());
+      if (!current()) return;
+      if (tracks.audio && a) await tracks.audio.replaceTrack(a, true);
+      else if (tracks.audio && !a) {
+        await unpublishOwned(r, tracks.audio);
+        if (!current()) return;
+        tracks.audio = undefined;
+      } else if (!tracks.audio && a) {
+        tracks.audio = new LocalAudioTrack(a, undefined, true);
+        await publishScreenAudio(r, tracks.audio);
+      }
+      if (!current()) return;
+    } else {
+      previous?.stop();
+      const video = new LocalVideoTrack(v, undefined, true);
+      const audio = a ? new LocalAudioTrack(a, undefined, true) : undefined;
+      published = { video, audio };
+      await publishScreen(r, opts, video, audio);
+      if (!current()) return;
+      screenTracks = published;
+    }
+    raw.addEventListener('ended', () => {
+      if (rawCapture === raw) void stopShare();
+    });
     sharing.value = { ...opts, audioInfo };
     scheduleRefresh();
-    return;
-  }
-
-  previous?.stop();
-  const video = new LocalVideoTrack(v, undefined, true);
-  const audio = a ? new LocalAudioTrack(a, undefined, true) : undefined;
-  screenTracks = { video, audio };
-  sharing.value = { ...opts, audioInfo };
-  raw.addEventListener('ended', () => stopShare());
-  try {
-    await publishScreen(room, sharing.value, video, audio);
   } catch (e) {
-    stopScreenTracks();
-    sharing.value = null;
+    if (!current()) return;
+    if (published) {
+      stopScreenTracks();
+      sharing.value = null;
+    }
     throw e;
+  } finally {
+    if (stream) pendingDisplays.delete(stream);
+    if (!current()) {
+      if (rawCapture && stream?.getVideoTracks().includes(rawCapture)) stopRawCapture();
+      stream?.getTracks().forEach((track) => track.stop());
+      v?.stop();
+      if (published && screenTracks.video !== published.video) {
+        await unpublishOwned(r, published.video).catch(() => {});
+        if (published.audio) await unpublishOwned(r, published.audio).catch(() => {});
+      }
+    }
   }
-  scheduleRefresh();
 }
 
 // Hardware H.264 needs even sizes, and the half-size layer must be even too.
@@ -1035,6 +1511,7 @@ function redrawFrames(raw: MediaStreamTrack): { track: MediaStreamTrack; firstFr
   let writing = Promise.resolve();
   let ended = false;
   const draw = (src: VideoFrame | ImageBitmap, sw: number, sh: number) => {
+    if (rawCapture !== raw) return;
     const w = mult4(sw);
     const h = mult4(sh);
     if (canvas.width !== w || canvas.height !== h) {
@@ -1098,10 +1575,12 @@ async function describeAudio(mode: AudioMode, got: boolean): Promise<string> {
 }
 
 async function publishScreen(r: Room, o: ShareOptions, video: LocalVideoTrack, audio?: LocalAudioTrack) {
+  const epoch = captureEpoch.screen;
+  if (!sourceCurrent(r, 'screen', epoch)) { video.stop(); audio?.stop(); throw new DOMException('Capture cancelled', 'AbortError'); }
   const q = QUALITY[o.quality];
   const fps = shareFps(o);
   const bitrate = o.mode === 'motion' ? q.motion : q.detail;
-  // One half-size layer for previews: extra layers only split the upload.
+  // One half-size preview layer limits upload overhead.
   // Odd or sub-360p sizes fall back to the software encoder.
   const { width, height } = captureSize;
   const half = { w: Math.max(width, height) / 2, h: Math.min(width, height) / 2 };
@@ -1120,10 +1599,13 @@ async function publishScreen(r: Room, o: ShareOptions, video: LocalVideoTrack, a
     videoEncoding: { maxBitrate: bitrate, maxFramerate: fps, priority: 'high' },
     degradationPreference: o.mode === 'motion' ? 'maintain-framerate' : 'maintain-resolution',
   });
+  if (!sourceCurrent(r, 'screen', epoch)) { await retireTrack(r, video); audio?.stop(); throw new DOMException('Capture cancelled', 'AbortError'); }
   if (audio) await publishScreenAudio(r, audio);
 }
 
 async function publishScreenAudio(r: Room, audio: LocalAudioTrack) {
+  const epoch = captureEpoch.screen;
+  if (!sourceCurrent(r, 'screen', epoch)) { audio.stop(); throw new DOMException('Capture cancelled', 'AbortError'); }
   await r.localParticipant.publishTrack(audio, {
     source: Track.Source.ScreenShareAudio,
     name: 'screen-audio',
@@ -1132,9 +1614,15 @@ async function publishScreenAudio(r: Room, audio: LocalAudioTrack) {
     forceStereo: true,
     audioPreset: { maxBitrate: 160_000, priority: 'high' },
   });
+  if (!sourceCurrent(r, 'screen', epoch)) { await retireTrack(r, audio); throw new DOMException('Capture cancelled', 'AbortError'); }
 }
 
 function stopScreenTracks() {
+  ++shareGeneration;
+  ++captureEpoch.screen;
+  captureIntent.screen = false;
+  for (const stream of pendingDisplays) stream.getTracks().forEach((track) => track.stop());
+  pendingDisplays.clear();
   stopRawCapture();
   screenTracks.video?.stop();
   screenTracks.audio?.stop();
@@ -1142,32 +1630,42 @@ function stopScreenTracks() {
 }
 
 export async function stopShare() {
+  ++shareGeneration;
+  ++captureEpoch.screen;
+  captureIntent.screen = false;
   const r = room;
   const tracks = screenTracks;
   screenTracks = {};
   sharing.value = null;
+  stopRawCapture();
+  for (const stream of pendingDisplays) stream.getTracks().forEach((track) => track.stop());
+  pendingDisplays.clear();
+  tracks.video?.stop();
+  tracks.audio?.stop();
   if (r) {
-    if (tracks.video) await r.localParticipant.unpublishTrack(tracks.video).catch(() => {});
-    if (tracks.audio) await r.localParticipant.unpublishTrack(tracks.audio).catch(() => {});
+    if (tracks.video) await unpublishOwned(r, tracks.video).catch(() => {});
+    if (tracks.audio) await unpublishOwned(r, tracks.audio).catch(() => {});
   }
   tracks.video?.stop();
   tracks.audio?.stop();
-  stopRawCapture();
   scheduleRefresh();
 }
 
 let ringTimeout: number | undefined;
 
 export async function startCall(channelId: number, label: string) {
-  await joinVoice({ channel_id: channelId }, label, { ringing: true });
-  await api().ring(channelId);
+  const owner = api();
+  const generation = await joinVoice({ channel_id: channelId }, label, { ringing: true });
+  if (generation === undefined) return;
+  const current = () => session.value?.api === owner && callApi === owner && callGeneration === generation && call.value?.target && 'channel_id' in call.value.target && call.value.target.channel_id === channelId;
+  if (!current()) return;
+  await owner.ring(channelId);
+  if (!current()) return;
   window.clearTimeout(ringTimeout);
   ringTimeout = window.setTimeout(() => {
-    if (call.value?.status === 'ringing') {
+    if (current() && call.value?.status === 'ringing') {
       toast(t().core.voice.noAnswer);
-      api()
-        .cancelCall(channelId)
-        .catch(() => {});
+      owner.cancelCall(channelId).catch(() => {});
       leaveVoice();
     }
   }, 45000);
@@ -1273,52 +1771,4 @@ export async function collectStats(): Promise<MediaStats> {
 
 export function connectionState(): ConnectionState | null {
   return room?.state ?? null;
-}
-
-const TONES = {
-  join: [523, 784],
-  leave: [784, 523],
-  mute: [440],
-  unmute: [660],
-  ring: [660, 880, 660, 880],
-  'ptt-on': [990],
-  'ptt-off': [740],
-  test: [523, 659, 784, 1047],
-};
-
-export async function playTone(kind: keyof typeof TONES) {
-  if (!prefs.value.sounds) return;
-  try {
-    const actx = new AudioContext() as AudioContext & { setSinkId(id: string): Promise<void> };
-    const out = prefs.value.outputDevice;
-    // Not the constructor's sinkId: with an unplugged device that context stays silent.
-    if (out && out !== 'default') await actx.setSinkId(out).catch(() => {});
-    let at = actx.currentTime;
-    let o: OscillatorNode | undefined;
-    for (const f of TONES[kind]) {
-      o = actx.createOscillator();
-      const g = actx.createGain();
-      o.frequency.value = f;
-      o.type = 'sine';
-      g.gain.setValueAtTime(0.0001, at);
-      g.gain.exponentialRampToValueAtTime(0.08, at + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.14);
-      o.connect(g).connect(actx.destination);
-      o.start(at);
-      o.stop(at + 0.15);
-      at += 0.12;
-    }
-    if (o) o.onended = () => actx.close();
-  } catch {
-    /* audio unavailable */
-  }
-}
-
-let ringLoop: number | undefined;
-export function ringing(on: boolean) {
-  window.clearInterval(ringLoop);
-  if (on) {
-    playTone('ring');
-    ringLoop = window.setInterval(() => playTone('ring'), 2000);
-  }
 }

@@ -17,7 +17,7 @@ export function Login() {
   const tl = t().common.login;
 
   useEffect(() => {
-    bridge.getSettings().then((s) => setServer(s.server || __DEFAULT_SERVER__));
+    bridge.getSettings().then((s) => setServer((typed) => typed || s.server || __DEFAULT_SERVER__));
   }, []);
 
   const submit = async (e: Event) => {

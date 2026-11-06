@@ -4,8 +4,10 @@ In the HTTPS setup, the proxy accepts requests on port 443 and forwards them to 
 
 | Path on `chat.example.com` | Local address |
 |---|---|
-| `/rtc` and everything under it | `http://127.0.0.1:7880` (LiveKit) |
+| `/rtc` and everything under it | `http://127.0.0.1:8080` (TolkTak admission proxy) |
 | everything else | `http://127.0.0.1:8080` (TolkTak) |
+
+Every signaling connection must pass through the app so it can enforce current room policy. LiveKit HTTP/WS (including `/twirp`) stays private; direct public access bypasses moderation. When upgrading, replace the old `/rtc` → 7880 route and remove any public 7880 binding. Manual LiveKit deployments set `TOLKTAK_SIGNALING_PRIVATE=1` only after verifying that boundary.
 
 These are the default ports. Calls themselves reach LiveKit through [separate ports](firewall.md), not through the proxy. Do not forward LiveKit's other paths, such as `/twirp`: that is its server API.
 
@@ -44,12 +46,27 @@ When changing `TOLKTAK_MAX_UPLOAD_MB`, keep the nginx limit higher to allow for 
 ## Caddy
 
 ```
+{
+    log default {
+        format filter {
+            request>uri query {
+                delete access_token
+                delete token
+                delete join_request
+            }
+            request>headers>Authorization delete
+        }
+    }
+}
+
 chat.example.com {
     header Strict-Transport-Security max-age=31536000
-    reverse_proxy /rtc* 127.0.0.1:7880
+    reverse_proxy /rtc* 127.0.0.1:8080
     reverse_proxy 127.0.0.1:8080
 }
 ```
+
+The logging filter removes voice query credentials, including from proxy error logs. If you add another access logger, apply the same filter. Do not enable request/response debug logging for signaling.
 
 Caddy obtains the certificate itself and passes WebSocket and `X-Forwarded-*` headers without further settings.
 
@@ -60,6 +77,6 @@ curl https://chat.example.com/healthz
 curl https://chat.example.com/api/v1/server
 ```
 
-Use your own domain. `ok` from the first command confirms that TolkTak is reachable through HTTPS. In the second, `livekit_url` must be `wss://chat.example.com`; `ws://...:7880` means the server does not see the proxy's headers. Test a call and screen sharing separately with two accounts, preferably on different networks.
+Use your own domain. `ok` from the first command confirms that TolkTak is reachable through HTTPS. In the second, `livekit_url` must be `wss://chat.example.com`; a different origin means the server does not see the proxy's headers or has an explicit signaling override. Test a call and screen sharing separately with two accounts, preferably on different networks.
 
 Other proxies need the same routes, WebSocket support and an appropriate upload limit. For connection problems, see [Troubleshooting](../operations/troubleshooting.md).

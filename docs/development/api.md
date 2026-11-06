@@ -35,10 +35,13 @@ For automation, create a separate account for the script, so its token can be re
 | `GET /server` | Server name, version, registration mode, LiveKit address. No authentication. |
 | `POST /auth/register`, `/auth/login`, `/auth/logout` | Accounts and sessions. |
 | `GET /me`, `PATCH /me`, `POST /me/password` | Own profile (`display_name`, `about`, `status`, `avatar`) and password. |
-| `GET /users` | All users on the server. |
+| `GET /users` | Legacy user list. New clients use the paginated directory and profile endpoints below. |
+| `GET /users/directory`, `/users/dialogs`, `/users/{id}`; `POST /users/profiles` | Paged user search, dialogs and public profiles. See [Users and contacts](users.md). |
+| `GET /contacts`, `/contacts/summary`; `PUT`, `DELETE /contacts/{id}`; `POST /contacts/{id}/{action}` | Mutual contacts and incoming/outgoing requests. See [Users and contacts](users.md). |
 | `GET /channels` | Channels the user is in: direct messages and group text channels, with the last message and unread count. |
 | `POST /dms` | Open a direct-message channel with `user_id`. |
-| `GET /channels/{id}/messages` | History. Query: `before`, `after`, `limit`, `q` (search). |
+| `GET /channels/{id}/messages` | Legacy history and search. Query: `before`, `after`, `limit`, `q`. |
+| `GET /channels/{id}/history`, `/changes`, `/search` | Bounded history windows, revision reconciliation and server search. See [Message history](message-history.md). |
 | `POST /channels/{id}/messages` | Send: `text`, `nonce` (client-generated, makes retries safe), optional `reply_to` and `attachments` (file IDs). |
 | `POST /channels/{id}/read` | Mark read up to `message_id`. |
 | `PATCH /messages/{id}`, `DELETE /messages/{id}` | Edit or delete own message. |
@@ -50,7 +53,9 @@ For automation, create a separate account for the script, so its token can be re
 | `POST /groups/{id}/members`, `DELETE /groups/{id}/members/{uid}`, `PUT /groups/{id}/members/{uid}/role` | Membership and roles. |
 | `POST /groups/{id}/channels`, `PATCH`, `DELETE /text-channels/{id}` | Text channels. |
 | `POST /groups/{id}/rooms`, `PATCH`, `DELETE /rooms/{id}` | Voice rooms. |
+| `PUT /groups/{id}/channel-order`, `/groups/{id}/room-order` | Shared order of text channels and rooms. See [Group order](group-order.md). |
 | `POST /voice/join`, `POST /voice/leave` | Get a LiveKit URL and token for `room_id` (group room) or `channel_id` (direct call). |
+| `GET /rooms/{id}/permissions`, `/moderation`; `PUT`, `DELETE /rooms/{id}/moderation/{uid}/{source}`; `POST /rooms/{id}/participants/{uid}/off`, `/kick` | Call restrictions, one-time source disabling and removal. See [Moderation](moderation.md). |
 | `POST /calls/{channel}/ring`, `/decline`, `/cancel` | Direct-message calls. |
 | `GET`, `POST /admin/invites`, `DELETE /admin/invites/{code}` | Invites. Administrator only. |
 
@@ -72,12 +77,16 @@ The token is never put in the URL, so it does not end up in proxy logs. The serv
 | `channel.created`, `channel.deleted`, `channel.read` | Channels appeared or disappeared; read position changed on another device. |
 | `group.updated`, `group.deleted` | Group settings, members, rooms or text channels changed. |
 | `user.created`, `user.updated`, `presence` | Accounts and online status. |
+| `contacts.changed`, `users.snapshot` | Private contact changes and watched profile snapshots. See [Users and contacts](users.md). |
+| `voice.moderation` | Current call permissions changed. See [Moderation](moderation.md). |
 | `typing` | Someone is typing in a channel. |
 | `voice.room` | Who is in a voice room, with mute, deafen, camera and screen flags. |
 | `call.ring`, `call.declined`, `call.cancelled`, `call.ended` | Direct-message calls. |
 | `ping` | Every 25 seconds. Treat 70 seconds without any frame as a dead connection. |
 
-Events tell you that something changed; after a reconnect, fetch what you missed through REST (`GET /channels`, then `messages?after=…`).
+Events are not a durable replay log. After a reconnect, refresh channels, read state, contacts and watched profiles. Reconcile message edits and deletions through `/changes`; reload bounded windows when the interval is incomplete. Fetching only `messages?after=…` cannot recover changes to older messages. See [Message history](message-history.md).
+
+The authentication frame may include `"profile_scope":"watched"`. New clients use this mode and explicitly watch profiles instead of subscribing to every registered user. Omitting it retains legacy behavior.
 
 A client can send `{"type": "typing", "channel_id": …}`.
 

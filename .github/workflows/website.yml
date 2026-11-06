@@ -6,6 +6,9 @@ on:
     paths: ['docs/**', 'website/**', 'SECURITY.md', 'CONTRIBUTING.md', 'deploy/nginx.conf.example', '.github/workflows/website.yml']
   release:
     types: [published, unpublished, edited, deleted]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -17,6 +20,7 @@ concurrency:
 
 jobs:
   publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:

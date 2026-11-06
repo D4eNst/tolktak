@@ -13,6 +13,7 @@ export class Realtime {
     private api: Api,
     private onEvent: (ev: { type: string; data: unknown }) => void,
     private onStatus: (s: Status) => void,
+    private watchedProfiles = false,
   ) {}
 
   connect() {
@@ -22,7 +23,7 @@ export class Realtime {
     const ws = new WebSocket(url);
     this.ws = ws;
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'auth', token: this.api.token }));
+      ws.send(JSON.stringify({ type: 'auth', token: this.api.token, ...(this.watchedProfiles ? { profile_scope: 'watched' } : {}) }));
     };
     ws.onmessage = (e) => {
       let ev: { type: string; data: unknown };

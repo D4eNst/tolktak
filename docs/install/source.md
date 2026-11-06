@@ -44,7 +44,7 @@ TOLKTAK_LISTEN=127.0.0.1:8080
 TOLKTAK_TRUST_PROXY=1
 ```
 
-Other settings are listed in the [configuration reference](../operations/configuration.md). LiveKit listens on ports 7880, 7881 and 7882; see [Firewall and ports](../guides/firewall.md).
+Other settings are listed in the [configuration reference](../operations/configuration.md). Embedded LiveKit HTTP listens on loopback port 7880; participants use the app's `/rtc` admission proxy. Media uses public TCP 7881 and UDP 7882; see [Firewall and ports](../guides/firewall.md).
 
 ## 4. Create the service
 

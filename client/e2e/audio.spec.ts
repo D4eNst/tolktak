@@ -3,7 +3,7 @@ import { _electron as electron, expect, test, type Page } from '@playwright/test
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { expectFlowing, joinRoom, stats } from './helpers';
+import { expectFlowing, joinRoom, mainWindow, stats } from './helpers';
 import { loginToken, register, startStack, type Stack } from './stack';
 
 let stack: Stack;
@@ -93,7 +93,7 @@ function received(p: Page, from: number, seconds: number) {
 }
 
 test('voice processing: noise suppression and leveller on the wire', async () => {
-  test.skip(!process.env.DISPLAY, 'needs an X display (xvfb-run)');
+  test.skip(process.platform === 'linux' && !process.env.DISPLAY, 'needs an X display (xvfb-run)');
   const wav = noisySpeechWav();
   const launch = async (user: string, mic?: string) => {
     const app = await electron.launch({
@@ -108,7 +108,8 @@ test('voice processing: noise suppression and leveller on the wire', async () =>
       ],
       env: { ...process.env, TOLKTAK_USER_DATA: mkdtempSync(path.join(tmpdir(), 'tt-audio-')) } as Record<string, string>,
     });
-    const w = await app.firstWindow();
+    const w = await mainWindow(app);
+    await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
     w.on('console', (m) => m.type() === 'error' && console.log(`[electron ${user}]`, m.text()));
     await w.fill('input[name=server]', stack.api);
     await w.fill('input[name=username]', user);
@@ -121,10 +122,11 @@ test('voice processing: noise suppression and leveller on the wire', async () =>
   const { app: app2, w: bob } = await launch('bob');
 
   await alice.evaluate(() => (globalThis as any).__tolktak.setPrefs({ denoise: 'max' }));
-  await alice.click('button[aria-label="Настройки"]');
+  await alice.click('.topbar-avatar');
+  await alice.locator('.self-menu button', { hasText: 'Настройки' }).click();
   await alice.click('.settings-nav button:has-text("Голос")');
   await expect(alice.locator('.select:has-text("Максимальное")')).toBeVisible();
-  await alice.click('button:has-text("Послушать себя")');
+  await alice.click('button:has-text("Проверить микрофон")');
   await expect(alice.locator('.meter-gain').first()).toBeVisible({ timeout: 10_000 });
   // The pauses between words are silent after the strongest noise suppression.
   const fill = () => alice.locator('.meter-fill').first().evaluate((e) => parseFloat((e as HTMLElement).style.width));

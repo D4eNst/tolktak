@@ -80,7 +80,7 @@ export function page({ lang, page, path = '', title, description, alternate = ur
 <title>${escape(title)}</title>
 <meta name="description" content="${escape(description || c.description)}">
 <meta name="color-scheme" content="${page === 'docs' ? 'dark light' : 'dark'}">
-<meta name="theme-color" content="#111015">
+<meta name="theme-color" content="#081114">
 ${head}
 ${seo}
 <meta property="og:type" content="website">
@@ -90,7 +90,7 @@ ${seo}
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <link rel="icon" href="/img/logo.svg" type="image/svg+xml">
-<link rel="preload" href="/fonts/golos-text.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/onest-${lang === 'ru' ? 'cyrillic' : 'latin'}.woff2" as="font" type="font/woff2" crossorigin>
 ${['site', ...styles, page].map(name => `<link rel="stylesheet" href="/css/${name}.css">`).join('\n')}
 <script type="module" src="/js/${page}.js"></script>
 <noscript><style>.w-find, .w-burger, .w-rail-search, .w-hint, [data-needs-js] { display: none !important; }</style></noscript>

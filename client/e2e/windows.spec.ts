@@ -6,6 +6,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { mainWindow } from './helpers';
 
 const API = process.env.TT_API ?? '';
 const ROOT = path.join(__dirname, '..');
@@ -55,7 +56,8 @@ async function launch(user: string, micWav?: string): Promise<{ app: ElectronApp
   app.process().stdout?.on('data', (d) => log.push(String(d)));
   app.process().stderr?.on('data', (d) => log.push(String(d)));
   (app as any).__log = log;
-  const w = await app.firstWindow();
+  const w = await mainWindow(app);
+  await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
   // Noise suppression would remove a steady tone, and UI sounds would add one.
   await w.evaluate((raw) => localStorage.setItem('tolktak.voice', JSON.stringify(raw ? { sounds: false, noiseSuppression: false, echoCancellation: false, autoGainControl: false } : { sounds: false })), !!micWav);
   await w.reload();
@@ -133,13 +135,14 @@ test('stream sound: app/system capture exclude room voices; plain loopback echoe
     alice = await launch('winalice');
     bob = await launch('winbob', wav(path.join(work, 'voice.wav'), VOICE_HZ, 5));
     for (const p of [alice.w, bob.w]) {
-      await p.locator('.rail-btn.group').first().click();
-      await p.locator('.room-join').first().click();
-      await expect(p.locator('.voicebar-call .dot.ok')).toBeVisible();
+      await p.locator('.nav-tabs button', { hasText: 'Группы' }).click();
+      await p.locator('.nav-grouprow').first().click();
+      await p.locator('.nav-row', { hasText: 'Общая' }).click();
+      await expect(p.locator('.capsule .dot.ok')).toBeVisible();
     }
     await expect(alice.w.locator('.tile')).toHaveCount(2);
     // Alice's microphone would hear the speakers.
-    if (await alice.w.locator('.call-controls button[aria-label="Микрофон"].off').count() === 0) await alice.w.click('.call-controls button[aria-label="Микрофон"]');
+    if (await alice.w.locator('.call-controls button[aria-label="Выключить микрофон"]').count()) await alice.w.click('.call-controls button[aria-label="Выключить микрофон"]');
     results.appInfo = await alice.w.evaluate(() => (window as any).tolktak.appInfo());
 
     await alice.w.waitForTimeout(3000);
@@ -188,7 +191,7 @@ test('stream sound: app/system capture exclude room voices; plain loopback echoe
           { id: src.id, name: src.name, audio, single: name.includes('single') },
         );
         entry.audioInfo = await alice.w.evaluate(() => (window as any).tolktak.lastCaptureAudio());
-        await bob.w.locator('.stream-card').first().click();
+        await expect(bob.w.locator('.theater')).toBeVisible();
         // percentCPUUsage covers the time since the previous call.
         await alice.app.evaluate(({ app }) => app.getAppMetrics());
         await bob.w.waitForTimeout(5000);
@@ -246,7 +249,8 @@ test('gpu / hardware encoder probe', async () => {
   for (const [name, flags] of Object.entries(variants)) {
     const app = await electron.launch({ args: [ROOT, ...flags], env: { ...process.env, TOLKTAK_USER_DATA: mkdtempSync(path.join(work, 'gpu-')) } as Record<string, string> });
     try {
-      const w = await app.firstWindow();
+      const w = await mainWindow(app);
+      await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
       await w.waitForTimeout(1500);
       const feature = await app.evaluate(({ app }) => app.getGPUFeatureStatus());
       const info: any = await app.evaluate(({ app }) => app.getGPUInfo('complete'));
@@ -313,7 +317,8 @@ test('webrtc hardware encode in a real call', async () => {
   for (const [name, flags] of Object.entries(variants)) {
     const app = await electron.launch({ args: [ROOT, ...flags], env: { ...process.env, TOLKTAK_USER_DATA: mkdtempSync(path.join(work, 'hw-')) } as Record<string, string> });
     try {
-      const w = await app.firstWindow();
+      const w = await mainWindow(app);
+      await w.evaluate(() => localStorage.setItem('tolktak.tour', '1'));
       await w.waitForTimeout(1500);
       out[name] = await w.evaluate(async () => {
         const res: Record<string, unknown> = {};

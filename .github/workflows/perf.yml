@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
-      LIVEKIT_VERSION: 1.13.10
-      LIVEKIT_SHA256: c25a3e45fb922e9a93c6443d10c0ed041ba64342097e38632331736630283165
+      LIVEKIT_VERSION: 1.13.11
+      LIVEKIT_SHA256: 1e9ee90ca301e1842b2887fc77cb122759756a9c8aeb4334ee91de3325ec43fb
       PERF_CI_REPEATS: ${{ github.event.inputs.repeats || '2' }}
       PERF_HOST_NOTE: GitHub Actions ubuntu-24.04 runner (shared VM, no GPU)
     steps:

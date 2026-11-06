@@ -35,7 +35,10 @@ server {
 
     # LiveKit signalling; calls themselves go over UDP 7882 or TCP 7881 directly.
     location /rtc {
-        proxy_pass http://127.0.0.1:7880;
+        # Voice credentials may arrive in the query; never record the raw URI.
+        access_log off;
+        error_log /dev/null;
+        proxy_pass http://127.0.0.1:8080;
         proxy_read_timeout 3600s;
     }
 }

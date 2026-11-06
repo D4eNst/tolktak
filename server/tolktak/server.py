@@ -15,7 +15,6 @@ from .updates import Updater
 
 log = logging.getLogger("tolktak")
 
-# Voice rooms map to LiveKit rooms named "g<group>r<room>" or "dm<channel>".
 _GROUP_ROOM = re.compile(r"g([1-9][0-9]*)r([1-9][0-9]*)")
 _DM_ROOM = re.compile(r"dm([1-9][0-9]*)")
 
@@ -53,6 +52,9 @@ class Server:
         self.files = storage.open_storage(cfg)
         self.hub = Hub(self.room_audience)
         self.rl = RateLimiter()
+        from .moderation import Moderation
+
+        self.moderation = Moderation(self)
         self.upload_locks: dict[int, asyncio.Lock] = {}
         self.updater = Updater(cfg, version, self.hub)
 
@@ -85,23 +87,19 @@ class Server:
 
     def client_ip(self, request: Request) -> str:
         if self.cfg.trust_proxy and (xff := request.headers.get("x-forwarded-for")):
-            # The proxy appends the address it sees; everything before it comes from the client.
+            # The final proxy appends the peer address; earlier entries are untrusted.
             return xff.rsplit(",", 1)[-1].strip()
         return request.client.host if request.client else ""
 
     def livekit_url(self, request: Request) -> str:
-        if self.cfg.livekit_public_url:
-            return self.cfg.livekit_public_url
+        if self.cfg.signaling_public_url:
+            return self.cfg.signaling_public_url
         h = request.headers
         scheme, host = request.url.scheme, h.get("host", "")
         if self.cfg.trust_proxy:
             scheme = h.get("x-forwarded-proto", scheme).split(",")[0].strip()
             host = h.get("x-forwarded-host", host).split(",")[0].strip()
-        if scheme == "https":
-            # The reverse proxy sends /rtc on the same domain to LiveKit.
-            return f"wss://{host}"
-        hostname = host if host.endswith("]") else host.rsplit(":", 1)[0]
-        return f"ws://{hostname}:7880"
+        return f"{'wss' if scheme == 'https' else 'ws'}://{host}"
 
     def limit(self, key: str, burst: float, per_minute: float, message: str) -> None:
         if not self.rl.allow(key, burst, per_minute):

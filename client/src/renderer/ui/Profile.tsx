@@ -1,12 +1,15 @@
 import { signal } from '@preact/signals';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { bridge } from '../bridge';
 import { t } from '../i18n';
-import { api, errorText, me, online, openDM, settingsOpen, toast, userName, users } from '../state';
+import { api, errorText, me, online, openDM, people, settingsOpen, toast, userName, users } from '../state';
 import { startCall } from '../voice';
+import { ContactButton } from './People';
+import { useKnownUsers } from './usePeople';
 import { Avatar, Icon, Popover } from './common';
 
 const profileAt = signal<{ id: number; x: number; y: number } | null>(null);
+window.addEventListener('tolktak:session-reset', () => (profileAt.value = null));
 
 export function openProfile(id: number, x: number, y: number) {
   profileAt.value = { id, x, y };
@@ -28,10 +31,21 @@ export async function setStatus(status: string) {
 }
 
 export function ProfileCard({ id, onClose }: { id: number; onClose: () => void }) {
+  useKnownUsers([id]);
+  const store = people.value;
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!store) return;
+    const controller = new AbortController();
+    setFailed(false);
+    void store.profile(id, controller.signal).catch(() => { if (!controller.signal.aborted) setFailed(true); });
+    return () => controller.abort();
+  }, [store, id, attempt]);
   const u = users.value.get(id);
   const self = id === me.value?.id;
   const [statusEdit, setStatusEdit] = useState<string | null>(null);
-  if (!u) return null;
+  if (!u) return <div class="profile-card pad"><span class="muted small">{failed ? t().common.people.failed : t().common.people.loading}</span>{failed && <button class="link" onClick={() => setAttempt((n) => n + 1)}>{t().chat.view.retry}</button>}</div>;
   const tp = t().common.profile;
   return (
     <div class="profile-card">
@@ -89,6 +103,7 @@ export function ProfileCard({ id, onClose }: { id: number; onClose: () => void }
           {online.value.has(id) ? <span class="online-text">{tp.online}</span> : tp.offline}
           {!!u.created_at && ' · ' + tp.memberSince(new Date(u.created_at))}
         </div>
+        {!self && <div class="profile-contact"><ContactButton id={id} /></div>}
         <div class="profile-actions">
           {self ? (
             <button
@@ -117,6 +132,7 @@ export function ProfileCard({ id, onClose }: { id: number; onClose: () => void }
                   onClose();
                   try {
                     const c = await openDM(id);
+                    if (!c) return;
                     await startCall(c.id, userName(id));
                   } catch (e) {
                     toast(errorText(e), 'error');

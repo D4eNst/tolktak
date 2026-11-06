@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from tolktak import db, sqlite_backend
 from tolktak.app import create_app
 from tolktak.copydb import copy
-from tolktak.store import users
+from tolktak.store import moderation, users
 
 # Hashes written by the 0.1 Go server for "password1".
 GO_HASH = "argon2id$3$65536$2$jemqnL6RqWZdywksRUFY6w$Ll+or2v/nAhfkHS5lTGcpZn7MBLo5IYUh/sjF52ypys"
@@ -171,20 +171,54 @@ def _fill(cfg) -> None:
             m = c.post(f"/api/v1/channels/{dm}/messages", headers=tok, json={"text": f"m{i}", "nonce": f"n{i}"})
             c.post(f"/api/v1/messages/{m.json()['message']['id']}/reactions", headers=tok, json={"emoji": "👍"})
         c.post(f"/api/v1/channels/{g['channel_id']}/messages", headers=tok, json={"text": "g", "nonce": "g"})
+        request = c.put("/api/v1/contacts/2", headers=tok).json()
+        peer_token = c.post("/api/v1/auth/login", json={"username": "bob", "password": "password1"}).json()["token"]
+        assert (
+            c.post(
+                "/api/v1/contacts/1/accept",
+                headers={"Authorization": "Bearer " + peer_token},
+                json={"request_id": request["relation"]["request_id"]},
+            ).status_code
+            == 200
+        )
+        assert c.patch("/api/v1/me", headers=tok, json={"display_name": "Straße Alice"}).status_code == 200
+        assert c.portal is not None
+        rid = g["rooms"][0]["id"]
+        c.portal.call(moderation.observe, rid, True)
+        c.portal.call(moderation.change_rule, rid, 1, 2, "camera", "permanent")
+        c.portal.call(moderation.change_rule, rid, 1, 2, "microphone", "call")
 
 
-def _snapshot(cfg, create: bool = False) -> tuple[str, str]:
+def _snapshot(cfg, create: bool = False) -> tuple[str, ...]:
     with TestClient(create_app(cfg)) as c:
         tok = {"Authorization": "Bearer " + c.post(
             "/api/v1/auth/login", json={"username": "alice", "password": "password1"}
         ).json()["token"]}  # fmt: skip
         chans = c.get("/api/v1/channels", headers=tok).json()
         groups = c.get("/api/v1/groups", headers=tok).json()
+        contacts = c.get("/api/v1/contacts", headers=tok).json()
+        searches = {
+            channel["id"]: c.get(f"/api/v1/channels/{channel['id']}/search?q=m0", headers=tok).json()
+            for channel in chans["channels"]
+        }
+        assert c.portal is not None
+        rid = groups["groups"][0]["rooms"][0]["id"]
+        policies = c.portal.call(moderation.snapshot, rid, 2)
         if create:
+            # The copied policy sequence also advances without an ID collision.
+            old_ids = [rule["id"] for rule in policies["rules"]]
+            c.portal.call(moderation.change_rule, rid, 1, 2, "screen", "permanent")
+            assert max(rule["id"] for rule in c.portal.call(moderation.snapshot, rid, 2)["rules"]) > max(old_ids)
             # New rows continue after the copied ones.
             r = c.post("/api/v1/groups", headers=tok, json={"name": "after copy"})
             assert r.status_code == 201, r.text
-        return json.dumps(chans, sort_keys=True), json.dumps(groups, sort_keys=True)
+        return (
+            json.dumps(chans, sort_keys=True),
+            json.dumps(groups, sort_keys=True),
+            json.dumps(searches, sort_keys=True),
+            json.dumps(contacts, sort_keys=True),
+            json.dumps(policies, sort_keys=True),
+        )
 
 
 @pytest.mark.parametrize("target", ["sqlite"] + (["postgres"] if PG_URL else []))
@@ -205,3 +239,6 @@ def test_copy_db(tmp_path, target):
     after = _snapshot(dst, create=True)
     assert json.loads(after[0]) == json.loads(before[0])
     assert json.loads(after[1]) == json.loads(before[1])
+    assert json.loads(after[2]) == json.loads(before[2])
+    assert json.loads(after[3]) == json.loads(before[3])
+    assert json.loads(after[4]) == json.loads(before[4])

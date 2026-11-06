@@ -26,6 +26,7 @@ ENTRYPOINT ["tolktak-server"]
 
 # The image for a single `docker run`: the server starts LiveKit itself.
 FROM server AS full
-COPY --from=livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a /livekit-server /usr/local/bin/livekit-server
+COPY --from=livekit/livekit-server:v1.13.11@sha256:25cd902de7cacbd5f1f779f6a6ac1eae20ba8f56b0935934ce6b0ab80d1e3d20 /livekit-server /usr/local/bin/livekit-server
 ENV TOLKTAK_EMBEDDED_LIVEKIT=1
-EXPOSE 7880 7881 7882/udp
+# Signaling binds loopback and is admitted through the app; only media is public.
+EXPOSE 7881 7882/udp

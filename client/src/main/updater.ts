@@ -41,10 +41,11 @@ export function installUpdater(getWindow: () => BrowserWindow | null) {
   });
 }
 
-/** Resolves when the main window may open. Never resolves when the app quits to install. */
+/** Resolves when the main window may open; the launch window stays until it is drawn. Never resolves when the app quits to install. */
 export async function checkBeforeLaunch(server: string, hidden: boolean) {
-  if (!enabled || !server || hidden) return;
+  if (hidden) return;
   const from = app.getVersion();
+  if (!enabled || !server) return show({ kind: 'start', from });
   show({ kind: 'check', from });
   const s = await fetchServerVersion(server);
   if (!s) {
@@ -174,17 +175,17 @@ function show(state: LaunchState) {
 }
 
 function isNewer(a: string | undefined, b: string) {
-  const x = parseVersion(a);
-  const y = parseVersion(b);
-  if (!x || !y) return false;
-  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+  const candidate = parseVersion(a);
+  const current = parseVersion(b);
+  if (!candidate || !current) return false;
+  for (let i = 0; i < 3; i++) if (candidate[i] !== current[i]) return candidate[i] > current[i];
   return false;
 }
 
 /** Release versions only, so the app never updates towards a developer build. */
 function parseVersion(v: string | undefined) {
-  const m = v ? /^(\d+)\.(\d+)\.(\d+)$/.exec(v) : null;
-  return m ? m.slice(1).map(Number) : null;
+  const match = v ? /^(\d+)\.(\d+)\.(\d+)$/.exec(v) : null;
+  return match ? match.slice(1).map(Number) : null;
 }
 
 const releasePage = (v: string) => `${RELEASES}/tag/v${v}`;

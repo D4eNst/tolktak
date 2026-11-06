@@ -20,7 +20,6 @@ def setup(debug: bool) -> None:
     root.handlers[:] = [h]
     root.setLevel(logging.INFO)
     logging.getLogger("tolktak").setLevel(logging.DEBUG if debug else logging.INFO)
-    # The app logs errors itself.
     logging.getLogger("uvicorn.access").disabled = True
     for name in ("tortoise", "aiosqlite", "asyncio", "httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)

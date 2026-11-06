@@ -1,12 +1,15 @@
-import { ava, icon, nameOf, openSwitcher, reducedMotion, replay, site, visible } from '../site.js';
-import { clock, person } from '../markup.js';
+import { icon, openSwitcher, reducedMotion, replay } from '../site.js';
+import { chatAvatar } from './chat-markup.js';
 import { draggable } from './drag.js';
 
-const section = document.getElementById('w-chat');
+const section = document.querySelector('[data-workstory]');
 const copy = JSON.parse(document.getElementById('w-chat-copy').textContent);
 const win = section.querySelector('[data-chat]');
 const scroll = win.querySelector('[data-chat-scroll]');
-const list = win.querySelector('[data-chat-list]');
+const lists = [...win.querySelectorAll('[data-chat-list]')];
+let list = lists[0];
+const empty = win.querySelector('[data-chat-empty]');
+const drafts = new Map();
 const pins = win.querySelector('[data-chat-pins]');
 const pinText = win.querySelector('[data-chat-pin-text]');
 const pinCount = win.querySelector('[data-chat-pin-count]');
@@ -17,9 +20,11 @@ const replyWho = win.querySelector('[data-chat-reply-who]');
 const replyText = win.querySelector('[data-chat-reply-text]');
 const tray = section.querySelector('[data-chat-tray]');
 
-const colorOf = id => (id === 'me' ? '' : person(id, site.lang).color);
+const ava = (id, size) => chatAvatar(id, copy.people, size);
+const nameOf = id => copy.people[id].name;
+const colorOf = id => copy.people[id].color;
 const messages = () => [...list.querySelectorAll('.w-chat-msg:not(.is-hidden)')];
-const snippet = li => li.querySelector('.w-chat-text')?.textContent.trim() || (li.querySelector('.w-chat-sticker') ? copy.sticker : copy.attachment);
+const snippet = li => li.querySelector('.w-chat-text')?.textContent.trim() || copy.attachment;
 const toBottom = (smooth = true) => scroll.scrollTo({ top: scroll.scrollHeight, behavior: smooth && !reducedMotion ? 'smooth' : 'auto' });
 const any = items => items[Math.floor(Math.random() * items.length)];
 
@@ -89,7 +94,20 @@ function openPicker(li, opener) {
   });
 }
 
-let pinned = 1;
+function updatePins() {
+  const pinned = [...list.querySelectorAll('.is-pinned')];
+  pins.hidden = !pinned.length;
+  pinCount.textContent = pinned.length;
+  const last = pinned.at(-1);
+  if (!last) {
+    pinText.replaceChildren();
+    return;
+  }
+  const name = document.createElement('em');
+  name.textContent = nameOf(last.dataset.who) + ':';
+  pinText.replaceChildren(name, ' ' + snippet(last));
+}
+
 function pin(li) {
   if (!li.classList.contains('is-pinned')) {
     li.classList.add('is-pinned');
@@ -97,12 +115,8 @@ function pin(li) {
     mark.className = 'w-chat-pinmark' + (reducedMotion ? '' : ' is-new');
     mark.innerHTML = `${icon('pin', 12)}${copy.pinned}`;
     li.querySelector('.w-chat-body').prepend(mark);
-    pinned += 1;
-    pinCount.textContent = pinned;
   }
-  const name = document.createElement('em');
-  name.textContent = nameOf(li.dataset.who) + ':';
-  pinText.replaceChildren(name, ' ' + snippet(li));
+  updatePins();
   replay(pins, 'is-stamp');
 }
 
@@ -121,9 +135,7 @@ function clearReply() {
   replying.hidden = true;
 }
 
-let minute = copy.clock;
-function post(who, text, quote) {
-  minute += 1;
+function post(who, text, quote, target = list) {
   const li = document.createElement('li');
   li.className = 'w-chat-msg' + (quote ? ' has-quote' : '') + (reducedMotion ? '' : ' is-new');
   li.dataset.who = who;
@@ -131,7 +143,7 @@ function post(who, text, quote) {
   li.setAttribute('aria-keyshortcuts', 'r p');
   li.innerHTML = `${ava(who, 36)}<div class="w-chat-body">
     ${quote ? `<p class="w-chat-quote">${ava(quote.who, 16)}<b></b><span></span></p>` : ''}
-    <p class="w-chat-meta"><b></b><time>${clock(minute, site.lang)}</time></p>
+    <p class="w-chat-meta"><b></b></p>
     <p class="w-chat-text"></p>
     <div class="w-chat-reacts"></div>
   </div>`;
@@ -145,28 +157,33 @@ function post(who, text, quote) {
   li.querySelector('.w-chat-text').textContent = text;
   addActions(li);
   draggableMessage(li);
-  list.appendChild(li);
-  while (list.children.length > 16) list.firstElementChild.remove();
-  requestAnimationFrame(() => toBottom());
+  target.appendChild(li);
+  while (target.children.length > 16) target.firstElementChild.remove();
+  if (target === list) {
+    empty.hidden = true;
+    updatePins();
+    requestAnimationFrame(() => toBottom());
+  }
   return li;
 }
 
-let answering = false;
+const answering = new Set();
 function send() {
   const text = input.value.trim();
   if (!text) return;
   const quote = replyTo;
-  const mine = post('me', text, quote);
+  const target = list;
+  const mine = post('me', text, quote, target);
   input.value = '';
   composer.classList.remove('has-text');
   clearReply();
-  if (answering) return;
-  answering = true;
+  if (answering.has(target)) return;
+  answering.add(target);
   const who = quote && copy.replies[quote.who] ? quote.who : any(Object.keys(copy.replies));
   setTimeout(() => react(mine, any(['👍', '🔥', '😂', '❤️']), { mine: false }), reducedMotion ? 0 : 700);
   setTimeout(() => {
-    post(who, any(copy.replies[who]), { who: 'me', text });
-    answering = false;
+    post(who, any(copy.replies[who]), { who: 'me', text }, target);
+    answering.delete(target);
   }, reducedMotion ? 0 : 1500 + Math.random() * 700);
 }
 composer.querySelectorAll('button:disabled').forEach(button => (button.disabled = false));
@@ -178,7 +195,7 @@ input.addEventListener('keydown', event => {
 });
 win.querySelector('[data-chat-reply-cancel]').addEventListener('click', clearReply);
 
-list.addEventListener('click', event => {
+scroll.addEventListener('click', event => {
   const chip = event.target.closest('.w-chat-react');
   if (chip) {
     react(chip.closest('.w-chat-msg'), chip.dataset.e, { toggle: true });
@@ -191,16 +208,23 @@ list.addEventListener('click', event => {
   if (button.dataset.act === 'pin') pin(li);
   if (button.dataset.act === 'react') openPicker(li, button);
 });
-// "к" and "з" are where "r" and "p" sit on the Russian layout.
-list.addEventListener('keydown', event => {
+// Клавиши R и P в русской раскладке.
+scroll.addEventListener('keydown', event => {
   const li = event.target;
   if (!li.matches('.w-chat-msg') || event.ctrlKey || event.metaKey || event.altKey) return;
-  if (event.key === 'r' || event.key === 'к') setReply(li);
-  if (event.key === 'p' || event.key === 'з') pin(li);
+  if (event.key === 'r' || event.key === 'к') {
+    event.preventDefault();
+    setReply(li);
+  }
+  if (event.key === 'p' || event.key === 'з') {
+    event.preventDefault();
+    pin(li);
+  }
 });
 document.addEventListener('pointerdown', event => picker && !picker.contains(event.target) && closePicker());
 win.addEventListener('keydown', event => event.key === 'Escape' && closePicker({ focus: true }));
-win.querySelector('[data-chat-find]').addEventListener('click', openSwitcher);
+section.querySelector('[data-chat-find]').addEventListener('click', openSwitcher);
+section.querySelector('[data-chat-write]').addEventListener('click', () => input.focus({ preventScroll: true }));
 win.querySelector('[data-chat-emoji]').addEventListener('click', () => {
   replay(tray, 'is-pulse');
   tray.querySelector('.w-chat-emo').focus({ preventScroll: true });
@@ -243,9 +267,13 @@ function draggableMessage(li) {
     drop: target => (target === pins ? pin(li) : setReply(li)),
     start: () => {
       win.classList.add('is-dragging-msg');
+      pins.hidden = false;
       closePicker();
     },
-    end: () => win.classList.remove('is-dragging-msg'),
+    end: () => {
+      win.classList.remove('is-dragging-msg');
+      updatePins();
+    },
   });
 }
 
@@ -254,16 +282,27 @@ list.querySelectorAll('.w-chat-msg').forEach(li => {
   draggableMessage(li);
 });
 
-const later = [...list.children].slice(2);
-if (!reducedMotion) later.forEach(li => li.classList.add('is-hidden'));
 toBottom(false);
-if (!reducedMotion) {
-  const observer = visible(win, () => {
-    observer.disconnect();
-    later.forEach((li, i) => setTimeout(() => {
-      li.classList.remove('is-hidden');
-      li.classList.add('is-new');
-      toBottom();
-    }, 350 + i * 650));
+
+section.querySelectorAll('[data-chat-channel]').forEach(button => {
+  button.addEventListener('click', () => {
+    const id = button.dataset.chatChannel;
+    if (id === list.dataset.chatList) return;
+    drafts.set(list.dataset.chatList, input.value);
+    closePicker();
+    clearReply();
+    list = lists.find(item => item.dataset.chatList === id);
+    lists.forEach(item => { item.hidden = item !== list; });
+    section.querySelectorAll('[data-chat-channel]').forEach(item => {
+      item.classList.toggle('is-current', item === button);
+      item.setAttribute('aria-pressed', item === button);
+    });
+    win.querySelector('[data-chat-name]').textContent = copy.channels[id];
+    input.placeholder = button.dataset.placeholder;
+    input.value = drafts.get(id) || '';
+    composer.classList.toggle('has-text', !!input.value.trim());
+    empty.hidden = !!list.children.length;
+    updatePins();
+    toBottom(false);
   });
-}
+});

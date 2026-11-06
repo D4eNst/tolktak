@@ -98,6 +98,8 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm run typecheck
       - run: npm run build
+      - name: History, people and session regression tests
+        run: npx playwright test e2e/history-store.spec.ts e2e/people-store.spec.ts e2e/session-state.spec.ts e2e/hotkeys-lifecycle.spec.ts
 
   # Offline DNSMOS/PESQ/STOI and CPU checks of the shipped noise suppressors.
   voice:
