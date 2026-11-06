@@ -29,6 +29,6 @@ Calls go to ports 7881/TCP and 7882/UDP of the server directly. An ordinary HTTP
 A [server started with `docker run`](../install/docker.md) serves plain HTTP on its own address:
 
 - `http://192.168.1.20:8080` — TolkTak;
-- `ws://192.168.1.20:7880` — LiveKit. The server gives this address to the apps itself, from the address they connected to.
+- `ws://192.168.1.20:8080` — call signaling through TolkTak. The server gives this address to the apps; LiveKit HTTP remains private.
 
 Replace `192.168.1.20` with your machine's address. HTTP sends passwords, messages and files without encryption. For internet access, continue with [HTTPS certificates](certificates.md).

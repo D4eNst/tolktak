@@ -18,7 +18,7 @@ The log names the problem: a missing `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`, 
 
 This is almost always the media path. `https://<server>/api/v1/server` shows `livekit_url`, the address the apps use for LiveKit.
 
-- **Connection to LiveKit fails right away.** `livekit_url` must be reachable from the user's device. Behind HTTPS it is `wss://<domain>`, and the reverse proxy must send `/rtc` to LiveKit. If it shows `ws://...:7880` behind a proxy, set `TOLKTAK_TRUST_PROXY=1` and make the proxy send `X-Forwarded-Proto`. Without a certificate, port 7880/TCP must be open.
+- **Connection to LiveKit fails right away.** `livekit_url` must be reachable from the user's device. Behind HTTPS it is `wss://<domain>`, and the reverse proxy must send `/rtc` to TolkTak on port 8080. Set `TOLKTAK_TRUST_PROXY=1` and pass `X-Forwarded-Proto`. Without HTTPS, signaling uses the app port 8080; keep LiveKit HTTP 7880 private.
 - **Joins, but nobody hears anybody, or it drops after about 15 seconds.** Port 7882/UDP is blocked, or LiveKit gives the apps an address they cannot reach. Open the port in both the server's firewall and your provider's firewall; see [Firewall and ports](../guides/firewall.md). On a local network, set `NODE_IP` to the server's local address; in the Compose setup, set `LIVEKIT_USE_EXTERNAL_IP=false` and `LIVEKIT_NODE_IP` instead.
 - **The domain is proxied by a CDN.** Media cannot go through it. Turn the proxy off for that name; see [Domains and addresses](../guides/domains.md).
 - **Works for some users only.** Users on strict networks need port 7881/TCP. On hosts with several interfaces, limit `rtc.interfaces` in LiveKit's configuration; see [Configuration](configuration.md#livekit).
